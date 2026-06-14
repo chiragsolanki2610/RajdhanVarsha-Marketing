@@ -1,0 +1,11 @@
+RD-app/node_modules/
+RD-app/.next/
+
+node_modules/
+.next/
+
+dist/
+build/
+
+.env
+.env.local
