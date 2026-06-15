@@ -75,7 +75,6 @@ export default function HeroSlider() {
       {/* DESKTOP VIEW (md and up)                   */}
       {/* ========================================== */}
       <div className="hidden md:block relative w-full h-[100vh]" style={{ minHeight: 560 }}>
-        {/* Laptop top shadow overlay updated to exactly 80px height */}
         <div className="absolute top-0 left-0 right-0 h-[80px] bg-gradient-to-b from-black/50 to-transparent z-10 pointer-events-none" />
 
         <AnimatePresence initial={false} custom={direction}>
@@ -101,8 +100,6 @@ export default function HeroSlider() {
               priority={current === 0}
               sizes="100vw"
             />
-            
-            {/* Overlay filters on hover for desktop text legibility */}
             <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
@@ -154,38 +151,68 @@ export default function HeroSlider() {
       {/* ========================================== */}
       {/* MOBILE & TABLET VIEW (Under md)            */}
       {/* ========================================== */}
-      <div className="block md:hidden w-full pb-10">
-        
-        {/* Image Display Wrapper Container */}
-        {/* aspect-[16/9] or aspect-[2/1] maintains accurate banner layout proportions without side-cropping */}
-        <div className="relative w-full aspect-[16/9] overflow-hidden">
-          <AnimatePresence initial={false} custom={direction}>
-            <motion.div
-              key={current}
-              custom={direction}
-              variants={{
-                enter: (d: number) => ({ x: d > 0 ? "100%" : "-100%", opacity: 0 }),
-                center: { x: 0, opacity: 1 },
-                exit: (d: number) => ({ x: d > 0 ? "-100%" : "100%", opacity: 0 }),
-              }}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.5, ease: "easeInOut" }}
-              className="absolute inset-0 w-full h-full"
-            >
-              <Image
-                src={slides[current].src}
-                alt={slides[current].title}
-                fill
-                className="object-contain w-full h-full" // Object-contain preserves full uncropped original resolution
-                priority={current === 0}
-                sizes="100vw"
-              />
-            </motion.div>
-          </AnimatePresence>
+      <div className="block md:hidden w-full">
 
-          {/* Left Arrow overlay on mobile graphic area */}
+        {/*
+          ✅ KEY FIX: pt-[72px] pushes the image down by exactly the navbar height
+          so the fixed navbar no longer overlaps/crops the top of the image.
+          72px = navbar py-4 (16px top + 16px bottom) + logo height (~40px).
+          If it still clips slightly, try pt-[76px] or pt-[80px].
+        */}
+        <div className="relative w-full bg-[#F97316] pt-[72px]">
+
+          {/* 
+            Animated slides stacked absolutely inside,
+            ghost image below sets the natural height of the container.
+          */}
+          <div className="relative w-full">
+            <AnimatePresence initial={false} custom={direction}>
+              <motion.div
+                key={current}
+                custom={direction}
+                variants={{
+                  enter: (d: number) => ({ x: d > 0 ? "100%" : "-100%", opacity: 0 }),
+                  center: { x: 0, opacity: 1 },
+                  exit: (d: number) => ({ x: d > 0 ? "-100%" : "100%", opacity: 0 }),
+                }}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+                className="absolute inset-0 w-full h-full"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={slides[current].src}
+                  alt={slides[current].title}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                />
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Ghost image — invisible, sets natural container height, max 280px */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={slides[current].src}
+              alt=""
+              aria-hidden="true"
+              style={{
+                width: "100%",
+                height: "auto",
+                maxHeight: "280px",
+                objectFit: "contain",
+                visibility: "hidden",
+                display: "block",
+              }}
+            />
+          </div>
+
+          {/* Left Arrow */}
           <button
             onClick={prev}
             className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-orange-600 flex items-center justify-center shadow-md active:scale-90 transition-transform"
@@ -194,7 +221,7 @@ export default function HeroSlider() {
             <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
           </button>
 
-          {/* Right Arrow overlay on mobile graphic area */}
+          {/* Right Arrow */}
           <button
             onClick={next}
             className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-orange-600 flex items-center justify-center shadow-md active:scale-90 transition-transform"
@@ -204,22 +231,24 @@ export default function HeroSlider() {
           </button>
         </div>
 
-        {/* Dots pagination exactly below graphic segment */}
-        <div className="flex gap-2 items-center justify-center mt-5 mb-5">
+        {/* Dots pagination */}
+        <div className="flex gap-2 items-center justify-center mt-4 mb-4">
           {slides.map((_, i) => (
             <button
               key={i}
               onClick={() => goTo(i)}
               aria-label={`Go to slide ${i + 1}`}
               className={`transition-all duration-300 ${
-                i === current ? "w-7 h-2 rounded-full bg-[#E05915]" : "w-2.5 h-2 rounded-full bg-orange-600/30"
+                i === current
+                  ? "w-7 h-2 rounded-full bg-[#E05915]"
+                  : "w-2.5 h-2 rounded-full bg-orange-600/30"
               }`}
             />
           ))}
         </div>
 
-        {/* Text information structure block */}
-        <div className="px-6 text-center max-w-xl mx-auto">
+        {/* Text block */}
+        <div className="px-6 pb-10 text-center max-w-xl mx-auto">
           <h2 className="text-3xl font-black text-[#002B6B] mb-2.5">
             {slides[current].title}
           </h2>
@@ -227,7 +256,7 @@ export default function HeroSlider() {
             {slides[current].sub}
           </p>
 
-          {/* Call-to-actions setup */}
+          {/* CTAs */}
           <div className="flex items-center justify-center gap-4">
             {slides[current].cta.href.startsWith("/") ? (
               <Link
@@ -255,9 +284,8 @@ export default function HeroSlider() {
       </div>
 
       {/* ========================================== */}
-      {/* GLOBAL BACKGROUND ELEMENTS (DESKTOP)       */}
+      {/* DESKTOP GLOBAL ELEMENTS                    */}
       {/* ========================================== */}
-      {/* Desktop Navigation Arrows */}
       <button
         onClick={prev}
         className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/30 hover:bg-black/60 backdrop-blur-sm text-white items-center justify-center border border-white/20 transition-all hover:scale-110"
@@ -271,25 +299,24 @@ export default function HeroSlider() {
         <ChevronRight className="w-5 h-5" />
       </button>
 
-      {/* Desktop Dots Indicator */}
       <div className="hidden md:flex absolute bottom-8 left-1/2 -translate-x-1/2 z-20 gap-2.5 items-center">
         {slides.map((_, i) => (
           <button
             key={i}
             onClick={() => goTo(i)}
             className={`transition-all duration-300 rounded-full ${
-              i === current ? "w-8 h-2.5 bg-[#2E4CA2]" : "w-2.5 h-2.5 bg-white/50 hover:bg-white/80"
+              i === current
+                ? "w-8 h-2.5 bg-[#2E4CA2]"
+                : "w-2.5 h-2.5 bg-white/50 hover:bg-white/80"
             }`}
           />
         ))}
       </div>
 
-      {/* Desktop Counter */}
       <div className="hidden md:block absolute bottom-8 right-6 z-20 text-white/60 text-sm font-medium tabular-nums">
         {current + 1} / {slides.length}
       </div>
 
-      {/* Desktop Bottom Progress bar */}
       <div className="hidden md:block absolute bottom-0 left-0 right-0 h-0.5 bg-white/10 z-20">
         <motion.div
           key={current}
