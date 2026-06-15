@@ -61,7 +61,6 @@ export default function OurPlanPage() {
         description: "A comprehensive 12-Level business acceleration matrix allowing up to 10 direct network joinings.",
         basicFeatures: [
           "Existing distributors can join with an additional 600 B.V. purchase",
-          "New distributors can enter directly with a 1200 B.V. product purchase",
           "Enables a wider horizon of up to 10 direct customer joinings"
         ],
         fullFeatures: [
@@ -122,16 +121,15 @@ export default function OurPlanPage() {
       },
       plan2: {
         title: "ड्रीम प्लान (Dream Plan)",
-        price: "1200 B.V. / 600 B.V.",
+        price: "600 B.V.",
         description: "एक व्यापक 12-स्तरीय (12 Level) बिजनेस प्लान, जिसमें आप अधिकतम 10 डायरेक्ट जॉइनिंग करवा सकते हैं।",
         basicFeatures: [
           "पुराने डिस्ट्रीब्यूटर के लिए केवल 600 B.V. का एक और उत्पाद लेना अनिवार्य है",
-          "नए डिस्ट्रीब्यूटर के लिए शुरुआत में 1200 B.V. का उत्पाद लेना आवश्यक है",
           "इस प्लान के अंतर्गत आप कुल 10 डायरेक्ट जॉइनिंग (Direct Joinings) करवा सकते हैं"
         ],
         fullFeatures: [
           "सेल्फ परचेज (Self Purchase) बोनस: 10%",
-          "लेवल 1: पहला लेवल पास करने के लिए 3 डायरेक्ट सेल अनिवार्य हैं। 3 सेल पर 10% के हिसाब से ₹180 और 10 सेल करने पर ₹600 का बोनस बनता है।",
+          "लेवल 1: पहला लेवल पास करने के लिए 3 वितरित करेंट सेल अनिवार्य हैं। 3 सेल पर 10% के हिसाब से ₹180 और 10 सेल करने पर ₹600 का बोनस बनता है।",
           "लेवल 2: जाने के लिए हर कोई 3 या 10 से अधिक सेल कर सकता है। इसमें 3 सेल पर 7% के हिसाब से ₹180 और 10 सेल पर ₹420 का बोनस मिलता है।",
           "लेवल 3: इसमें कुल 5% का बोनस निर्धारित किया गया है",
           "लेवल 4 और 5: इसमें स्थिर 4% का बोनस प्राप्त होता है",
