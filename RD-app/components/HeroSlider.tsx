@@ -12,7 +12,7 @@ const slides = [
     badge: "PREMIUM PRODUCTS",
     title: "Digestive drop",
     sub: "Only in ₹350/- with 250 B.V.",
-    cta: { label: "Join Us Now", href: "#contact" },
+    cta: { label: "Join Us Now", href: "/register" }, // Updated to redirect to register page
     cta2: { label: "Learn More", href: "#about" },
   },
   {
@@ -20,7 +20,7 @@ const slides = [
     badge: "PREMIUM PRODUCTS",
     title: "Lady care syrup",
     sub: "Only in ₹349/- with 200 B.V.",
-    cta: { label: "Join Us Now", href: "#plan" },
+    cta: { label: "Join Us Now", href: "/register" }, // Updated to redirect to register page
     cta2: { label: "Learn More", href: "#about" },
   },
   {
@@ -28,7 +28,7 @@ const slides = [
     badge: "PREMIUM PRODUCTS",
     title: "Relax on oil",
     sub: "Only in ₹350/- with 150 B.V.",
-    cta: { label: "Join Us Now", href: "/products" },
+    cta: { label: "Join Us Now", href: "/register" }, // Updated to redirect to register page
     cta2: { label: "Learn More", href: "#products" },
   },
 ];
@@ -152,9 +152,7 @@ export default function HeroSlider() {
       {/* MOBILE & TABLET VIEW (Under md)            */}
       {/* ========================================== */}
       <div className="block md:hidden w-full">
-
         <div className="relative w-full bg-[#F97316] pt-[72px]">
-
           <div className="relative w-full">
             <AnimatePresence initial={false} custom={direction}>
               <motion.div
@@ -202,7 +200,7 @@ export default function HeroSlider() {
             />
           </div>
 
-          {/* ✅ Left Arrow — shifted down with top-[65%] for mobile only */}
+          {/* Left Arrow */}
           <button
             onClick={prev}
             className="absolute left-3 top-[65%] -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-orange-600 flex items-center justify-center shadow-md active:scale-90 transition-transform"
@@ -211,7 +209,7 @@ export default function HeroSlider() {
             <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
           </button>
 
-          {/* ✅ Right Arrow — shifted down with top-[65%] for mobile only */}
+          {/* Right Arrow */}
           <button
             onClick={next}
             className="absolute right-3 top-[65%] -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-orange-600 flex items-center justify-center shadow-md active:scale-90 transition-transform"
