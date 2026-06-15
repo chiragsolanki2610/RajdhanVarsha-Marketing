@@ -57,7 +57,7 @@ export default function OurPlanPage() {
       },
       plan2: {
         title: "Dream Plan",
-        price: "1200 B.V. / 600 B.V.",
+        price: "600 B.V.",
         description: "A comprehensive 12-Level business acceleration matrix allowing up to 10 direct network joinings.",
         basicFeatures: [
           "Existing distributors can join with an additional 600 B.V. purchase",
@@ -66,7 +66,7 @@ export default function OurPlanPage() {
         ],
         fullFeatures: [
           "Self Purchase Generation Bonus: 10%",
-          "Level 1: Minimum of 3 direct sales required to pass. Generates a 10% bonus (Rs. 180 on 3 sales, scales to Rs. 600 on 10 sales)",
+          "Level 1: Minimum of 3 distribute sales required to pass. Generates a 10% bonus (Rs. 180 on 3 sales, scales to Rs. 600 on 10 sales)",
           "Level 2: Accessible upon making 3 or more sales. Generates a 7% bonus (Rs. 180 on 3 sales, scales up to Rs. 420 on 10 sales)",
           "Level 3: Generates a 5% system bonus structure",
           "Levels 4 & 5: Generates a stable 4% distribution bonus",
@@ -167,14 +167,13 @@ export default function OurPlanPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 text-gray-800">
-      {/* Navigation Bar */}
       <Navbar />
 
       <main className="flex-grow">
-        {/* Page Title & Hero Image Section */}
+        {/* Hero Section */}
         <div className="relative h-64 md:h-80 w-full overflow-hidden flex items-center justify-center">
           <Image
-            src="/photos/page-title.jpg" 
+            src="/photos/page-title.jpg"
             alt="Our Plans Background"
             fill
             priority
@@ -190,7 +189,7 @@ export default function OurPlanPage() {
           </div>
         </div>
 
-        {/* LANGUAGE SWITCHER BUTTONS */}
+        {/* Language Switcher */}
         <div className="max-w-6xl mx-auto px-4 pt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
           <span className="text-sm font-semibold text-gray-500 tracking-wide">
             {currentText.selectLanguage}
@@ -219,7 +218,7 @@ export default function OurPlanPage() {
           </div>
         </div>
 
-        {/* Basics Introduction Section */}
+        {/* Basics Intro */}
         <section className="max-w-5xl mx-auto text-center py-12 px-4">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
             {currentText.basicsTitle}
@@ -229,76 +228,11 @@ export default function OurPlanPage() {
           </p>
         </section>
 
-        {/* Pricing Cards Section - Stacked and Expanded to Full Width */}
+        {/* Pricing Cards Section */}
         <section className="w-full px-4 md:px-8 pb-20">
           <div className="flex flex-col gap-10 w-full max-w-none mx-auto">
             
-            {/* Plan 1 Card (Binary Plan) */}
-            <div className="bg-white rounded-2xl shadow-md p-8 border border-gray-100 transition-all duration-300 hover:shadow-lg w-full">
-              <h3 className="text-2xl font-bold text-gray-900">{currentText.plan1.title}</h3>
-              <p className="text-gray-500 mt-2 text-sm max-w-3xl">{currentText.plan1.description}</p>
-              <div className="mt-4 flex items-baseline">
-                <span className="text-3xl font-extrabold text-blue-600">{currentText.plan1.price}</span>
-              </div>
-
-              {/* Core Features */}
-              <ul className="mt-6 space-y-3">
-                {currentText.plan1.basicFeatures.map((feature, idx) => (
-                  <li key={idx} className="flex items-center text-sm text-gray-600">
-                    <span className="text-green-500 mr-2">✓</span> {feature}
-                  </li>
-                ))}
-              </ul>
-
-              {/* Toggleable Full Plan Details */}
-              {showMorePlan1 && (
-                <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
-                  <div>
-                    <h4 className="font-semibold text-gray-900 text-sm tracking-wide uppercase mb-3">
-                      {currentText.includedTitle}
-                    </h4>
-                    <ul className="space-y-3">
-                      {currentText.plan1.fullFeatures.map((feature, idx) => (
-                        <li key={idx} className="flex items-start text-sm text-gray-600">
-                          <span className="text-blue-500 mr-2 mt-0.5">✦</span> 
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* DIRECT BINARY PLAN IMAGE DISPLAY */}
-                  <div className="mt-6 flex justify-center w-full">
-                    <Image
-                      src="/photos/graph.png" 
-                      alt="Binary Plan Structure Hierarchy"
-                      width={650}
-                      height={400}
-                      priority
-                      className="object-contain h-auto max-w-full"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="mt-8 space-y-3">
-                <button 
-                  onClick={() => setShowMorePlan1(!showMorePlan1)}
-                  className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition"
-                >
-                  {showMorePlan1 ? currentText.showLess : currentText.showFull}
-                </button>
-                <button 
-                  onClick={handleGetStartedRedirect}
-                  className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition"
-                >
-                  {currentText.getStarted}
-                </button>
-              </div>
-            </div>
-
-            {/* Plan 2 Card (Dream Plan) */}
+            {/* Plan 2 Card (Dream Plan) - MOVED TO FIRST POSITION */}
             <div className="bg-white rounded-2xl shadow-md p-8 border-2 border-blue-600 relative transition-all duration-300 hover:shadow-lg w-full">
               <span className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white text-xs uppercase font-extrabold tracking-widest px-3 py-1 rounded-full">
                 {currentText.popularBadge}
@@ -318,12 +252,10 @@ export default function OurPlanPage() {
                 ))}
               </ul>
 
-              {/* Toggleable Full Plan Details */}
+              {/* Toggleable Details */}
               {showMorePlan2 && (
                 <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                    
-                    {/* Left Column: Descriptive Bullets */}
                     <div>
                       <h4 className="font-semibold text-gray-900 text-sm tracking-wide uppercase mb-3">
                         {currentText.includedTitle}
@@ -338,7 +270,6 @@ export default function OurPlanPage() {
                       </ul>
                     </div>
 
-                    {/* Right Column: Bonus Level Matrix Breakdown */}
                     <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
                       <h4 className="font-bold text-gray-900 text-sm tracking-wide uppercase mb-3 text-center">
                         {currentText.levelBonusTitle}
@@ -352,10 +283,8 @@ export default function OurPlanPage() {
                         ))}
                       </div>
                     </div>
-
                   </div>
 
-                  {/* THREE IMAGE STRUCTURAL GALLERY GRID */}
                   <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
                     <div className="flex justify-center">
                       <Image
@@ -391,7 +320,6 @@ export default function OurPlanPage() {
                 </div>
               )}
 
-              {/* Action Buttons */}
               <div className="mt-8 space-y-3">
                 <button 
                   onClick={() => setShowMorePlan2(!showMorePlan2)}
@@ -408,11 +336,71 @@ export default function OurPlanPage() {
               </div>
             </div>
 
+            {/* Plan 1 Card (Binary Plan) - MOVED TO SECOND POSITION */}
+            <div className="bg-white rounded-2xl shadow-md p-8 border border-gray-100 transition-all duration-300 hover:shadow-lg w-full">
+              <h3 className="text-2xl font-bold text-gray-900">{currentText.plan1.title}</h3>
+              <p className="text-gray-500 mt-2 text-sm max-w-3xl">{currentText.plan1.description}</p>
+              <div className="mt-4 flex items-baseline">
+                <span className="text-3xl font-extrabold text-blue-600">{currentText.plan1.price}</span>
+              </div>
+
+              <ul className="mt-6 space-y-3">
+                {currentText.plan1.basicFeatures.map((feature, idx) => (
+                  <li key={idx} className="flex items-center text-sm text-gray-600">
+                    <span className="text-green-500 mr-2">✓</span> {feature}
+                  </li>
+                ))}
+              </ul>
+
+              {showMorePlan1 && (
+                <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
+                  <div>
+                    <h4 className="font-semibold text-gray-900 text-sm tracking-wide uppercase mb-3">
+                      {currentText.includedTitle}
+                    </h4>
+                    <ul className="space-y-3">
+                      {currentText.plan1.fullFeatures.map((feature, idx) => (
+                        <li key={idx} className="flex items-start text-sm text-gray-600">
+                          <span className="text-blue-500 mr-2 mt-0.5">✦</span> 
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="mt-6 flex justify-center w-full">
+                    <Image
+                      src="/photos/graph.png" 
+                      alt="Binary Plan Structure Hierarchy"
+                      width={650}
+                      height={400}
+                      priority
+                      className="object-contain h-auto max-w-full"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-8 space-y-3">
+                <button 
+                  onClick={() => setShowMorePlan1(!showMorePlan1)}
+                  className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition"
+                >
+                  {showMorePlan1 ? currentText.showLess : currentText.showFull}
+                </button>
+                <button 
+                  onClick={handleGetStartedRedirect}
+                  className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition"
+                >
+                  {currentText.getStarted}
+                </button>
+              </div>
+            </div>
+
           </div>
         </section>
       </main>
 
-      {/* Footer */}
       <Footer />
     </div>
   );
