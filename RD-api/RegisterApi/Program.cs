@@ -8,6 +8,17 @@ using RegisterApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── CORS Policy (Allows Next.js Frontend) ────────────────────────────────────
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("NextFrontendPolicy", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000") // Trusting your Next.js frontend port
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // ── Database (Supabase PostgreSQL) ────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -82,7 +93,12 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseAuthentication();
-app.UseAuthorization();
+
+// ── MUST BE PLACED IN THIS EXACT ORDER ───────────────────────────────────────
+app.UseCors("NextFrontendPolicy"); // 1. Allow the request to cross origins safely
+app.UseAuthentication();           // 2. Identify who is sending the request
+app.UseAuthorization();            // 3. Assess resource privileges
+
 app.MapControllers();
+
 app.Run();
