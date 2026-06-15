@@ -153,18 +153,8 @@ export default function HeroSlider() {
       {/* ========================================== */}
       <div className="block md:hidden w-full">
 
-        {/*
-          ✅ KEY FIX: pt-[72px] pushes the image down by exactly the navbar height
-          so the fixed navbar no longer overlaps/crops the top of the image.
-          72px = navbar py-4 (16px top + 16px bottom) + logo height (~40px).
-          If it still clips slightly, try pt-[76px] or pt-[80px].
-        */}
         <div className="relative w-full bg-[#F97316] pt-[72px]">
 
-          {/* 
-            Animated slides stacked absolutely inside,
-            ghost image below sets the natural height of the container.
-          */}
           <div className="relative w-full">
             <AnimatePresence initial={false} custom={direction}>
               <motion.div
@@ -195,7 +185,7 @@ export default function HeroSlider() {
               </motion.div>
             </AnimatePresence>
 
-            {/* Ghost image — invisible, sets natural container height, max 280px */}
+            {/* Ghost image — sets natural container height */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={slides[current].src}
@@ -212,19 +202,19 @@ export default function HeroSlider() {
             />
           </div>
 
-          {/* Left Arrow */}
+          {/* ✅ Left Arrow — shifted down with top-[65%] for mobile only */}
           <button
             onClick={prev}
-            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-orange-600 flex items-center justify-center shadow-md active:scale-90 transition-transform"
+            className="absolute left-3 top-[65%] -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-orange-600 flex items-center justify-center shadow-md active:scale-90 transition-transform"
             aria-label="Previous slide"
           >
             <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
           </button>
 
-          {/* Right Arrow */}
+          {/* ✅ Right Arrow — shifted down with top-[65%] for mobile only */}
           <button
             onClick={next}
-            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-orange-600 flex items-center justify-center shadow-md active:scale-90 transition-transform"
+            className="absolute right-3 top-[65%] -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 text-orange-600 flex items-center justify-center shadow-md active:scale-90 transition-transform"
             aria-label="Next slide"
           >
             <ChevronRight className="w-5 h-5 stroke-[2.5]" />
