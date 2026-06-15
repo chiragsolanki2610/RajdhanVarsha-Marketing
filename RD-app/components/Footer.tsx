@@ -22,7 +22,59 @@ export default function Footer({ scrollTo }: FooterProps) {
     <>
       <footer className="bg-[#0a1628] text-white pt-16 pb-6">
         <div className="container mx-auto px-6 md:px-10">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+          
+          {/* 📱 MOBILE & TABLET VIEW: Ultra-compact, clean row layout */}
+          <div className="flex flex-col items-center gap-6 md:hidden text-center">
+            <div className="flex items-center gap-3">
+              <Image
+                src="/photos/web_logo.jpg"
+                alt="Logo"
+                width={40}
+                height={40}
+                className="rounded-full"
+              />
+              <span className="font-bold tracking-wider text-sm">RAJ DHANVARSHA</span>
+            </div>
+
+            {/* Quick Action Contacts Grid */}
+            <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
+              <a 
+                href="https://maps.google.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-white/5 text-xs text-white/70 active:bg-white/10 transition-colors"
+              >
+                <MapPin size={18} className="text-emerald-500" />
+                <span>Visit</span>
+              </a>
+              <a 
+                href="tel:+917404526380" 
+                className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-white/5 text-xs text-white/70 active:bg-white/10 transition-colors"
+              >
+                <PhoneCall size={18} className="text-emerald-500" />
+                <span>Call</span>
+              </a>
+              <a 
+                href="mailto:info@rajdhanvarsha.in" 
+                className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-white/5 text-xs text-white/70 active:bg-white/10 transition-colors"
+              >
+                <Mail size={18} className="text-emerald-500" />
+                <span>Email</span>
+              </a>
+            </div>
+
+            {/* Compact Inline Navigation Links */}
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-white/60 font-medium">
+              <button onClick={() => scrollTo?.("home")} className="active:text-white">Home</button>
+              <Link href="/overview" className="active:text-white">Overview</Link>
+              <Link href="/products" className="active:text-white">Products</Link>
+              <button onClick={() => scrollTo?.("plan")} className="active:text-white">Our Plan</button>
+              <button onClick={() => scrollTo?.("contact")} className="active:text-white">Contact</button>
+            </div>
+          </div>
+
+          {/* 💻 LAPTOP & DESKTOP VIEW: Exactly matches your original design image */}
+          <div className="hidden md:grid grid-cols-4 gap-10 mb-12">
 
             {/* Brand Column */}
             <div className="flex flex-col gap-4">
@@ -39,47 +91,17 @@ export default function Footer({ scrollTo }: FooterProps) {
               </p>
 
               <div className="flex items-center gap-4 mt-2">
-                <a
-                  href="#"
-                  aria-label="Facebook"
-                  className="text-white/60 hover:text-white transition-colors text-lg"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-                  </svg>
+                <a href="#" aria-label="Facebook" className="text-white/60 hover:text-white transition-colors text-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
                 </a>
-
-                <a
-                  href="#"
-                  aria-label="Twitter"
-                  className="text-white/60 hover:text-white transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
-                  </svg>
+                <a href="#" aria-label="Twitter" className="text-white/60 hover:text-white transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/></svg>
                 </a>
-
-                <a
-                  href="#"
-                  aria-label="Instagram"
-                  className="text-white/60 hover:text-white transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
-                  </svg>
+                <a href="#" aria-label="Instagram" className="text-white/60 hover:text-white transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
                 </a>
-
-                <a
-                  href="#"
-                  aria-label="YouTube"
-                  className="text-white/60 hover:text-white transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.54C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
-                    <polygon fill="#0a1628" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" />
-                  </svg>
+                <a href="#" aria-label="YouTube" className="text-white/60 hover:text-white transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.54C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon fill="#0a1628" points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg>
                 </a>
               </div>
             </div>
@@ -92,30 +114,16 @@ export default function Footer({ scrollTo }: FooterProps) {
 
               <ul className="flex flex-col gap-3 text-sm text-white/65">
                 {[
-                  { label: "Home", action: () => scrollTo?.("home") },
+                  { label: "Home", action: () => scrollTo("home") },
                   { label: "Overview", href: "/overview" },
-                  { label: "Our Team", action: () => scrollTo?.("about") },
-                  { label: "Legal Documents", action: () => scrollTo?.("about") },
+                  { label: "Our Team", action: () => scrollTo("about") },
+                  { label: "Legal Documents", action: () => scrollTo("about") },
                   { label: "Our Products", href: "/products" },
                 ].map((item, i) =>
                   item.href ? (
-                    <li key={i}>
-                      <Link
-                        href={item.href}
-                        className="hover:text-white transition-colors"
-                      >
-                        {item.label}
-                      </Link>
-                    </li>
+                    <li key={i}><Link href={item.href} className="hover:text-white transition-colors">{item.label}</Link></li>
                   ) : (
-                    <li key={i}>
-                      <button
-                        onClick={item.action}
-                        className="hover:text-white transition-colors"
-                      >
-                        {item.label}
-                      </button>
-                    </li>
+                    <li key={i}><button onClick={item.action} className="hover:text-white transition-colors">{item.label}</button></li>
                   )
                 )}
               </ul>
@@ -129,30 +137,16 @@ export default function Footer({ scrollTo }: FooterProps) {
 
               <ul className="flex flex-col gap-3 text-sm text-white/65">
                 {[
-                  { label: "Our Plan", action: () => scrollTo?.("plan") },
+                  { label: "Our Plan", action: () => scrollTo("plan") },
                   { label: "Delivery Center", href: "#" },
-                  { label: "Contact Us", action: () => scrollTo?.("contact") },
+                  { label: "Contact Us", action: () => scrollTo("contact") },
                   { label: "Login", href: "#" },
                   { label: "Register", href: "#" },
                 ].map((item, i) =>
                   item.href ? (
-                    <li key={i}>
-                      <Link
-                        href={item.href}
-                        className="hover:text-white transition-colors"
-                      >
-                        {item.label}
-                      </Link>
-                    </li>
+                    <li key={i}><Link href={item.href} className="hover:text-white transition-colors">{item.label}</Link></li>
                   ) : (
-                    <li key={i}>
-                      <button
-                        onClick={item.action}
-                        className="hover:text-white transition-colors"
-                      >
-                        {item.label}
-                      </button>
-                    </li>
+                    <li key={i}><button onClick={item.action} className="hover:text-white transition-colors">{item.label}</button></li>
                   )
                 )}
               </ul>
@@ -193,6 +187,7 @@ export default function Footer({ scrollTo }: FooterProps) {
                 </li>
               </ul>
             </div>
+
           </div>
 
           <div className="border-t border-white/10 pt-6 text-center text-sm text-white/40">
@@ -201,6 +196,7 @@ export default function Footer({ scrollTo }: FooterProps) {
         </div>
       </footer>
 
+      {/* Scroll to top button */}
       {showTop && (
         <button
           onClick={() =>

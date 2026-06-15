@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 interface NavbarProps {
   transparent?: boolean;
@@ -65,27 +65,31 @@ export default function Navbar({ transparent = false }: NavbarProps) {
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        /* Mobile/Tablet forces white background per image; Desktop preserves transparent/opaque scroll configurations */
         isOpaque
           ? "bg-white/95 backdrop-blur-md shadow-sm py-4 border-b border-gray-200/50"
-          : "bg-transparent py-6"
+          : "bg-white md:bg-transparent py-4 md:py-6 border-b border-gray-100 md:border-none"
       }`}
     >
       <div className="container mx-auto px-4 md:px-6 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 no-underline group">
+        <Link href="/" className="flex items-center gap-2 md:gap-3 no-underline group">
           <Image
             src="/photos/web_logo.png"
             alt="Raj Dhan Varsha logo"
-            width={48}
-            height={48}
-            className="rounded-md object-cover transition-transform duration-500 group-hover:scale-105"
+            width={44}
+            height={44}
+            className="rounded-md object-cover transition-transform duration-500 group-hover:scale-105 shadow-sm md:w-[48px] md:h-[48px]"
           />
           <div className="flex flex-col justify-center leading-none">
-            <div className="text-xl md:text-2xl font-black tracking-tight select-none">
+            <div className="text-lg md:text-2xl font-black tracking-tight select-none">
               <span className="text-[#E31E24]">RAJ</span>
-              <span className={`transition-colors duration-300 ${isOpaque ? "text-[#2E4CA2]" : "text-white md:text-[#2E4CA2]"}`}>DHANVARSHA</span>
+              {/* "DHANVARSHA" color locked cleanly to your brand blue color */}
+              <span className="text-[#2E4CA2]">
+                DHANVARSHA
+              </span>
             </div>
-            <span className="text-[10px] md:text-[11px] font-extrabold tracking-widest text-[#E31E24] text-right mt-0.5">
+            <span className="text-[9px] md:text-[11px] font-extrabold tracking-widest text-[#E31E24] text-left mt-0.5">
               MARKETING
             </span>
           </div>
@@ -124,9 +128,10 @@ export default function Navbar({ transparent = false }: NavbarProps) {
                   Overview
                 </Link>
                 
+                {/* Redirecting to Our Team page */}
                 <Link
-                  href="/#about"
-                  onClick={(e) => { setAboutDropdownOpen(false); handleScrollLink(e, "about"); }}
+                  href="/our-team"
+                  onClick={() => setAboutDropdownOpen(false)}
                   className={dropdownItemStyles}
                 >
                   Our Team
@@ -143,7 +148,7 @@ export default function Navbar({ transparent = false }: NavbarProps) {
             )}
           </div>
           
-          <Link href="/#plan" onClick={(e) => handleScrollLink(e, "plan")} className={linkStyles}>
+          <Link href="/our-plan" className={linkStyles}>
             Our Plan
           </Link>
           
@@ -151,39 +156,53 @@ export default function Navbar({ transparent = false }: NavbarProps) {
             Products
           </Link>
           
-          <Link href="/#contact" onClick={(e) => handleScrollLink(e, "contact")} className={linkStyles}>
-            Contact
+          {/* Desktop Redirect to Delivery Center */}
+          <Link href="/delivery-center" className={linkStyles}>
+            Delivery Center
           </Link>
         </nav>
 
-        {/* CTA */}
+        {/* Desktop CTA */}
         <div className="hidden md:flex">
           <Link
-            href="/#contact"
-            onClick={(e) => handleScrollLink(e, "contact")}
+            href="/register"
             className="bg-[#2E4CA2] hover:bg-[#1E3573] text-white font-semibold rounded-full px-6 py-2.5 text-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-600/30 active:translate-y-0 no-underline"
           >
             Join Now
           </Link>
         </div>
 
-        {/* Hamburger */}
+        {/* Custom Hamburger Matching Image Look */}
         <button
-          className={`md:hidden p-2 transition-colors ${isOpaque ? "text-gray-700" : "text-white"}`}
+          className="md:hidden flex flex-col items-end justify-center gap-1.5 w-8 h-8 p-1 focus:outline-none group z-50"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label="Toggle menu"
         >
-          {mobileOpen ? <X size={24} /> : <Menu size={24} />}
+          <span 
+            className={`h-[2px] bg-slate-800 rounded-full transition-all duration-300 origin-center ${
+              mobileOpen ? "w-6 rotate-45 translate-y-[8px]" : "w-6"
+            }`} 
+          />
+          <span 
+            className={`h-[2px] bg-slate-800 rounded-full transition-all duration-300 ${
+              mobileOpen ? "w-0 opacity-0" : "w-5"
+            }`} 
+          />
+          <span 
+            className={`h-[2px] bg-slate-800 rounded-full transition-all duration-300 origin-center ${
+              mobileOpen ? "w-6 -rotate-45 -translate-y-[8px]" : "w-4"
+            }`} 
+          />
         </button>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile menu wrapper */}
       {mobileOpen && (
-        <div className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-lg py-4 px-4 flex flex-col gap-2">
+        <div className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-xl py-4 px-4 flex flex-col gap-2 animate-fadeIn">
           <Link
             href="/#home"
             onClick={(e) => handleScrollLink(e, "home")}
-            className="text-left text-sm font-medium p-2.5 hover:bg-gray-50 active:bg-gray-100 rounded-lg text-gray-800 transition-colors no-underline"
+            className="text-left text-sm font-semibold p-2.5 hover:bg-gray-50 active:bg-gray-100 rounded-lg text-gray-800 transition-colors no-underline"
           >
             Home
           </Link>
@@ -199,9 +218,10 @@ export default function Navbar({ transparent = false }: NavbarProps) {
             >
               Overview
             </Link>
+            {/* Mobile Redirect to Our Team page */}
             <Link
-              href="/#about"
-              onClick={(e) => handleScrollLink(e, "about")}
+              href="/our-team"
+              onClick={() => setMobileOpen(false)}
               className="text-left text-sm font-medium p-2 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors no-underline"
             >
               Our Team
@@ -216,9 +236,9 @@ export default function Navbar({ transparent = false }: NavbarProps) {
           </div>
 
           <Link
-            href="/#plan"
-            onClick={(e) => handleScrollLink(e, "plan")}
-            className="text-left text-sm font-medium p-2.5 hover:bg-gray-50 active:bg-gray-100 rounded-lg text-gray-800 transition-colors no-underline"
+            href="/our-plan"
+            onClick={() => setMobileOpen(false)}
+            className="text-left text-sm font-semibold p-2.5 hover:bg-gray-50 active:bg-gray-100 rounded-lg text-gray-800 transition-colors no-underline"
           >
             Our Plan
           </Link>
@@ -226,22 +246,24 @@ export default function Navbar({ transparent = false }: NavbarProps) {
           <Link
             href="/products"
             onClick={() => setMobileOpen(false)}
-            className="text-left text-sm font-medium p-2.5 hover:bg-gray-50 rounded-lg block text-gray-800 transition-colors no-underline"
+            className="text-left text-sm font-semibold p-2.5 hover:bg-gray-50 rounded-lg block text-gray-800 transition-colors no-underline"
           >
             Products
           </Link>
 
+          {/* Mobile Redirect to Delivery Center page */}
           <Link
-            href="/#contact"
-            onClick={(e) => handleScrollLink(e, "contact")}
-            className="text-left text-sm font-medium p-2.5 hover:bg-gray-50 active:bg-gray-100 rounded-lg text-gray-800 transition-colors no-underline"
+            href="/delivery-center"
+            onClick={() => setMobileOpen(false)}
+            className="text-left text-sm font-semibold p-2.5 hover:bg-gray-50 rounded-lg block text-gray-800 transition-colors no-underline"
           >
-            Contact
+            Delivery Center
           </Link>
           
+          {/* Mobile Redirect to Join Now / Register page */}
           <Link
-            href="/#contact"
-            onClick={(e) => handleScrollLink(e, "contact")}
+            href="/register"
+            onClick={() => setMobileOpen(false)}
             className="mt-2 w-full bg-[#2E4CA2] hover:bg-[#1E3573] text-white font-semibold rounded-full py-3 text-sm transition-colors text-center no-underline"
           >
             Join Now
