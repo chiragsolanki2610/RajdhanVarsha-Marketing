@@ -114,10 +114,10 @@ export default function Footer({ scrollTo }: FooterProps) {
 
               <ul className="flex flex-col gap-3 text-sm text-white/65">
                 {[
-                  { label: "Home", action: () => scrollTo("home") },
+                  { label: "Home", action: () => scrollTo?.("home") },
                   { label: "Overview", href: "/overview" },
-                  { label: "Our Team", action: () => scrollTo("about") },
-                  { label: "Legal Documents", action: () => scrollTo("about") },
+                  { label: "Our Team", action: () => scrollTo?.("about") },
+                  { label: "Legal Documents", action: () => scrollTo?.("about") },
                   { label: "Our Products", href: "/products" },
                 ].map((item, i) =>
                   item.href ? (
@@ -137,11 +137,11 @@ export default function Footer({ scrollTo }: FooterProps) {
 
               <ul className="flex flex-col gap-3 text-sm text-white/65">
                 {[
-                  { label: "Our Plan", action: () => scrollTo("plan") },
-                  { label: "Delivery Center", href: "#" },
-                  { label: "Contact Us", action: () => scrollTo("contact") },
-                  { label: "Login", href: "#" },
-                  { label: "Register", href: "#" },
+                  { label: "Our Plan", action: () => scrollTo?.("plan") },
+                  { label: "Delivery Center", href: "/delivery-center" },
+                  { label: "Contact Us", action: () => scrollTo?.("contact") },
+                  { label: "Login", href: "/login" },
+                  { label: "Register", href: "/register" },
                 ].map((item, i) =>
                   item.href ? (
                     <li key={i}><Link href={item.href} className="hover:text-white transition-colors">{item.label}</Link></li>
