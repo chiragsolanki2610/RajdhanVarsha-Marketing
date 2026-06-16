@@ -1,131 +1,281 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React from 'react';
+import Sidebar from '@/components/Sidebar';
+// import MobileBottomNav from '@/components/MobileBottomNav';
+import LoginTopbar from '@/components/loginTopbar';
+import {
+  Calendar,
+  TrendingUp,
+  Zap,
+  Wallet,
+  ArrowDownToLine,
+  Coins,
+  ChevronRight,
+  UserPlus,
+} from 'lucide-react';
 
 export default function DashboardPage() {
-    const router = useRouter();
-    const [userId, setUserId] = useState<string | null>("");
+  const stats = [
+    {
+      title: 'PURCHASE DATE',
+      value: '15-05-2026',
+      subtext: 'ACTIVE',
+      subtextColor: 'text-green-600',
+      icon: Calendar,
+      iconBg: 'bg-blue-50',
+      iconColor: 'text-blue-500',
+      borderColor: 'border-t-blue-500',
+    },
+    {
+      title: 'PURCHASE BV',
+      value: '600 BV',
+      icon: TrendingUp,
+      iconBg: 'bg-indigo-50',
+      iconColor: 'text-indigo-500',
+      borderColor: 'border-t-indigo-500',
+    },
+    {
+      title: 'TOTAL SELLS',
+      value: '1 Sell',
+      icon: Zap,
+      iconBg: 'bg-orange-50',
+      iconColor: 'text-orange-500',
+      borderColor: 'border-t-orange-400',
+    },
+    {
+      title: 'TOTAL PAYOUT',
+      value: 'Rs.220.00',
+      icon: Wallet,
+      iconBg: 'bg-green-50',
+      iconColor: 'text-green-500',
+      borderColor: 'border-t-green-500',
+    },
+    {
+      title: 'WITHDRAWAL',
+      value: 'Rs.0.00',
+      icon: ArrowDownToLine,
+      iconBg: 'bg-red-50',
+      iconColor: 'text-red-500',
+      borderColor: 'border-t-red-400',
+    },
+    {
+      title: 'BALANCE',
+      value: 'Rs.220.00',
+      icon: Coins,
+      iconBg: 'bg-blue-50',
+      iconColor: 'text-blue-500',
+      borderColor: 'border-t-blue-600',
+      highlight: true,
+    },
+  ];
 
-    useEffect(() => {
-        // Safe check for browser context
-        if (typeof window !== "undefined") {
-            const token = localStorage.getItem("authToken");
-            const savedUserId = localStorage.getItem("rememberUserId");
-            
-            // SECURITY GUARD: If no auth token is found, boot them back to the login page
-            if (!token) {
-                router.push("/login"); // Adjust path if your login page is at root "/"
-            } else {
-                setUserId(savedUserId || "Distributor");
-            }
-        }
-    }, [router]);
+  const activities = [
+    {
+      id: 1,
+      icon: Zap,
+      iconBg: 'bg-green-50',
+      iconColor: 'text-green-600',
+      title: 'Commission Credited',
+      description: 'From Level 1 direct sell',
+      value: '+ Rs.220.00',
+      valueColor: 'text-green-600',
+      timestamp: '10:45 AM',
+    },
+    {
+      id: 2,
+      icon: UserPlus,
+      iconBg: 'bg-blue-50',
+      iconColor: 'text-blue-500',
+      title: 'New Team Member',
+      description: 'Rahul joined your downline',
+      value: null,
+      valueColor: '',
+      timestamp: 'Yesterday',
+    },
+    {
+      id: 3,
+      icon: TrendingUp,
+      iconBg: 'bg-blue-50',
+      iconColor: 'text-blue-500',
+      title: 'Account Activated',
+      description: 'Dream purchase processed',
+      value: '600 BV',
+      valueColor: 'text-gray-700',
+      timestamp: '15 May',
+    },
+  ];
 
-    const handleLogout = () => {
-        if (typeof window !== "undefined") {
-            localStorage.removeItem("authToken");
-        }
-        router.push("/login");
-    };
+  return (
+    <div className="flex bg-[#F4F6FA] min-h-screen text-gray-800 font-sans antialiased">
 
-    return (
-        <div className="min-h-screen bg-[#f8fafc] text-gray-800 font-sans">
-            {/* Top Navigation Bar */}
-            <nav className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm px-6 py-4 flex justify-between items-center">
-                <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-                    <span className="text-red-500">RAJ</span>
-                    <span className="text-blue-800">DHANVARSHA</span>
-                </div>
-                
-                <div className="flex items-center gap-4">
-                    <div className="text-right hidden sm:block">
-                        <p className="text-xs text-gray-400 font-medium">Welcome back,</p>
-                        <p className="text-sm font-bold text-gray-700">{userId}</p>
-                    </div>
-                    <button 
-                        onClick={handleLogout}
-                        className="bg-gray-50 hover:bg-red-50 hover:text-red-600 text-gray-600 text-xs font-bold px-4 py-2.5 rounded-xl border border-gray-200 transition-all duration-200"
-                    >
-                        Sign Out
-                    </button>
-                </div>
-            </nav>
+      {/* Sidebar — desktop only */}
+      
+        <Sidebar />
+      
 
-            {/* Dashboard Content Container */}
-            <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
-                
-                {/* Welcome Banner */}
-                <div className="bg-gradient-to-r from-blue-900 to-blue-800 text-white rounded-2xl p-6 md:p-8 shadow-md relative overflow-hidden">
-                    <div className="relative z-10 space-y-2">
-                        <span className="bg-red-500 text-[10px] uppercase tracking-widest font-extrabold px-2.5 py-1 rounded-full">
-                            Operational Panel
+      <div className="flex-1 flex flex-col min-w-0">
+
+        <LoginTopbar
+          title="RAJ DHAN VARSHA"
+          userName="Dharamveer Varsha"
+          logoSrc="/logo.png"
+        />
+
+        {/* pb-20 on mobile so content doesn't hide behind bottom nav */}
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+
+          {/* ── Mobile Layout ── */}
+          <div className="block md:hidden">
+
+            {/* Welcome Banner */}
+            <div className="bg-gradient-to-br from-blue-600 to-blue-500 text-white px-5 pt-10 pb-10 rounded-b-3xl relative overflow-hidden">
+              <div className="absolute -top-6 -right-6 w-32 h-32 bg-blue-400/30 rounded-full" />
+              <div className="absolute top-10 -right-2 w-16 h-16 bg-blue-300/20 rounded-full" />
+              <p className="text-sm font-medium text-blue-100 mb-0.5">Welcome back,</p>
+              <h1 className="text-2xl font-extrabold tracking-wide">DHARAMVEER</h1>
+              <div className="mt-3 inline-flex items-center gap-1.5 bg-blue-700/50 rounded-full px-3 py-1">
+                <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
+                <span className="text-xs font-semibold text-white">ID: RD0025</span>
+              </div>
+            </div>
+
+            {/* My Performance */}
+            <div className="px-4 mt-6">
+              <h2 className="text-base font-bold text-gray-900">My Performance</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Tuesday, June 16, 2026</p>
+
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                {stats.map((card, idx) => (
+                  <div
+                    key={idx}
+                    className={`bg-white rounded-2xl p-4 border-t-4 ${card.borderColor} shadow-sm`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={`p-2 rounded-xl ${card.iconBg}`}>
+                        <card.icon size={16} className={card.iconColor} />
+                      </div>
+                      {card.subtext && (
+                        <span className={`text-[10px] font-bold ${card.subtextColor}`}>
+                          {card.subtext}
                         </span>
-                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-                            Welcome to your Wellness Business Portal
-                        </h1>
-                        <p className="text-blue-200 text-xs md:text-sm max-w-xl font-normal leading-relaxed">
-                            Track your direct referrals, manage retail product inventory margins, and monitor corporate performance metrics from a clean centralized workspace.
-                        </p>
+                      )}
                     </div>
-                    {/* Background Graphic Element */}
-                    <div className="absolute right-0 bottom-0 top-0 w-1/3 bg-gradient-to-l from-white/5 to-transparent pointer-events-none hidden md:block" />
-                </div>
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide leading-tight">
+                      {card.title}
+                    </p>
+                    <p className={`mt-1 font-extrabold leading-tight ${card.highlight ? 'text-blue-600 text-lg' : 'text-gray-900 text-sm'}`}>
+                      {card.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-                {/* Grid Metric Section */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    
-                    {/* Metric Card 1 */}
-                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-2">
-                        <p className="text-[11px] text-gray-400 uppercase font-bold tracking-wider">Total Earnings</p>
-                        <p className="text-2xl font-black text-gray-900">₹0.00</p>
-                        <span className="text-[10px] text-green-500 font-medium bg-green-50 px-2 py-0.5 rounded-md">
-                            Current Cycle
+            {/* Recent Activity */}
+            <div className="mx-4 mt-6 mb-8 bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="flex justify-between items-center px-4 pt-4 pb-2">
+                <h3 className="text-sm font-bold text-gray-900">Recent Activity</h3>
+                <button className="text-xs font-semibold text-blue-600 flex items-center gap-0.5">
+                  View All <ChevronRight size={14} />
+                </button>
+              </div>
+
+              <div className="divide-y divide-gray-100">
+                {activities.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl ${item.iconBg}`}>
+                        <item.icon size={16} className={item.iconColor} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-900">{item.title}</p>
+                        <p className="text-[11px] text-gray-400">{item.description}</p>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-2">
+                      {item.value && (
+                        <p className={`text-xs font-bold ${item.valueColor}`}>{item.value}</p>
+                      )}
+                      <p className="text-[10px] text-gray-400 mt-0.5">{item.timestamp}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Desktop Layout ── */}
+          <div className="hidden md:block p-8 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {stats.map((card, idx) => (
+                <div
+                  key={idx}
+                  className={`bg-white rounded-xl p-5 shadow-sm border border-gray-100 border-t-4 ${card.borderColor} flex flex-col justify-between min-h-[110px]`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-[10px] font-bold tracking-wider text-gray-400 uppercase">
+                        {card.title}
+                      </p>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className={`font-extrabold text-gray-900 ${card.highlight ? 'text-3xl text-blue-600' : 'text-xl'}`}>
+                          {card.value}
                         </span>
+                      </div>
                     </div>
-
-                    {/* Metric Card 2 */}
-                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-2">
-                        <p className="text-[11px] text-gray-400 uppercase font-bold tracking-wider">Direct Referrals</p>
-                        <p className="text-2xl font-black text-gray-900">0</p>
-                        <span className="text-[10px] text-gray-400 font-medium bg-gray-50 px-2 py-0.5 rounded-md">
-                            Active Downline
-                        </span>
+                    <div className={`p-2.5 rounded-xl ${card.iconBg}`}>
+                      <card.icon size={18} className={card.iconColor} />
                     </div>
-
-                    {/* Metric Card 3 */}
-                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-2">
-                        <p className="text-[11px] text-gray-400 uppercase font-bold tracking-wider">Retail Margin</p>
-                        <p className="text-2xl font-black text-gray-900">Up to 20%</p>
-                        <span className="text-[10px] text-red-500 font-medium bg-red-50 px-2 py-0.5 rounded-md">
-                            Premium Tier
-                        </span>
+                  </div>
+                  {card.subtext && (
+                    <div className="mt-2 flex">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-green-600 bg-green-50 border border-green-200">
+                        {card.subtext}
+                      </span>
                     </div>
-
-                    {/* Metric Card 4 */}
-                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-2">
-                        <p className="text-[11px] text-gray-400 uppercase font-bold tracking-wider">Account Status</p>
-                        <div className="flex items-center gap-2 pt-1">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <p className="text-sm font-bold text-emerald-600 uppercase tracking-wide">Verified</p>
-                        </div>
-                    </div>
-
+                  )}
                 </div>
+              ))}
+            </div>
 
-                {/* Mock Data Placeholder Block */}
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                    <div className="border-b border-gray-100 pb-3">
-                        <h3 className="text-sm font-bold text-gray-800">Recent Operational Actions</h3>
-                        <p className="text-xs text-gray-400">Your live activity logs will populate here once API integration hooks are complete.</p>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-base font-bold text-gray-900">Recent Activity</h3>
+                <button className="text-sm font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-0.5">
+                  View All <ChevronRight size={16} />
+                </button>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {activities.map((item) => (
+                  <div key={item.id} className="py-4 flex items-center justify-between group hover:bg-slate-50/50 px-2 rounded-xl transition-colors duration-150 cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2.5 rounded-xl ${item.iconBg}`}>
+                        <item.icon size={18} className={item.iconColor} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-900">{item.title}</h4>
+                        <p className="text-sm text-gray-400 mt-0.5">{item.description}</p>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-center justify-center py-12 text-center text-gray-400 space-y-2">
-                        <span className="text-3xl">📊</span>
-                        <p className="text-xs font-medium">No log events detected in this session layout.</p>
+                    <div className="flex items-center gap-6 text-right">
+                      {item.value && (
+                        <p className={`text-sm font-bold ${item.valueColor}`}>{item.value}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-medium text-gray-400">{item.timestamp}</p>
+                        <ChevronRight size={16} className="text-gray-300 group-hover:text-gray-400" />
+                      </div>
                     </div>
-                </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
 
-            </main>
-        </div>
-    );
+        </main>
+      </div>
+
+      {/* Mobile bottom nav — rendered here, outside the hidden wrapper */}
+      {/* <MobileBottomNav /> */}
+    </div>
+  );
 }

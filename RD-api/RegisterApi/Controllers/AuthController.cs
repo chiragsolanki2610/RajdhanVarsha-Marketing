@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RegisterApi.DTOs;
 using RegisterApi.Services;
+using System.Security.Claims;
 
 namespace RegisterApi.Controllers;
 
@@ -33,7 +35,6 @@ public class AuthController : ControllerBase
         if (!success)
             return Conflict(new { message = error });
 
-        // This links directly to the GetUserById route and passes the custom generated string UserId
         return CreatedAtAction(nameof(GetUserById), new { userId = data!.UserId }, data);
     }
 
@@ -57,6 +58,38 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Gets the profile details of the currently authenticated logged-in user via JWT token claims.
+    /// </summary>
+    [HttpGet("profile")]
+    [Authorize] // Requires a valid JWT bearer token in the headers
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetProfile()
+    {
+        // Extracts the unique User ID embedded in the JWT token payload
+        // Note: Replace ClaimTypes.NameIdentifier if your login token uses a custom key (e.g., "id" or "sub")
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized(new { message = "Invalid or expired session token." });
+        }
+
+        var user = await _userService.GetUserByIdAsync(userId);
+
+        if (user is null)
+            return NotFound(new { message = "User record not found in database." });
+
+        // Maps structural DB properties to clean keys matching frontend expectations
+        return Ok(new
+        {
+            name = user.Name,
+            memberId = user.UserId
+        });
+    }
+
+    /// <summary>
     /// Fetch user details by their generated custom User ID.
     /// </summary>
     [HttpGet("{userId}")]
@@ -69,7 +102,6 @@ public class AuthController : ControllerBase
         if (user is null)
             return NotFound(new { message = $"User with ID '{userId}' not found." });
 
-        // Maps data fields dynamically to protect plain text password/hash variables from leaking
         var userProfile = new
         {
             user.UserId,
@@ -79,7 +111,7 @@ public class AuthController : ControllerBase
             user.SponsorId,
             user.SponsorIdName,
             user.Position,
-            user.Address, // REMOVED: user.UnderUserId is no longer tracked here
+            user.Address,
             user.CreatedAt
         };
 
