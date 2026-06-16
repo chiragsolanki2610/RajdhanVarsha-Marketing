@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RegisterApi.DTOs;
 using RegisterApi.Services;
@@ -32,7 +33,8 @@ public class AuthController : ControllerBase
         if (!success)
             return Conflict(new { message = error });
 
-        return CreatedAtAction(nameof(Register), data);
+        // This links directly to the GetUserById route and passes the custom generated string UserId
+        return CreatedAtAction(nameof(GetUserById), new { userId = data!.UserId }, data);
     }
 
     /// <summary>
@@ -52,5 +54,35 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = error });
 
         return Ok(data);
+    }
+
+    /// <summary>
+    /// Fetch user details by their generated custom User ID.
+    /// </summary>
+    [HttpGet("{userId}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUserById(string userId)
+    {
+        var user = await _userService.GetUserByIdAsync(userId);
+
+        if (user is null)
+            return NotFound(new { message = $"User with ID '{userId}' not found." });
+
+        // Maps data fields dynamically to protect plain text password/hash variables from leaking
+        var userProfile = new
+        {
+            user.UserId,
+            user.Name,
+            user.MobileNo,
+            user.AadharNo,
+            user.SponsorId,
+            user.SponsorIdName,
+            user.Position,
+            user.Address, // REMOVED: user.UnderUserId is no longer tracked here
+            user.CreatedAt
+        };
+
+        return Ok(userProfile);
     }
 }

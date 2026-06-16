@@ -16,8 +16,8 @@ public class RegisterRequestDto
     [RegularExpression(@"^\d{12}$", ErrorMessage = "Aadhar number must be 12 digits")]
     public string AadharNo { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Sponsor ID is required")]
-    public string SponsorId { get; set; } = string.Empty;
+    // REMOVED [Required] validation attribute to allow Super Admin bypass
+    public string? SponsorId { get; set; } = string.Empty;
 
     // Auto-filled from database — user does not need to enter this
     public string SponsorIdName { get; set; } = string.Empty;
@@ -25,9 +25,6 @@ public class RegisterRequestDto
     [Required(ErrorMessage = "Position is required")]
     [RegularExpression(@"^(Left|Right)$", ErrorMessage = "Position must be 'Left' or 'Right'")]
     public string Position { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Under User ID is required")]
-    public string UnderUserId { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Address is required")]
     public string Address { get; set; } = string.Empty;

@@ -9,12 +9,6 @@ using RegisterApi.Models;
 
 namespace RegisterApi.Services;
 
-public interface IUserService
-{
-    Task<(bool Success, string Error, RegisterResponseDto? Data)> RegisterAsync(RegisterRequestDto dto);
-    Task<(bool Success, string Error, LoginResponseDto? Data)> LoginAsync(LoginRequestDto dto);
-}
-
 public class UserService : IUserService
 {
     private readonly AppDbContext _db;
@@ -36,26 +30,48 @@ public class UserService : IUserService
 
     public async Task<(bool Success, string Error, RegisterResponseDto? Data)> RegisterAsync(RegisterRequestDto dto)
     {
-        // Check duplicate mobile
+        // 1. Check duplicate mobile
         if (await _db.Users.AnyAsync(u => u.MobileNo == dto.MobileNo.Trim()))
             return (false, "Mobile number is already registered.", null);
 
-        // Check duplicate Aadhar
+        // 2. Check duplicate Aadhar
         if (await _db.Users.AnyAsync(u => u.AadharNo == dto.AadharNo.Trim()))
             return (false, "Aadhar number is already registered.", null);
 
-        // Validate SponsorId exists in database
-        var sponsor = await _db.Users.FirstOrDefaultAsync(u => u.UserId == dto.SponsorId.Trim());
-        if (sponsor is null)
-            return (false, "Sponsor ID does not exist. Please enter a valid Sponsor ID.", null);
-
-        // Validate UnderUserId exists in database
-        var underUser = await _db.Users.FirstOrDefaultAsync(u => u.UserId == dto.UnderUserId.Trim());
-        if (underUser is null)
-            return (false, "Under User ID does not exist. Please enter a valid User ID.", null);
-
-        // Generate unique user ID and password
+        // 3. Generate unique user ID beforehand to see if it is the first ID
         var userId = await _idGenerator.GenerateNextUserIdAsync();
+
+        bool isSuperAdmin = (userId == "RD0001");
+
+        string finalSponsorId = "";
+        string finalSponsorName = "";
+
+        // 4. Validate Sponsor rules
+        if (isSuperAdmin)
+        {
+            // First user registration bypasses SponsorId requirements completely
+            finalSponsorId = "SYSTEM";
+            finalSponsorName = "Super Admin";
+        }
+        else
+        {
+            // Regular users MUST provide a valid Sponsor ID
+            if (string.IsNullOrWhiteSpace(dto.SponsorId))
+            {
+                return (false, "Sponsor ID is required for registration.", null);
+            }
+
+            var sponsor = await _db.Users.FirstOrDefaultAsync(u => u.UserId == dto.SponsorId.Trim());
+            if (sponsor is null)
+            {
+                return (false, "Sponsor ID does not exist. Please enter a valid Sponsor ID.", null);
+            }
+
+            finalSponsorId = sponsor.UserId;
+            finalSponsorName = sponsor.Name;
+        }
+
+        // 5. Generate security credentials
         var plainPassword = _passwordService.GeneratePassword();
         var hashedPassword = _passwordService.HashPassword(plainPassword);
 
@@ -65,10 +81,9 @@ public class UserService : IUserService
             Name = dto.Name.Trim(),
             MobileNo = dto.MobileNo.Trim(),
             AadharNo = dto.AadharNo.Trim(),
-            SponsorId = sponsor.UserId,           // from database
-            SponsorIdName = sponsor.Name,             // auto-filled from database
+            SponsorId = finalSponsorId,
+            SponsorIdName = finalSponsorName,
             Position = dto.Position.Trim(),
-            UnderUserId = underUser.UserId,         // from database
             Address = dto.Address.Trim(),
             Password = plainPassword,
             PasswordHash = hashedPassword,
@@ -84,7 +99,11 @@ public class UserService : IUserService
             GeneratedPassword = plainPassword,
             Name = user.Name,
             MobileNo = user.MobileNo,
-            Message = "Registration successful. Save your User ID and Password!"
+            SponsorId = finalSponsorId,
+            SponsorIdName = finalSponsorName,
+            Message = isSuperAdmin
+                ? "Super Admin Registration successful! Save your User ID and Password!"
+                : "Registration successful. Save your User ID and Password!"
         });
     }
 
@@ -105,8 +124,17 @@ public class UserService : IUserService
             MobileNo = user.MobileNo,
             Position = user.Position,
             SponsorId = user.SponsorId,
+            SponsorIdName = user.SponsorIdName,
             Token = token
         });
+    }
+
+    public async Task<User?> GetUserByIdAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return null;
+
+        return await _db.Users
+            .FirstOrDefaultAsync(u => u.UserId == userId.Trim());
     }
 
     private string GenerateJwtToken(User user)

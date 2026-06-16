@@ -13,7 +13,6 @@ export default function RegisterPage() {
         sponsorId: "",
         sponsorName: "",
         position: "",
-        underUserId: "",
         address: "",
         password: "",
         confirmPassword: "",
@@ -21,7 +20,9 @@ export default function RegisterPage() {
     });
 
     const [isLoading, setIsLoading] = useState(false);
+    const [isLoggingIn, setIsLoggingIn] = useState(false); // New state to trace background login status
     const [apiError, setApiError] = useState<string | null>(null);
+    const [isFetchingSponsor, setIsFetchingSponsor] = useState(false); // UI state for sponsor checking
     
     // Popup Modal States
     const [showPopup, setShowPopup] = useState(false);
@@ -29,6 +30,37 @@ export default function RegisterPage() {
         userId: "",
         password: ""
     });
+
+    // Automatically fetches sponsor details using your AuthController [HttpGet("{userId}")] endpoint
+    const fetchSponsorName = async (sponsorId: string) => {
+        if (!sponsorId.trim()) {
+            setFormData((prev) => ({ ...prev, sponsorName: "" }));
+            return;
+        }
+
+        setIsFetchingSponsor(true);
+        try {
+            const response = await fetch(`https://localhost:56187/api/Auth/${sponsorId.trim()}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                // Map from C# userProfile response 'userId' and 'name' properties
+                setFormData((prev) => ({ ...prev, sponsorName: data.name || "" }));
+            } else {
+                setFormData((prev) => ({ ...prev, sponsorName: "Sponsor Not Found ⚠️" }));
+            }
+        } catch (error) {
+            console.error("Error fetching sponsor:", error);
+            setFormData((prev) => ({ ...prev, sponsorName: "Connection Error" }));
+        } finally {
+            setIsFetchingSponsor(false);
+        }
+    };
 
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -57,20 +89,17 @@ export default function RegisterPage() {
         setApiError(null);
 
         try {
-            // Capitalize 'left' or 'right' to 'Left' or 'Right' so the API validation rule accepts it
             const formattedPosition = formData.position 
                 ? formData.position.charAt(0).toUpperCase() + formData.position.slice(1) 
                 : "";
 
-            // Mapping the frontend form keys to what your backend expects
             const payload = {
                 Name: formData.name,
-                MobileNo: formData.mobile,       // Fixed property key matching backend requirement
-                AadharNo: formData.aadhar,       // Fixed property key matching backend requirement
+                MobileNo: formData.mobile,
+                AadharNo: formData.aadhar,
                 SponsorId: formData.sponsorId,
                 SponsorName: formData.sponsorName,
-                Position: formattedPosition,     // Fixed casing constraint ('Left' or 'Right')
-                UnderUserId: formData.underUserId,
+                Position: formattedPosition,
                 Address: formData.address
             };
 
@@ -84,24 +113,20 @@ export default function RegisterPage() {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                
-                // If the backend responds with specific validation messages, pull them directly to the screen UI
                 if (errorData.errors) {
                     const detailedErrors = Object.entries(errorData.errors)
                         .map(([field, messages]) => `${(messages as string[]).join(', ')}`)
                         .join(' | ');
                     throw new Error(detailedErrors || "Registration failed. Invalid inputs.");
                 }
-
                 throw new Error(errorData.message || "Registration failed. Please check your network or inputs.");
             }
 
             const data = await response.json();
             
-            // Adjust the fallbacks matching your ASP.NET Core response fields
             setGeneratedCredentials({
-                userId: data.userId || data.id || data.username || "Generated ID Unavailable",
-                password: data.password || data.generatedPassword || "Automatically Assigned"
+                userId: data.userId || "Generated ID Unavailable",
+                password: data.generatedPassword || "Automatically Assigned"
             });
             
             setShowPopup(true);
@@ -113,10 +138,45 @@ export default function RegisterPage() {
         }
     };
 
-    const handleLoginAndRedirect = () => {
-        // You could inject authentication tokens into state / cookies here if provided by the registration hook
-        setShowPopup(false);
-        router.push("/dashboard");
+    const handleLoginAndRedirect = async () => {
+        setIsLoggingIn(true);
+        setApiError(null);
+
+        try {
+            const loginPayload = {
+                UserId: generatedCredentials.userId,
+                Password: generatedCredentials.password
+            };
+
+            const response = await fetch("https://localhost:56187/api/Auth/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(loginPayload),
+            });
+
+            if (!response.ok) {
+                throw new Error("Account created successfully, but automatic login failed. Please login manually.");
+            }
+
+            const loginData = await response.json();
+
+            if (loginData.token) {
+                localStorage.setItem("authToken", loginData.token);
+                localStorage.setItem("userProfile", JSON.stringify(loginData));
+            }
+
+            setShowPopup(false);
+            router.push("/dashboard");
+        } catch (error: any) {
+            console.error("Auto Login Error:", error);
+            alert(error.message || "Authentication routing failed.");
+            setShowPopup(false);
+            router.push("/login");
+        } finally {
+            setIsLoggingIn(false);
+        }
     };
 
     const inputStyles =
@@ -257,9 +317,9 @@ export default function RegisterPage() {
                                     placeholder="Sponsor code"
                                     value={formData.sponsorId}
                                     onChange={handleChange}
+                                    onBlur={(e) => fetchSponsorName(e.target.value)}
                                     className={inputStyles}
                                     disabled={isLoading}
-                                    required
                                 />
                             </div>
 
@@ -269,50 +329,32 @@ export default function RegisterPage() {
                                     type="text"
                                     id="sponsorName"
                                     name="sponsorName"
-                                    placeholder="Sponsor name"
+                                    placeholder={isFetchingSponsor ? "Checking ID..." : "Sponsor name"}
                                     value={formData.sponsorName}
                                     onChange={handleChange}
-                                    className={inputStyles}
-                                    disabled={isLoading}
-                                    required
+                                    className={`${inputStyles} bg-gray-50 text-gray-600 font-medium`}
+                                    readOnly
                                 />
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label htmlFor="position" className={labelStyles}>Your Position</label>
-                                <div className="relative">
-                                    <select
-                                        id="position"
-                                        name="position"
-                                        value={formData.position}
-                                        onChange={handleChange}
-                                        className={`${inputStyles} appearance-none cursor-pointer pr-10 text-gray-800`}
-                                        disabled={isLoading}
-                                        required
-                                    >
-                                        <option value="" disabled>Select Position</option>
-                                        <option value="left">LEFT</option>
-                                        <option value="right">RIGHT</option>
-                                    </select>
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-[10px]">▼</div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label htmlFor="underUserId" className={labelStyles}>Under User ID</label>
-                                <input
-                                    type="text"
-                                    id="underUserId"
-                                    name="underUserId"
-                                    placeholder="User ID"
-                                    value={formData.underUserId}
+                        <div className="mb-4">
+                            <label htmlFor="position" className={labelStyles}>Your Position</label>
+                            <div className="relative">
+                                <select
+                                    id="position"
+                                    name="position"
+                                    value={formData.position}
                                     onChange={handleChange}
-                                    className={inputStyles}
+                                    className={`${inputStyles} appearance-none cursor-pointer pr-10 text-gray-800`}
                                     disabled={isLoading}
                                     required
-                                />
+                                >
+                                    <option value="" disabled>Select Position</option>
+                                    <option value="left">LEFT</option>
+                                    <option value="right">RIGHT</option>
+                                </select>
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-[10px]">▼</div>
                             </div>
                         </div>
 
@@ -399,9 +441,20 @@ export default function RegisterPage() {
 
                         <button
                             onClick={handleLoginAndRedirect}
-                            className="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold tracking-wider uppercase rounded-xl py-3 text-xs transition-all duration-200 shadow-md shadow-blue-800/10"
+                            disabled={isLoggingIn}
+                            className="w-full bg-blue-800 hover:bg-blue-900 text-white font-bold tracking-wider uppercase rounded-xl py-3 text-xs transition-all duration-200 shadow-md shadow-blue-800/10 disabled:opacity-75 flex items-center justify-center gap-2"
                         >
-                            Login to Dashboard
+                            {isLoggingIn ? (
+                                <>
+                                    <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    </svg>
+                                    Logging in...
+                                </>
+                            ) : (
+                                "Login to Dashboard"
+                            )}
                         </button>
                     </div>
                 </div>

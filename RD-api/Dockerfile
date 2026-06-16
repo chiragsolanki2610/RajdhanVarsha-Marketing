@@ -1,16 +1,19 @@
 # Use the official Microsoft .NET SDK image to build the project
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy AS build
 WORKDIR /src
 
-# Copy everything and restore dependencies
+# Copy everything from the RD-api folder into the container
 COPY . .
+
+# Move into the actual project folder where the .csproj lives and restore dependencies
+WORKDIR /src/RegisterApi
 RUN dotnet restore
 
-# Build and publish a release variant
+# Build and publish a release variant from the project directory
 RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 
 # Use the lightweight ASP.NET Core runtime image for production
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-jammy AS final
 WORKDIR /app
 EXPOSE 8080
 COPY --from=build /app/publish .
