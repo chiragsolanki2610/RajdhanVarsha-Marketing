@@ -1,5 +1,12 @@
 namespace RegisterApi.Models;
 
+// 1. Define the roles available in your system
+public enum UserRole
+{
+    User = 0,
+    Admin = 1
+}
+
 public class User
 {
     public int Id { get; set; }
@@ -10,9 +17,12 @@ public class User
     public string SponsorId { get; set; } = string.Empty;
     public string SponsorIdName { get; set; } = string.Empty;
     public string Position { get; set; } = string.Empty;
-    //public string UnderUserId { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
+
+    // 2. Add the Role property, defaulting to UserRole.User
+    public UserRole Role { get; set; } = UserRole.User;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

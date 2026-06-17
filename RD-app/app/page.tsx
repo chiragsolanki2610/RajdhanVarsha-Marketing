@@ -22,12 +22,15 @@ const stagger = {
   visible: { transition: { staggerChildren: 0.1 } },
 };
 
+// Augmented local data schema structure to keep data points separate for badges
 const productShowcase = [
   {
     id: 1,
     name: "Digestive drop",
     category: "HEALTHCARE",
-    price: "₹ 350",
+    price: 350, // MRP
+    dp: 250,
+    bv: 150,
     image: "/photos/product_digestive_drop.jpg",
     tag: null,
     tagColor: "bg-emerald-500",
@@ -36,7 +39,9 @@ const productShowcase = [
     id: 2,
     name: "Mattress",
     category: "WELLNESS",
-    price: "₹ 15,000",
+    price: 15000, // MRP
+    dp: 12000,
+    bv: 5000,
     image: "/photos/product_bedSheat.jpg",
     tag: null,
     tagColor: "bg-red-500",
@@ -45,7 +50,9 @@ const productShowcase = [
     id: 3,
     name: "Anti radiation chip",
     category: "HEALTHCARE",
-    price: "₹ 500",
+    price: 500, // MRP
+    dp: 380,
+    bv: 200,
     image: "/photos/product_chip.jpg",
     tag: null,
   },
@@ -53,7 +60,9 @@ const productShowcase = [
     id: 4,
     name: "Hand Bracelet",
     category: "OTHER",
-    price: "₹ 900",
+    price: 900, // MRP
+    dp: 700,
+    bv: 350,
     image: "/photos/product_wrist_band.jpg",
     tag: null,
   },
@@ -160,7 +169,6 @@ export default function Home() {
         </section>
 
         {/* ── 3. Product Display Section ─────────────────────────── */}
-        {/* FIX: Handled edge padding parameters seamlessly via `px-0 lg:px-4` containers to let horizontal sliders flow end-to-edge natively on mobile */}
         <section id="products" className="py-12 sm:py-20 lg:py-24 bg-white overflow-hidden">
           <div className="container mx-auto px-0 lg:px-4 md:px-6">
             <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-16 px-4 lg:px-0">
@@ -175,7 +183,6 @@ export default function Home() {
               </p>
             </div>
 
-            {/* FIX: Wrapped container track inside a touch-friendly swiper overflow layout (`flex overflow-x-auto no-scrollbar snap-x snap-mandatory lg:grid lg:overflow-x-visible`) */}
             <motion.div
               initial="hidden"
               whileInView="visible"
@@ -187,7 +194,7 @@ export default function Home() {
                 <motion.div
                   key={product.id}
                   variants={fadeIn}
-                  className="group border border-gray-200/80 rounded-2xl p-5 bg-white transition-all duration-300 flex flex-col relative overflow-hidden hover:border-blue-500 hover:shadow-[0_0_25px_rgba(37,99,235,0.4)] min-w-[280px] sm:min-w-[320px] lg:min-w-0 snap-center shrink-0"
+                  className="group border border-gray-200/80 rounded-2xl p-5 bg-white transition-all duration-300 flex flex-col relative overflow-hidden hover:border-blue-500 hover:shadow-md min-w-[280px] sm:min-w-[320px] lg:min-w-0 snap-center shrink-0"
                 >
                   <div className="bg-[#f8fafc] rounded-xl p-6 flex items-center justify-center h-[220px] border border-gray-100 relative overflow-hidden mb-5 transition-colors duration-300 group-hover:bg-blue-50/30">
                     <div className="absolute inset-0 bg-blue-500/5 opacity-0 scale-70 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 rounded-xl pointer-events-none" />
@@ -207,7 +214,7 @@ export default function Home() {
                     />
                   </div>
 
-                  <div className="flex flex-col flex-1 text-center">
+                  <div className="flex flex-col flex-1 text-left">
                     <span className="text-[11px] font-bold text-gray-400 tracking-widest uppercase mb-1">
                       {product.category}
                     </span>
@@ -215,23 +222,38 @@ export default function Home() {
                       {product.name}
                     </h4>
 
-                    <div className="mt-3 mb-4">
-                      <span className="text-red-600 font-extrabold text-base tracking-tight">
-                        {product.price}
-                      </span>
+                    {/* Updated Pricing Badges matching design parameters perfectly */}
+                    <div className="mt-3 mb-4 flex items-center justify-start gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
+                      {/* MRP Badge (Blue) */}
+                      <div className="inline-flex items-center justify-center bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
+                        MRP : {product.price}
+                      </div>
+                      
+                      {/* DP Badge (Red) */}
+                      <div className="inline-flex items-center justify-center bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
+                        DP : {product.dp}
+                      </div>
+
+                      {/* BV Badge (Blue) */}
+                      <div className="inline-flex items-center justify-center bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
+                        BV : {product.bv}
+                      </div>
                     </div>
 
-                    <Link
-                      href={`/products/${product.id}`}
-                      className="mt-auto w-full py-2.5 bg-slate-800 text-white font-bold text-xs rounded-lg transition-colors shadow-sm tracking-wide uppercase group-hover:bg-blue-600"
-                    >
-                      View Details
-                    </Link>
+                    {/* Updated Compact Learn More Button Structure */}
+                    <div className="mt-auto pt-1">
+                      <Link
+                        href={`/products/${product.id}`}
+                        className="relative z-10 w-full py-2 font-semibold text-xs rounded-md transition-colors border border-gray-300 bg-gray-100 text-gray-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 shadow-sm flex items-center justify-center"
+                      >
+                        Learn More
+                      </Link>
+                    </div>
                   </div>
                 </motion.div>
               ))}
 
-              {/* FIX: Appended a terminal "See All Products" card layout at the trailing end of the mobile/tablet horizon container track */}
+              {/* Terminal "See All Products" card slider endpoint on smaller devices */}
               <motion.div
                 variants={fadeIn}
                 className="flex lg:hidden flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-2xl p-6 min-w-[240px] snap-center shrink-0 bg-gray-50/50 hover:bg-gray-50 text-center group"
@@ -293,12 +315,12 @@ export default function Home() {
                   <div className="md:col-span-5 flex flex-col h-full justify-center text-center md:text-left">
                     <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mb-3">{plan.name}</h3>
                     <p className="text-gray-500 text-xs sm:text-sm leading-relaxed mb-6 md:mb-8">{plan.tagline}</p>
-                    
+
                     <button
-                      onClick={() => scrollTo("contact")}
+                      onClick={() => window.location.href = "/our-plan"}
                       className="w-full py-3.5 font-bold text-sm rounded-xl transition-all tracking-wide flex items-center justify-center gap-2 bg-slate-900 text-white hover:bg-blue-600 shadow-md transform hover:-translate-y-0.5"
                     >
-                      Learn More <ArrowRight className="w-4 h-4" />
+                      View Plans <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
 

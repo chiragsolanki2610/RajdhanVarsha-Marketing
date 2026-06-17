@@ -2,6 +2,7 @@
 
 import { Bell } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link"; // 1. Import Next.js Link component
 
 interface LoginTopbarProps {
   userName?: string;
@@ -57,9 +58,13 @@ export default function LoginTopbar({
             <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full" />
           </button>
 
-          <div className="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center">
+          {/* 2. Wrapped the avatar element inside Link */}
+          <Link 
+            href="/profile" 
+            className="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
+          >
             <span className="text-white font-semibold text-xs">{initials}</span>
-          </div>
+          </Link>
         </div>
       </div>
 

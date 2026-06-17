@@ -4,11 +4,14 @@ import React, { useState } from "react";
 import Navbar from "@/components/Navbar"; 
 import Footer from "@/components/Footer";
 
+// Updated products array with separate keys for MRP (price), DP, and BV
 const PRODUCTS = [
   { 
     id: 1, 
     name: "Digestive drop", 
-    price: 350, 
+    price: 350, // MRP
+    dp: 250,
+    bv: 150,
     category: "Bags", 
     image: "/photos/product_digestive_drop.jpg"
   },
@@ -16,6 +19,8 @@ const PRODUCTS = [
     id: 2, 
     name: "Lady care syrup", 
     price: 349, 
+    dp: 249,
+    bv: 140,
     category: "Electronics", 
     image: "/photos/product_lady_care.jpg"
   },
@@ -23,6 +28,8 @@ const PRODUCTS = [
     id: 3, 
     name: "Relax on oil", 
     price: 350, 
+    dp: 250,
+    bv: 150,
     category: "Electronics", 
     image: "/photos/product_relex_on.jpg"
   },
@@ -30,6 +37,8 @@ const PRODUCTS = [
     id: 4, 
     name: "Anti radiation chip", 
     price: 500, 
+    dp: 380,
+    bv: 200,
     category: "Accessories", 
     image: "/photos/product_chip.jpg"
   },
@@ -37,6 +46,8 @@ const PRODUCTS = [
     id: 5, 
     name: "Bottle Cover", 
     price: 1100, 
+    dp: 850,
+    bv: 400,
     category: "Furniture", 
     image: "/photos/product_bottle_cover.jpg"
   },
@@ -44,6 +55,8 @@ const PRODUCTS = [
     id: 6, 
     name: "Hand Bracelet", 
     price: 900, 
+    dp: 700,
+    bv: 350,
     category: "Accessories", 
     image: "/photos/product_wrist_band.jpg"
   },
@@ -51,6 +64,8 @@ const PRODUCTS = [
     id: 7, 
     name: "Mattress", 
     price: 15000, 
+    dp: 12000,
+    bv: 5000,
     category: "Electronics", 
     image: "/photos/product_bedSheat.jpg"
   },
@@ -140,10 +155,31 @@ export default function ProductsPage() {
                     </a>
                   </h3>
 
-                  <div className="mt-auto pt-6 flex items-center justify-between">
-                    <p className="text-lg font-bold text-gray-900">₹{product.price}</p>
-                    <button className="relative z-10 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none transition-colors">
-                      Add to Cart
+                  {/* Pricing Badges Area */}
+                  <div className="mt-auto pt-4 flex items-center justify-start gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
+                    {/* MRP Badge (Blue) */}
+                    <div className="inline-flex items-center justify-center bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
+                      MRP : {product.price}
+                    </div>
+                    
+                    {/* DP Badge (Red) */}
+                    <div className="inline-flex items-center justify-center bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
+                      DP : {product.dp}
+                    </div>
+
+                    {/* BV Badge (Blue) */}
+                    <div className="inline-flex items-center justify-center bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
+                      BV : {product.bv}
+                    </div>
+                  </div>
+
+                  {/* Decreased Size Button Element */}
+                  <div className="mt-4 pt-1">
+                    <button 
+                      onClick={() => window.location.href = `/products/${product.id}`}
+                      className="relative z-10 w-full py-2 font-semibold text-xs rounded-md transition-colors border border-gray-400 bg-gray-100 text-gray-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 shadow-sm flex items-center justify-center"
+                    >
+                      Learn More
                     </button>
                   </div>
                 </div>

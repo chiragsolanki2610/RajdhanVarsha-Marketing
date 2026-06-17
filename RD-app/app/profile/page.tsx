@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import LoginTopBar from '@/components/loginTopbar';
 import { 
@@ -40,6 +41,7 @@ interface UserProfileData {
 }
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +107,7 @@ export default function ProfilePage() {
         setProfile({
           name: "FIRSTUSER",
           mobileNo: "2227618099",
-          aadharNo: "247931417095",
+          aadharNo: "[Aadhaar Redacted]",
           sponsorId: "SYSTEM",
           sponsorIdName: "SYSTEM SPONSOR",
           position: "Right",
@@ -131,8 +133,8 @@ export default function ProfilePage() {
   }, []);
 
   const handleKycRedirect = () => {
-    // Navigate straight to your target KYC document verification route
-    window.location.href = '/dashboard/kyc';
+    // Navigate straight to your target Next.js app router file path sequence
+    router.push('/dashboard/kyc');
   };
 
   return (

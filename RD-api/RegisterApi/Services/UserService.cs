@@ -34,9 +34,9 @@ public class UserService : IUserService
         if (await _db.Users.AnyAsync(u => u.MobileNo == dto.MobileNo.Trim()))
             return (false, "Mobile number is already registered.", null);
 
-        // 2. Check duplicate Aadhar
+        // 2. Check duplicate identification document details
         if (await _db.Users.AnyAsync(u => u.AadharNo == dto.AadharNo.Trim()))
-            return (false, "Aadhar number is already registered.", null);
+            return (false, "Identification number is already registered.", null);
 
         // 3. Generate unique user ID beforehand to see if it is the first ID
         var userId = await _idGenerator.GenerateNextUserIdAsync();
@@ -87,6 +87,10 @@ public class UserService : IUserService
             Address = dto.Address.Trim(),
             Password = plainPassword,
             PasswordHash = hashedPassword,
+
+            // 👇 FIX 1: Automatically make RD0001 the Admin, everyone else a standard User
+            Role = isSuperAdmin ? UserRole.Admin : UserRole.User,
+
             CreatedAt = DateTime.UtcNow
         };
 
@@ -150,7 +154,9 @@ public class UserService : IUserService
             new Claim(ClaimTypes.NameIdentifier, user.UserId),
             new Claim(ClaimTypes.Name,           user.Name),
             new Claim(ClaimTypes.MobilePhone,    user.MobileNo),
-            new Claim(ClaimTypes.Role,           user.Position)
+            
+            // 👇 FIX 2: Bind the actual user.Role to the token claim so the API guards understand it
+            new Claim(ClaimTypes.Role,           user.Role.ToString())
         };
 
         var token = new JwtSecurityToken(

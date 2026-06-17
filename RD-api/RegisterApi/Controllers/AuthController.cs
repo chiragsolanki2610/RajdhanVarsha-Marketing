@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RegisterApi.DTOs;
 using RegisterApi.Services;
+using RegisterApi.Models; // Added to access UserRole enum
 using System.Security.Claims;
 
 namespace RegisterApi.Controllers;
@@ -58,42 +59,66 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Gets the profile details of the currently authenticated logged-in user via JWT token claims.
+    /// Gets the full profile of the currently authenticated user via JWT token claims.
     /// </summary>
     [HttpGet("profile")]
-    [Authorize] // Requires a valid JWT bearer token in the headers
+    [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProfile()
     {
-        // Extracts the unique User ID embedded in the JWT token payload
-        // Note: Replace ClaimTypes.NameIdentifier if your login token uses a custom key (e.g., "id" or "sub")
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
         if (string.IsNullOrEmpty(userId))
-        {
             return Unauthorized(new { message = "Invalid or expired session token." });
-        }
 
         var user = await _userService.GetUserByIdAsync(userId);
 
         if (user is null)
             return NotFound(new { message = "User record not found in database." });
 
-        // Maps structural DB properties to clean keys matching frontend expectations
         return Ok(new
         {
             name = user.Name,
-            memberId = user.UserId
+            memberId = user.UserId,
+            mobileNo = user.MobileNo,
+            aadharNo = user.AadharNo,
+            sponsorId = user.SponsorId,
+            sponsorIdName = user.SponsorIdName,
+            position = user.Position,
+            address = user.Address,
+            joinDate = user.CreatedAt.ToString("dd-MMM-yyyy"),
+
+            // Pass the string value ("User" or "Admin") to the frontend layout engine
+            role = user.Role.ToString(),
+
+            status = "ACTIVE",
+            // Dynamically change the membership title text depending on their actual role
+            membershipLevel = user.Role == UserRole.Admin ? "System Administrator" : "Registered Member",
+            bvPoints = 0,
+            referrals = 0,
+            currentRank = "New Member",
+            nextRank = "Silver Member",
+            neededReferrals = 10,
+            isKycCompleted = false,
+
+            // KYC bank fields — not in User model yet, return empty for now
+            bankName = "",
+            accountNo = "",
+            ifscCode = "",
+            accountType = "Savings"
         });
     }
 
     /// <summary>
-    /// Fetch user details by their generated custom User ID.
+    /// Fetch user details by their generated custom User ID. Only accessible by Admins.
     /// </summary>
     [HttpGet("{userId}")]
+    [Authorize(Roles = "Admin")] // Blocks normal users; returns 403 Forbidden unless logged in as Admin
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserById(string userId)
     {
@@ -102,7 +127,7 @@ public class AuthController : ControllerBase
         if (user is null)
             return NotFound(new { message = $"User with ID '{userId}' not found." });
 
-        var userProfile = new
+        return Ok(new
         {
             user.UserId,
             user.Name,
@@ -112,9 +137,8 @@ public class AuthController : ControllerBase
             user.SponsorIdName,
             user.Position,
             user.Address,
-            user.CreatedAt
-        };
-
-        return Ok(userProfile);
+            user.CreatedAt,
+            role = user.Role.ToString()
+        });
     }
 }

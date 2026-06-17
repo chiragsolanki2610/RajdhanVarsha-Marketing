@@ -137,9 +137,10 @@ export default function Navbar({ transparent = false }: NavbarProps) {
                   Our Team
                 </Link>
                 
+                {/* Clean redirection to Legal Documents page */}
                 <Link
-                  href="/#about" 
-                  onClick={(e) => { setAboutDropdownOpen(false); handleScrollLink(e, "about"); }}
+                  href="/legal-documents" 
+                  onClick={() => setAboutDropdownOpen(false)}
                   className={dropdownItemStyles}
                 >
                   Legal Documents
@@ -226,9 +227,10 @@ export default function Navbar({ transparent = false }: NavbarProps) {
             >
               Our Team
             </Link>
+            {/* Mobile Redirect to Legal Documents page */}
             <Link
-              href="/#about"
-              onClick={(e) => handleScrollLink(e, "about")}
+              href="/legal-documents"
+              onClick={() => setMobileOpen(false)}
               className="text-left text-sm font-medium p-2 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors no-underline"
             >
               Legal Documents

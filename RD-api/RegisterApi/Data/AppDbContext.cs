@@ -21,6 +21,13 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
             entity.Property(e => e.MobileNo).HasMaxLength(15).IsRequired();
             entity.Property(e => e.AadharNo).HasMaxLength(12).IsRequired();
+
+            // 👇 ADD THIS LINE RIGHT HERE 👇
+            // This ensures "User" or "Admin" is saved as readable text in your database column
+            entity.Property(e => e.Role)
+                  .HasConversion<string>()
+                  .HasMaxLength(20) // Good practice to give it a max length
+                  .IsRequired();
         });
     }
 }
