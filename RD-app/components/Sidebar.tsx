@@ -85,8 +85,6 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   const isProfileActive = pathname === '/profile';
-
-  // ─── Check if current user should see Admin Panel ─────────────────────────
   const isAdmin = userData?.role === 'Admin' || ADMIN_MEMBER_IDS.includes(userData?.memberId || '');
 
   // ─── FETCH PROFILE FROM API ───────────────────────────────────────────────
@@ -96,7 +94,6 @@ export default function Sidebar() {
     let fallbackRole = 'User';
 
     try {
-      // 1. Read identity from localStorage
       const profileString = localStorage.getItem('userProfile');
       const alternateUserString = localStorage.getItem('user');
       const rememberedId = localStorage.getItem('rememberUserId');
@@ -123,10 +120,8 @@ export default function Sidebar() {
         currentUserId = rememberedId;
       }
 
-      // 2. Set local state immediately so UI doesn't stutter
       setUserData({ name: fallbackName, memberId: currentUserId, role: fallbackRole });
 
-      // 3. Fetch fresh role from backend (uses env variable — no hardcoded port)
       const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:56187';
       const savedToken = localStorage.getItem('token');
 
@@ -149,7 +144,6 @@ export default function Sidebar() {
         localStorage.setItem('userProfile', JSON.stringify(updatedProfile));
       }
     } catch (error) {
-      // Backend not running or unreachable — silently fall back to localStorage data
       console.warn('Backend unreachable, using cached profile data.');
     } finally {
       setIsLoading(false);
@@ -158,10 +152,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     loadUserAndFetchRole();
-
-    // Re-sync when another tab updates localStorage (e.g. login/logout)
     window.addEventListener('storage', loadUserAndFetchRole);
-
     return () => {
       window.removeEventListener('storage', loadUserAndFetchRole);
     };
@@ -177,7 +168,7 @@ export default function Sidebar() {
         setIsProductOpen(true);
         setIsNetworkOpen(false);
         setIsAdminOpen(false);
-      } else if (pathname.startsWith('/admin')) {
+      } else if (pathname.toLowerCase().startsWith('/admin')) {
         setIsAdminOpen(true);
         setIsProductOpen(false);
         setIsNetworkOpen(false);
@@ -204,6 +195,7 @@ export default function Sidebar() {
     { icon: History,     label: 'Order History', path: '/shop/order-history' },
   ];
 
+  // ✅ FIXED: All paths are now lowercase to match folder structure
   const adminSubItems = [
     { icon: CheckSquare, label: 'KYC Requests',          path: '/admin/kyc-requests' },
     { icon: Banknote,    label: 'Withdrawal Requests',    path: '/admin/withdrawal-requests' },
@@ -477,7 +469,7 @@ export default function Sidebar() {
                     {isOpen && <span className="truncate animate-fadeIn">Finance & Earnings</span>}
                   </Link>
 
-                  {/* ── Admin Panel (visible if role=Admin OR memberId is in ADMIN_MEMBER_IDS) ── */}
+                  {/* ── Admin Panel ── */}
                   {isAdmin && (
                     <div className="pt-2">
                       <button
@@ -497,7 +489,7 @@ export default function Sidebar() {
                         className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
                           isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
                         } ${
-                          pathname.startsWith('/admin')
+                          pathname.toLowerCase().startsWith('/admin')
                             ? 'bg-red-700/40 text-white font-semibold border border-red-500/20'
                             : 'text-red-200 hover:bg-red-700/20'
                         }`}
@@ -517,7 +509,7 @@ export default function Sidebar() {
                       {isOpen && isAdminOpen && (
                         <div className="mt-1 pl-4 space-y-1 border-l border-red-400/30 ml-5 animate-fadeIn">
                           {adminSubItems.map((subItem, aIdx) => {
-                            const isSubActive = pathname === subItem.path;
+                            const isSubActive = pathname.toLowerCase() === subItem.path.toLowerCase();
                             return (
                               <Link
                                 key={aIdx}

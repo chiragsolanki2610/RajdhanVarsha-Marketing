@@ -40,7 +40,6 @@ export default function KycVerificationPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Automatically seed data available from /api/Auth/profile on mount
   useEffect(() => {
     const fetchProfileToSeed = async () => {
       try {
@@ -59,7 +58,7 @@ export default function KycVerificationPage() {
           setMobileNo(apiData.mobileNo || '');
           setAddress(apiData.address || '');
           setAadharNo(apiData.aadharNo || '');
-          setAccountHolderName(apiData.name || ''); // Defaulting holder name to member name
+          setAccountHolderName(apiData.name || ''); 
         }
       } catch (err) {
         console.error("Could not pre-seed profile records into KYC form layout:", err);
@@ -79,10 +78,23 @@ export default function KycVerificationPage() {
     }
   };
 
+  // Helper function to transform physical files into Base64 strings for JSON transport
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        // Strip out the metadata prefix (e.g., "data:image/png;base64,") if your backend requires raw base64 string
+        const base64String = reader.result as string;
+        resolve(base64String);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const handleSubmitKyc = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Core data verification assertion checks
     if (!age || !dob || !panNo || !bankName || !accountNo || !ifscCode || !accountHolderName) {
       setError("Please fill out all missing textual registration data completely.");
       return;
@@ -98,43 +110,42 @@ export default function KycVerificationPage() {
       setError(null);
       const token = localStorage.getItem('token');
 
-      // Initialize Multipart Form Data structure to enable binary image streams tracking
-      const formData = new FormData();
-      
-      // Personal Details Payload Append
-      formData.append('fullName', fullName);
-      formData.append('mobileNo', mobileNo);
-      formData.append('age', age);
-      formData.append('dob', dob);
-      formData.append('address', address);
+      // Convert all loaded imagery files concurrently to base64
+      const [aadharFrontBase64, aadharBackBase64, panCardBase64, bankProofBase64] = await Promise.all([
+        convertFileToBase64(aadharFront),
+        convertFileToBase64(aadharBack),
+        convertFileToBase64(panCardImg),
+        convertFileToBase64(bankProofImg)
+      ]);
 
-      // Identity Documents Text Data Append
-      formData.append('aadharNo', aadharNo);
-      formData.append('panNo', panNo.toUpperCase());
+      // Construct a standardized JSON schema object payload matching pure Appliaction/JSON content specifications
+      const kycPayload = {
+        fullName,
+        mobileNo,
+        age: parseInt(age, 10),
+        dob,
+        address,
+        aadharNo,
+        panNo: panNo.toUpperCase(),
+        accountHolderName,
+        accountNo,
+        bankName,
+        ifscCode: ifscCode.toUpperCase(),
+        aadharFrontImageUrl: aadharFrontBase64,
+        aadharBackImageUrl: aadharBackBase64,
+        panCardImageUrl: panCardBase64,
+        bankProofImageUrl: bankProofBase64,
+        isKycCompleted: true
+      };
 
-      // Banking System Nodes Append
-      formData.append('accountHolderName', accountHolderName);
-      formData.append('accountNo', accountNo);
-      formData.append('bankName', bankName);
-      formData.append('ifscCode', ifscCode.toUpperCase());
-
-      // Binary File Streams Append
-      formData.append('aadharFrontImage', aadharFront);
-      formData.append('aadharBackImage', aadharBack);
-      formData.append('panCardImage', panCardImg);
-      formData.append('bankProofImage', bankProofImg);
-      
-      formData.append('isKycCompleted', 'true');
-
-      // Pointing towards your target C# Update-KYC registration controller pipeline
-      const response = await fetch('https://localhost:56187/api/Auth/update-kyc', {
+      // Switched configuration strictly back to content-type application/json to bypass 415 error codes
+      const response = await fetch('https://localhost:56187/api/Kyc/submit', {
         method: 'POST', 
         headers: {
-          // NOTE: Content-Type header MUST NOT be defined explicitly when sending FormData 
-          // to let browser specify boundary configurations automatically
+          'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` })
         },
-        body: formData
+        body: JSON.stringify(kycPayload)
       });
 
       if (!response.ok) {
@@ -162,7 +173,6 @@ export default function KycVerificationPage() {
         <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#F4F7FC]">
           <div className="max-w-3xl mx-auto space-y-6 mt-2 animate-fadeIn pb-10">
             
-            {/* BACK CONTROLLER */}
             <button 
               type="button"
               onClick={handleBackToProfile}
@@ -316,7 +326,6 @@ export default function KycVerificationPage() {
                   <span>Ensure all physical uploaded file copies show data entries clearly. Mismatched image documentation audits delay downline wallet payout settlement channels.</span>
                 </div>
 
-                {/* FORM CONTROLLER BUTTONS */}
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={handleBackToProfile} disabled={submitting} className="flex-1 py-3.5 bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 text-xs font-bold uppercase tracking-wider rounded-xl transition">
                     Cancel

@@ -24,5 +24,12 @@ public class User
     // 2. Add the Role property, defaulting to UserRole.User
     public UserRole Role { get; set; } = UserRole.User;
 
+    // KYC-related fields, populated once an admin approves a KycRequest
+    public bool IsKycCompleted { get; set; } = false;
+    public string? BankName { get; set; }
+    public string? AccountNo { get; set; }
+    public string? IfscCode { get; set; }
+    public string? AccountType { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

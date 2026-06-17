@@ -115,7 +115,7 @@ export default function DashboardPage() {
       <div className="flex-1 flex flex-col min-w-0">
 
         <LoginTopbar
-          title="RAJ DHAN VARSHA"
+          //title="RAJ DHAN VARSHA"
           userName="Dharamveer Varsha"
           logoSrc="/logo.png"
         />
