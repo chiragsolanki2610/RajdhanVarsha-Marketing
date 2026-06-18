@@ -1,8 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckSquare, Banknote, MapPin, ShieldCheck, ChevronRight } from 'lucide-react';
-// ⚠️ Adjust these two import paths/alias if your project doesn't use the "@/components" alias
+import { CheckSquare, Banknote, MapPin, ShieldCheck, ChevronRight, PackagePlus, UserSearch } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import LoginTopbar from '@/components/loginTopbar';
 
@@ -25,15 +24,25 @@ const adminOptions = [
     description: 'Manage new pickup center registration requests.',
     path: '/admin/pickup-center-requests',
   },
+  {
+    icon: PackagePlus,
+    label: 'Add Products',
+    description: 'Add new products to the platform catalog.',
+    path: '/admin/add-products',
+  },
+  {
+    icon: UserSearch,
+    label: 'Search User Info',
+    description: 'Search and view detailed information of any registered user.',
+    path: '/admin/search-user',
+  },
 ];
 
 export default function AdminPanelPage() {
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* ── Sidebar (renders desktop sidebar + mobile bottom nav) ── */}
       <Sidebar />
 
-      {/* ── Right side: Topbar + Page content ── */}
       <div className="flex-1 flex flex-col min-w-0">
         <LoginTopbar />
 

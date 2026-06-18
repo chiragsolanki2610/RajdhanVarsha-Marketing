@@ -19,7 +19,9 @@ import {
   ShieldCheck, 
   CheckSquare, 
   Banknote,    
-  MapPin       
+  MapPin,
+  PackagePlus,
+  UserSearch
 } from 'lucide-react';
 
 interface UserData {
@@ -40,8 +42,6 @@ function MobileBottomNav({ isAdmin }: { isAdmin: boolean }) {
     { icon: Layers,      label: 'Plans',   path: '/plan' },
     { icon: ShoppingBag, label: 'Product', path: '/shop' }, 
     { icon: Users,       label: 'Network', path: '/network' }, 
-    // ✅ Admin Panel now shows on mobile too, only for admins.
-    // Tapping it routes straight to the /admin landing page (see admin/page.tsx)
     ...(isAdmin ? [{ icon: ShieldCheck, label: 'Admin', path: '/admin' }] : []),
   ];
 
@@ -209,11 +209,13 @@ export default function Sidebar() {
     { icon: History,     label: 'Order History', path: '/shop/order-history' },
   ];
 
-  // ✅ FIXED: All paths are now lowercase to match folder structure
+  // ✅ Updated: Added 2 new admin sub-items
   const adminSubItems = [
-    { icon: CheckSquare, label: 'KYC Requests',          path: '/admin/kyc-requests' },
-    { icon: Banknote,    label: 'Withdrawal Requests',    path: '/admin/withdrawal-requests' },
-    { icon: MapPin,      label: 'Pickup Center Requests', path: '/admin/pickup-center-requests' },
+    { icon: CheckSquare,  label: 'KYC Requests',            path: '/admin/kyc-requests' },
+    { icon: Banknote,     label: 'Withdrawal Requests',      path: '/admin/withdrawal-requests' },
+    { icon: MapPin,       label: 'Pickup Center Requests',   path: '/admin/pickup-center-requests' },
+    { icon: PackagePlus,  label: 'Add Products',             path: '/admin/add-products' },
+    { icon: UserSearch,   label: 'Search User Info',         path: '/admin/search-user' },
   ];
 
   return (
@@ -570,7 +572,6 @@ export default function Sidebar() {
       </div>
 
       {/* ── Mobile Bottom Nav ── */}
-      {/* ✅ isAdmin is passed down so the bottom nav can show the Admin tab */}
       <MobileBottomNav isAdmin={isAdmin} />
     </>
   );

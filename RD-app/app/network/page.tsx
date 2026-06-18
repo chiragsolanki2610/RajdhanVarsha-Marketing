@@ -8,7 +8,7 @@ import { UserPlus, GitBranch, Network, ChevronRight } from 'lucide-react';
 export default function MobileNetworkHub() {
   const options = [
     { icon: UserPlus, label: 'Team Detail', desc: 'View direct downline matrix records', path: '/network/team-detail', color: 'bg-emerald-50 text-emerald-600' },
-    { icon: GitBranch, label: 'Dream Tree View', desc: 'Trace generation leveling distribution structure', path: '/network/dream-tree', color: 'bg-blue-50 text-blue-600' },
+    { icon: GitBranch, label: 'Dream Tree View', desc: 'Trace generation leveling distribution structure', path: '/dream-tree-view', color: 'bg-blue-50 text-blue-600' },
     { icon: Network, label: 'Binary View', path: '/network/binary-view', desc: 'Manage left/right spillover sales legs placement', color: 'bg-purple-50 text-purple-600' },
   ];
 
