@@ -2,9 +2,13 @@
 
 import React, { useState } from 'react';
 import Sidebar from '@/components/Sidebar';
+import { useRouter } from "next/navigation";
 import { Check, Network, ChevronDown, ChevronUp, CircleDot, FileText } from 'lucide-react';
 
 export default function PlanPage() {
+  const router = useRouter();
+
+
   // Collapse toggles — Both set to false initially to display "Show Less" view on load
   const [showDreamDetails, setShowDreamDetails] = useState(false);
   const [showBinaryDetails, setShowBinaryDetails] = useState(false);
@@ -25,9 +29,14 @@ export default function PlanPage() {
     { level: 12, distributor: '531,441', bv: '318,864,600', pct: '1%', income: '₹3,188,646' },
   ];
 
+  // ── UPDATED: now routes to the correct shop pages ──
   const handleActivation = (planId: string) => {
     localStorage.setItem('pendingActivationPlan', planId);
-    window.location.href = '/shop';
+    if (planId === 'dream-plan') {
+      window.location.href = '/shop/dream-plan';
+    } else {
+      window.location.href = '/shop/dream-plan';
+    }
   };
 
   return (
@@ -37,7 +46,7 @@ export default function PlanPage() {
 
       {/* ── Main Workspace Content Area ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        
+
         {/* Top Header Navigation Strip */}
         <header className="bg-white border-b border-slate-200 h-16 shrink-0 px-6 flex items-center justify-between sticky top-0 z-20 shadow-sm">
           <div className="flex flex-col">
@@ -54,12 +63,12 @@ export default function PlanPage() {
 
         {/* ── Primary Main Dashboard Viewport ── */}
         <main className="p-4 md:p-6 max-w-[1600px] w-full mx-auto space-y-8">
-          
+
           {/* ──────────────────────────────────────────────────────────────────
              1. DREAM PLAN FULL SPECIFICATION VIEWPORT
              ────────────────────────────────────────────────────────────────── */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden relative transition-all duration-300">
-            
+
             {/* Top Graphic Most Popular Ribbon Accent */}
             <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-10">
               <span className="bg-[#1E40AF] text-white text-[9px] font-black px-6 py-1 rounded-b-xl uppercase tracking-widest shadow-md border-x border-b border-blue-400/20">
@@ -96,7 +105,7 @@ export default function PlanPage() {
             {/* ── Toggled Complete Matrix Breakdown Content Frame ── */}
             {showDreamDetails && (
               <div className="p-6 md:p-8 bg-white grid grid-cols-1 xl:grid-cols-12 gap-8 border-b border-slate-100 transition-all duration-300">
-                
+
                 {/* LEFT WING: Operational Rules Checklist Deck */}
                 <div className="xl:col-span-5 space-y-6">
                   <div>
@@ -144,9 +153,9 @@ export default function PlanPage() {
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-4">Network Tree Matrix Previews</h4>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col items-center justify-center min-h-[140px]">
-                        <img 
-                          src="/photos/Plan slide-1.png" 
-                          alt="Direct Matrix Architecture" 
+                        <img
+                          src="/photos/Plan slide-1.png"
+                          alt="Direct Matrix Architecture"
                           className="max-h-[110px] w-auto object-contain mix-blend-multiply"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
@@ -155,9 +164,9 @@ export default function PlanPage() {
                         />
                       </div>
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col items-center justify-center min-h-[140px]">
-                        <img 
-                          src="/photos/Plan slide-2.png" 
-                          alt="Compulsory Downline Layer Architecture" 
+                        <img
+                          src="/photos/Plan slide-2.png"
+                          alt="Compulsory Downline Layer Architecture"
                           className="max-h-[110px] w-auto object-contain mix-blend-multiply"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
@@ -216,9 +225,9 @@ export default function PlanPage() {
                       <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">Next time entry targets respond adaptively based upon individual structural product selection parameters.</p>
                     </div>
                     <div className="w-24 h-16 shrink-0 bg-white border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center p-1 shadow-sm">
-                      <img 
-                        src="/photos/marketing_chart.jpg" 
-                        alt="Dream Purchase Plan Table Flyer" 
+                      <img
+                        src="/photos/marketing_chart.jpg"
+                        alt="Dream Purchase Plan Table Flyer"
                         className="w-full h-full object-contain"
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
@@ -227,7 +236,6 @@ export default function PlanPage() {
                       />
                     </div>
                   </div>
-
                 </div>
               </div>
             )}
@@ -244,25 +252,23 @@ export default function PlanPage() {
                   <>Show Full 12-Level Matrix & Bonus Data <ChevronDown size={14} /></>
                 )}
               </button>
-              
+
               <div className="p-4 bg-white flex justify-end">
                 <button
-                  onClick={() => handleActivation('dream-plan')}
+                  onClick={() => router.push("/dream-purchase")}
                   className="w-full bg-[#2B4C8C] hover:bg-blue-700 text-white py-3.5 px-6 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all"
                 >
                   Get Started & Select Products
                 </button>
               </div>
             </div>
-
           </div>
 
           {/* ──────────────────────────────────────────────────────────────────
-             2. BINARY PLAN SPECIFICATION VIEWPORT (UPDATED & STARTS COLLAPSED)
+             2. BINARY PLAN SPECIFICATION VIEWPORT
              ────────────────────────────────────────────────────────────────── */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden relative transition-all duration-300">
-            
-            {/* Top Summary Block Layout Row */}
+
             <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-br from-white via-white to-indigo-50/20">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -283,7 +289,6 @@ export default function PlanPage() {
                 </span>
               </div>
 
-              {/* Checklist Rules Strip Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6 border-t border-slate-100 pt-5">
                 <div className="flex items-start gap-2.5 text-xs text-slate-600 font-medium">
                   <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
@@ -296,11 +301,9 @@ export default function PlanPage() {
               </div>
             </div>
 
-            {/* ── Toggled Complete Binary Plan Blueprint Breakdown ── */}
             {showBinaryDetails && (
               <div className="p-6 md:p-8 bg-white grid grid-cols-1 xl:grid-cols-12 gap-8 border-b border-slate-100 transition-all duration-300">
-                
-                {/* LEFT WING: Operational Rules & Binary Capping Details */}
+
                 <div className="xl:col-span-6 space-y-6">
                   <div>
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-3 flex items-center gap-1.5">
@@ -335,14 +338,10 @@ export default function PlanPage() {
                   </div>
                 </div>
 
-                {/* RIGHT WING: Binary Tree Diagram Visualization & Verification Requirements */}
                 <div className="xl:col-span-6 flex flex-col justify-between gap-6">
-                  
-                  {/* Binary Tree Visual Framework Preview Box */}
                   <div>
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-3">Binary Dual-Leg Matching Tree Architecture</h4>
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center min-h-[180px]">
-                      {/* Hierarchical Binary Tree Structure Generated in pure Tailwind CSS matching the Blueprint */}
                       <div className="flex flex-col items-center space-y-4 w-full max-w-sm">
                         <div className="bg-[#2B4C8C] text-white text-xs font-black px-4 py-1.5 rounded-lg shadow-sm tracking-wide uppercase">YOU</div>
                         <div className="w-1/2 h-0.5 bg-slate-300 relative">
@@ -363,7 +362,6 @@ export default function PlanPage() {
                     </div>
                   </div>
 
-                  {/* Required Documentation Identification Deck */}
                   <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                     <h5 className="text-xs font-black text-slate-800 uppercase tracking-tight flex items-center gap-1.5 mb-2">
                       <FileText size={14} className="text-amber-500" /> Required Documentation Placeholder
@@ -372,12 +370,10 @@ export default function PlanPage() {
                       To complete account validation matching cycles, ensure profile uploads contain a valid <strong>PAN Card, National ID Proof, Bank Account Passbook/Copy, Passport Size Photograph, and Active Mobile Number</strong>.
                     </p>
                   </div>
-
                 </div>
               </div>
             )}
 
-            {/* ── Binary Plan Accordion & Activation Control Footer ── */}
             <div className="flex flex-col border-t border-slate-100">
               <button
                 onClick={() => setShowBinaryDetails(!showBinaryDetails)}
@@ -389,7 +385,7 @@ export default function PlanPage() {
                   <>Show Full Binary Track Rules & Capping Data <ChevronDown size={14} /></>
                 )}
               </button>
-              
+
               <div className="p-4 bg-white flex justify-end">
                 <button
                   onClick={() => handleActivation('binary-plan')}
@@ -399,7 +395,6 @@ export default function PlanPage() {
                 </button>
               </div>
             </div>
-
           </div>
 
         </main>

@@ -1,3 +1,5 @@
+using System;
+
 namespace RegisterApi.Models;
 
 // 1. Define the roles available in your system
@@ -14,9 +16,12 @@ public class User
     public string Name { get; set; } = string.Empty;
     public string MobileNo { get; set; } = string.Empty;
     public string AadharNo { get; set; } = string.Empty;
-    public string SponsorId { get; set; } = string.Empty;
+    public string? SponsorId { get; set; } = string.Empty;
     public string SponsorIdName { get; set; } = string.Empty;
-    public string Position { get; set; } = string.Empty;
+
+    // 🛠️ FIX: Made nullable so user can register first and choose their binary tree target layout on plan selection
+    public string? Position { get; set; } = null;
+
     public string Address { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
@@ -32,4 +37,29 @@ public class User
     public string? AccountType { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+
+    // --- Plan & Acceleration Progress Fields ---
+
+    // Tracks if user has completed plan acquisition payment steps
+    public bool IsActive { get; set; } = false;
+
+    // Stores the selected plan title chosen from the dashboard panel (e.g., "Dream Plan", "Binary Plan")
+    public string? SelectedPlan { get; set; } = null;
+
+    // Tracks total accumulated Business Volume calculations for payout metrics
+    public int BusinessVolume { get; set; } = 0;
+
+
+    // --- Binary Tree Tracking Fields ---
+
+    // The immediate node above this user in the tree structure
+    public string? ParentId { get; set; }
+
+    // Tracks the structural depth level in the network tree
+    public int TreeLevel { get; set; } = 0;
+
+    // Helps quickly locate everyone down the Left or Right lineage
+    public string LeftLineage { get; set; } = string.Empty;
+    public string RightLineage { get; set; } = string.Empty;
 }

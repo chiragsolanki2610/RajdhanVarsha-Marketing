@@ -43,7 +43,9 @@ export default function KycVerificationPage() {
   useEffect(() => {
     const fetchProfileToSeed = async () => {
       try {
-        const token = localStorage.getItem('token');
+        // CHANGED: Reading from 'authToken' instead of 'token' based on local storage log
+        const token = localStorage.getItem('authToken');
+        
         const response = await fetch('https://localhost:56187/api/Auth/profile', {
           method: 'GET',
           headers: {
@@ -84,7 +86,6 @@ export default function KycVerificationPage() {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => {
-        // Strip out the metadata prefix (e.g., "data:image/png;base64,") if your backend requires raw base64 string
         const base64String = reader.result as string;
         resolve(base64String);
       };
@@ -108,7 +109,8 @@ export default function KycVerificationPage() {
     try {
       setSubmitting(true);
       setError(null);
-      const token = localStorage.getItem('token');
+      // CHANGED: Reading from 'authToken' here as well
+      const token = localStorage.getItem('authToken');
 
       // Convert all loaded imagery files concurrently to base64
       const [aadharFrontBase64, aadharBackBase64, panCardBase64, bankProofBase64] = await Promise.all([
@@ -138,7 +140,6 @@ export default function KycVerificationPage() {
         isKycCompleted: true
       };
 
-      // Switched configuration strictly back to content-type application/json to bypass 415 error codes
       const response = await fetch('https://localhost:56187/api/Kyc/submit', {
         method: 'POST', 
         headers: {

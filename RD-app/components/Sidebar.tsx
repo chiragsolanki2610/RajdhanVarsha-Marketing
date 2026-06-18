@@ -32,7 +32,7 @@ interface UserData {
 const ADMIN_MEMBER_IDS = ['RD0001'];
 
 // ─── Mobile Bottom Nav ────────────────────────────────────────────────────────
-function MobileBottomNav() {
+function MobileBottomNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
 
   const navItems = [
@@ -40,12 +40,16 @@ function MobileBottomNav() {
     { icon: Layers,      label: 'Plans',   path: '/plan' },
     { icon: ShoppingBag, label: 'Product', path: '/shop' }, 
     { icon: Users,       label: 'Network', path: '/network' }, 
+    // ✅ Admin Panel now shows on mobile too, only for admins.
+    // Tapping it routes straight to the /admin landing page (see admin/page.tsx)
+    ...(isAdmin ? [{ icon: ShieldCheck, label: 'Admin', path: '/admin' }] : []),
   ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around px-2 py-2 md:hidden shadow-[0_-2px_12px_rgba(0,0,0,0.08)]">
       {navItems.map(({ icon: Icon, label, path }) => {
         const isActive = pathname === path || (path !== '/dashboard' && pathname.startsWith(path));
+        const isAdminItem = label === 'Admin';
         return (
           <Link
             key={label}
@@ -55,17 +59,27 @@ function MobileBottomNav() {
             <Icon
               size={22}
               strokeWidth={isActive ? 2.2 : 1.6}
-              className={isActive ? 'text-[#3B5998]' : 'text-gray-400'}
+              className={
+                isActive
+                  ? isAdminItem ? 'text-red-600' : 'text-[#3B5998]'
+                  : 'text-gray-400'
+              }
             />
             <span
               className={`text-[10px] font-medium tracking-tight leading-none ${
-                isActive ? 'text-[#3B5998] font-semibold' : 'text-gray-400'
+                isActive
+                  ? isAdminItem ? 'text-red-600 font-semibold' : 'text-[#3B5998] font-semibold'
+                  : 'text-gray-400'
               }`}
             >
               {label}
             </span>
             {isActive && (
-              <span className="mt-0.5 w-1 h-1 rounded-full bg-[#3B5998] inline-block" />
+              <span
+                className={`mt-0.5 w-1 h-1 rounded-full inline-block ${
+                  isAdminItem ? 'bg-red-600' : 'bg-[#3B5998]'
+                }`}
+              />
             )}
           </Link>
         );
@@ -186,7 +200,7 @@ export default function Sidebar() {
 
   const networkSubItems = [
     { icon: UserPlus,   label: 'Team Detail',     path: '/network/team-detail' },
-    { icon: GitBranch,  label: 'Dream Tree View',  path: '/network/dream-tree' },
+    { icon: GitBranch,  label: 'Dream Tree View',  path: '/dream-tree-view' },
     { icon: Network,    label: 'Binary View',      path: '/network/binary-view' },
   ];
 
@@ -556,7 +570,8 @@ export default function Sidebar() {
       </div>
 
       {/* ── Mobile Bottom Nav ── */}
-      <MobileBottomNav />
+      {/* ✅ isAdmin is passed down so the bottom nav can show the Admin tab */}
+      <MobileBottomNav isAdmin={isAdmin} />
     </>
   );
 }

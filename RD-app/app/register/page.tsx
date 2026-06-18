@@ -12,15 +12,12 @@ export default function RegisterPage() {
         aadhar: "",
         sponsorId: "",
         sponsorName: "",
-        position: "",
         address: "",
-        password: "",
-        confirmPassword: "",
         agreeToTerms: false,
     });
 
     const [isLoading, setIsLoading] = useState(false);
-    const [isLoggingIn, setIsLoggingIn] = useState(false); // New state to trace background login status
+    const [isLoggingIn, setIsLoggingIn] = useState(false); // Traces background login status
     const [apiError, setApiError] = useState<string | null>(null);
     const [isFetchingSponsor, setIsFetchingSponsor] = useState(false); // UI state for sponsor checking
     
@@ -31,7 +28,7 @@ export default function RegisterPage() {
         password: ""
     });
 
-    // Automatically fetches sponsor details using your AuthController [HttpGet("{userId}")] endpoint
+    // Automatically fetches sponsor details using your public endpoint route
     const fetchSponsorName = async (sponsorId: string) => {
         if (!sponsorId.trim()) {
             setFormData((prev) => ({ ...prev, sponsorName: "" }));
@@ -40,7 +37,8 @@ export default function RegisterPage() {
 
         setIsFetchingSponsor(true);
         try {
-            const response = await fetch(`https://localhost:56187/api/Auth/${sponsorId.trim()}`, {
+            // ✅ Fixed: Changed endpoint route to target /sponsor-lookup/ to bypass 401 Authorization blocks
+            const response = await fetch(`https://localhost:56187/api/Auth/sponsor-lookup/${sponsorId.trim()}`, {
                 method: "GET",
                 headers: {
                     "Content-Type": "application/json",
@@ -49,7 +47,7 @@ export default function RegisterPage() {
 
             if (response.ok) {
                 const data = await response.json();
-                // Map from C# userProfile response 'userId' and 'name' properties
+                // Map from C# response 'name' property
                 setFormData((prev) => ({ ...prev, sponsorName: data.name || "" }));
             } else {
                 setFormData((prev) => ({ ...prev, sponsorName: "Sponsor Not Found ⚠️" }));
@@ -89,17 +87,12 @@ export default function RegisterPage() {
         setApiError(null);
 
         try {
-            const formattedPosition = formData.position 
-                ? formData.position.charAt(0).toUpperCase() + formData.position.slice(1) 
-                : "";
-
             const payload = {
                 Name: formData.name,
                 MobileNo: formData.mobile,
                 AadharNo: formData.aadhar,
                 SponsorId: formData.sponsorId,
                 SponsorName: formData.sponsorName,
-                Position: formattedPosition,
                 Address: formData.address
             };
 
@@ -250,7 +243,7 @@ export default function RegisterPage() {
                 <div className="lg:col-span-7 bg-white p-6 md:p-9 rounded-2xl border border-gray-100 shadow-xl max-w-xl lg:max-w-none w-full ml-auto">
                     <div className="mb-6">
                         <h3 className="text-xl font-bold text-gray-900 tracking-wide">Create Account</h3>
-                        <p className="text-xs text-gray-400 mt-0.5">Fill in your details to register</p>
+                        <p className="text-xs text-gray-400 mt-0.5">Fill in your details to register a free member profile</p>
                     </div>
 
                     {apiError && (
@@ -320,6 +313,7 @@ export default function RegisterPage() {
                                     onBlur={(e) => fetchSponsorName(e.target.value)}
                                     className={inputStyles}
                                     disabled={isLoading}
+                                    required
                                 />
                             </div>
 
@@ -335,26 +329,6 @@ export default function RegisterPage() {
                                     className={`${inputStyles} bg-gray-50 text-gray-600 font-medium`}
                                     readOnly
                                 />
-                            </div>
-                        </div>
-
-                        <div className="mb-4">
-                            <label htmlFor="position" className={labelStyles}>Your Position</label>
-                            <div className="relative">
-                                <select
-                                    id="position"
-                                    name="position"
-                                    value={formData.position}
-                                    onChange={handleChange}
-                                    className={`${inputStyles} appearance-none cursor-pointer pr-10 text-gray-800`}
-                                    disabled={isLoading}
-                                    required
-                                >
-                                    <option value="" disabled>Select Position</option>
-                                    <option value="left">LEFT</option>
-                                    <option value="right">RIGHT</option>
-                                </select>
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-[10px]">▼</div>
                             </div>
                         </div>
 
@@ -426,7 +400,7 @@ export default function RegisterPage() {
                             ✓
                         </div>
                         <h4 className="text-lg font-bold text-gray-900 mb-1">Registration Successful!</h4>
-                        <p className="text-xs text-gray-400 mb-5">Please save your auto-generated credentials below.</p>
+                        <p className="text-xs text-gray-400 mb-5">Save your automatically assigned profile credentials below.</p>
                         
                         <div className="bg-[#f8fafc] border border-gray-100 rounded-xl p-4 text-left space-y-3 mb-6">
                             <div>

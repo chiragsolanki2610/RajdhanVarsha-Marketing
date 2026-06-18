@@ -22,9 +22,8 @@ public class RegisterRequestDto
     // Auto-filled from database — user does not need to enter this
     public string SponsorIdName { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Position is required")]
-    [RegularExpression(@"^(Left|Right)$", ErrorMessage = "Position must be 'Left' or 'Right'")]
-    public string Position { get; set; } = string.Empty;
+    // 🛠️ FIX: Made nullable and removed strict constraints so position can be designated during plan selection
+    public string? Position { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Address is required")]
     public string Address { get; set; } = string.Empty;

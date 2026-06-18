@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 
 interface UserProfileData {
-  // Explicit properties submitted during registration
   name: string;
   mobileNo: string;
   aadharNo: string;
@@ -18,8 +17,6 @@ interface UserProfileData {
   sponsorIdName: string;
   position: 'Left' | 'Right' | string;
   address: string;
-  
-  // Implicit properties assigned by system
   userId?: string;
   memberId: string;
   email?: string;
@@ -31,8 +28,6 @@ interface UserProfileData {
   currentRank: string;
   nextRank: string;
   neededReferrals: number;
-  
-  // KYC verification checks
   isKycCompleted: boolean;
   bankName?: string;
   accountNo?: string;
@@ -51,25 +46,38 @@ export default function ProfilePage() {
       try {
         setLoading(true);
         setError(null);
-        
-        const token = localStorage.getItem('token'); 
-        
-        // Pointing directly to your active Swagger/C# API gateway port instance
+
+        // ✅ FIX: Use 'authToken' — matches the key saved during login
+        const token = localStorage.getItem('authToken');
+
+        if (!token) {
+          // No token means not logged in — redirect to login
+          router.push('/login');
+          return;
+        }
+
         const response = await fetch('https://localhost:56187/api/Auth/profile', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
+            'Authorization': `Bearer ${token}`,
           },
         });
+
+        // ✅ FIX: Handle 401 specifically — token expired or invalid
+        if (response.status === 401) {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('userProfile');
+          router.push('/login');
+          return;
+        }
 
         if (!response.ok) {
           throw new Error(`API response failed with server code: ${response.status}`);
         }
 
         const apiData = await response.json();
-        
-        // Evaluate if KYC bank settings have been bound to profile yet
+
         const hasKyc = apiData.isKycCompleted ?? !!(apiData.bankName && apiData.accountNo);
 
         setProfile({
@@ -80,7 +88,6 @@ export default function ProfilePage() {
           sponsorIdName: apiData.sponsorIdName || 'N/A',
           position: apiData.position || 'Right',
           address: apiData.address || 'N/A',
-          
           memberId: apiData.memberId || apiData.userId || 'RD0001',
           email: apiData.email || 'Not Provided',
           joinDate: apiData.joinDate || '17-06-2026',
@@ -91,7 +98,6 @@ export default function ProfilePage() {
           currentRank: apiData.currentRank || 'New Member',
           nextRank: apiData.nextRank || 'Silver Member',
           neededReferrals: Number(apiData.neededReferrals) || 10,
-          
           isKycCompleted: hasKyc,
           bankName: apiData.bankName || '',
           accountNo: apiData.accountNo || '',
@@ -102,28 +108,81 @@ export default function ProfilePage() {
       } catch (err: any) {
         console.error("Profile Fetch Exception Error:", err);
         setError("Failed to load real-time database context. Displaying registration session profile schema.");
-        
-        // Sandbox recovery baseline configuration matching your payload specs
-        setProfile({
-          name: "FIRSTUSER",
-          mobileNo: "2227618099",
-          aadharNo: "[Aadhaar Redacted]",
-          sponsorId: "SYSTEM",
-          sponsorIdName: "SYSTEM SPONSOR",
-          position: "Right",
-          address: "Sample Registration Address Street, India",
-          memberId: "RD0001",
-          email: "user@domain.com",
-          joinDate: "17-Jun-2026",
-          status: "ACTIVE",
-          membershipLevel: "Registered Member",
-          bvPoints: 0,
-          referrals: 0,
-          currentRank: "New Member",
-          nextRank: "Silver Member",
-          neededReferrals: 10,
-          isKycCompleted: false // Keeping this false manually simulates the exact unverified view state
-        });
+
+        // ✅ FIX: Try to load cached profile from localStorage as fallback
+        const cached = localStorage.getItem('userProfile');
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            setProfile({
+              name: parsed.name || 'N/A',
+              mobileNo: parsed.mobileNo || 'N/A',
+              aadharNo: parsed.aadharNo || '[Redacted]',
+              sponsorId: parsed.sponsorId || 'N/A',
+              sponsorIdName: parsed.sponsorIdName || 'N/A',
+              position: parsed.position || 'Right',
+              address: parsed.address || 'N/A',
+              memberId: parsed.memberId || parsed.userId || 'RD0001',
+              email: parsed.email || 'Not Provided',
+              joinDate: parsed.joinDate || '17-Jun-2026',
+              status: parsed.status || 'ACTIVE',
+              membershipLevel: parsed.membershipLevel || 'Registered Member',
+              bvPoints: Number(parsed.bvPoints) || 0,
+              referrals: Number(parsed.referrals) || 0,
+              currentRank: parsed.currentRank || 'New Member',
+              nextRank: parsed.nextRank || 'Silver Member',
+              neededReferrals: Number(parsed.neededReferrals) || 10,
+              isKycCompleted: parsed.isKycCompleted || false,
+              bankName: parsed.bankName || '',
+              accountNo: parsed.accountNo || '',
+              ifscCode: parsed.ifscCode || '',
+              accountType: parsed.accountType || 'Savings'
+            });
+          } catch {
+            // If cached data is also corrupt, show hardcoded fallback
+            setProfile({
+              name: "FIRSTUSER",
+              mobileNo: "N/A",
+              aadharNo: "[Aadhaar Redacted]",
+              sponsorId: "SYSTEM",
+              sponsorIdName: "SYSTEM SPONSOR",
+              position: "Right",
+              address: "N/A",
+              memberId: "RD0001",
+              email: "N/A",
+              joinDate: "17-Jun-2026",
+              status: "ACTIVE",
+              membershipLevel: "Registered Member",
+              bvPoints: 0,
+              referrals: 0,
+              currentRank: "New Member",
+              nextRank: "Silver Member",
+              neededReferrals: 10,
+              isKycCompleted: false
+            });
+          }
+        } else {
+          setProfile({
+            name: "FIRSTUSER",
+            mobileNo: "N/A",
+            aadharNo: "[Aadhaar Redacted]",
+            sponsorId: "SYSTEM",
+            sponsorIdName: "SYSTEM SPONSOR",
+            position: "Right",
+            address: "N/A",
+            memberId: "RD0001",
+            email: "N/A",
+            joinDate: "17-Jun-2026",
+            status: "ACTIVE",
+            membershipLevel: "Registered Member",
+            bvPoints: 0,
+            referrals: 0,
+            currentRank: "New Member",
+            nextRank: "Silver Member",
+            neededReferrals: 10,
+            isKycCompleted: false
+          });
+        }
       } finally {
         setLoading(false);
       }
@@ -133,7 +192,6 @@ export default function ProfilePage() {
   }, []);
 
   const handleKycRedirect = () => {
-    // Navigate straight to your target Next.js app router file path sequence
     router.push('/dashboard/kyc');
   };
 
@@ -145,7 +203,7 @@ export default function ProfilePage() {
         <LoginTopBar />
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#F4F7FC]">
-          
+
           {loading && (
             <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
               <div className="w-12 h-12 border-4 border-[#2B4C7E] border-t-transparent rounded-full animate-spin"></div>
@@ -165,7 +223,7 @@ export default function ProfilePage() {
 
           {!loading && profile && (
             <div className="max-w-5xl mx-auto space-y-6 mt-4 animate-fadeIn pb-10">
-              
+
               {/* HEADER CONTAINER */}
               <div className="bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-100 p-6 relative overflow-hidden">
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
@@ -179,7 +237,7 @@ export default function ProfilePage() {
                         <span className="text-xs font-medium text-gray-400 flex items-center gap-1 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100">
                           <User size={13} /> Member ID: <span className="font-mono font-bold text-gray-700">{profile.memberId}</span>
                         </span>
-                        
+
                         {profile.isKycCompleted ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-emerald-50 text-emerald-600 border border-emerald-200">
                             <CheckCircle size={12} className="mr-1" /> KYC Verified
@@ -210,10 +268,10 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* DETAILS ROW EXTRACTION */}
+              {/* DETAILS ROW */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* ACCOUNT PROFILE COL (LOADS EXACT REGISTRATION ARTIFACTS) */}
+
+                {/* REGISTRATION PROFILE */}
                 <div className="bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-100 p-6 space-y-5">
                   <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
                     <User size={18} className="text-[#2B4C7E]" />
@@ -229,7 +287,7 @@ export default function ProfilePage() {
                       <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Mobile Number</label>
                       <p className="text-sm font-bold text-[#334155] font-mono">{profile.mobileNo}</p>
                     </div>
-                    
+
                     <div className="space-y-1 sm:col-span-2">
                       <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
                         <Hash size={12} /> Aadhar Identification Number
@@ -268,7 +326,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {/* CONDITIONAL ASSIGNMENT BLOCK */}
+                {/* KYC / BANK BLOCK */}
                 {profile.isKycCompleted ? (
                   <div className="bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-100 p-6 space-y-5">
                     <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
@@ -296,7 +354,6 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 ) : (
-                  /* KYC WARNING BLOCK - Renders if banking setup is pending or unsubmitted */
                   <div className="bg-[#FFFDF5] rounded-2xl border border-amber-200 p-6 flex flex-col justify-between relative overflow-hidden">
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
@@ -321,19 +378,18 @@ export default function ProfilePage() {
                       </div>
                     </div>
 
-                    <button 
+                    <button
                       onClick={handleKycRedirect}
                       className="w-full mt-6 inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition shadow-lg shadow-amber-600/20 group font-sans"
                     >
-                      Complete KYC Now 
+                      Complete KYC Now
                       <MoveRight size={14} className="transition-transform group-hover:translate-x-1" />
                     </button>
                   </div>
                 )}
-
               </div>
 
-              {/* MILESTONE PROGRESSION TRACKER */}
+              {/* MILESTONE TRACKER */}
               <div className="bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-100 p-6 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -361,7 +417,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* ACTION BUTTON UTILITIES */}
+              {/* ACTION BUTTONS */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#2B4C7E] hover:bg-[#1E355B] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition">
                   <Edit size={14} /> Account Settings

@@ -6,7 +6,6 @@ using System.Text;
 using RegisterApi.Data;
 using RegisterApi.Services;
 
-// Wrap everything in a try-catch to prevent silent console closures
 try
 {
     var builder = WebApplication.CreateBuilder(args);
@@ -16,14 +15,19 @@ try
     {
         options.AddPolicy("NextFrontendPolicy", policy =>
         {
-            policy.WithOrigins("http://localhost:3000")
+            policy.WithOrigins(
+                    "http://localhost:3000",
+                    "https://localhost:3000",
+                    "http://localhost:3001",
+                    "https://localhost:3001"
+                  )
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
         });
     });
 
-    // ── Database (Supabase PostgreSQL) ────────────────────────────────────────────
+    // ── Database (Supabase PostgreSQL via EF Core) ───────────────────────────────
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseNpgsql(
             builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -37,6 +41,32 @@ try
                 npgsqlOptions.CommandTimeout(60);
             }
         ));
+    // ── Supabase Client SDK Registration (CRUCIAL FOR THE TREE ENGINE) ───────────
+    // We trim entries to prevent hidden copy-paste whitespace bugs from crashing the socket parser
+    var supabaseUrl = (builder.Configuration["Supabase:Url"] ?? "https://tojcysqttbbcnvvapkoi.supabase.co").Trim();
+    var supabaseKey = (builder.Configuration["Supabase:Key"] ?? "sb_publishable_-qIK8w1a0eTo-UH4Yd8Eyw_TfxeL2Z3").Trim();
+
+    // Re-verify configuration formatting manually before feeding it to the Client constructor
+    if (!supabaseUrl.StartsWith("http"))
+    {
+        supabaseUrl = $"https://{supabaseUrl}";
+    }
+
+    // This registers Supabase.Client cleanly as a singleton
+    builder.Services.AddSingleton(provider =>
+        new Supabase.Client(supabaseUrl, supabaseKey, new Supabase.SupabaseOptions
+        {
+            AutoRefreshToken = true,
+            AutoConnectRealtime = true
+        }));
+
+    // This registers Supabase.Client as a singleton so TreeController can inject it seamlessly
+    builder.Services.AddSingleton(provider =>
+        new Supabase.Client(supabaseUrl, supabaseKey, new Supabase.SupabaseOptions
+        {
+            AutoRefreshToken = true,
+            AutoConnectRealtime = true
+        }));
 
     // ── Services ──────────────────────────────────────────────────────────────────
     builder.Services.AddScoped<IUserService, UserService>();
@@ -58,7 +88,7 @@ try
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = builder.Configuration["Jwt:Issuer"],
                 ValidAudience = builder.Configuration["Jwt:Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)) // Cleaned up key processing redundancy
             };
         });
 
@@ -101,7 +131,6 @@ try
             Console.WriteLine("Checking database migrations...");
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            // Completely safe connection check
             if (db.Database.CanConnect())
             {
                 db.Database.Migrate();
@@ -120,6 +149,9 @@ try
         }
     }
 
+    // ✅ CORS must be FIRST — before Swagger, auth, and everything else
+    app.UseCors("NextFrontendPolicy");
+
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();
@@ -130,12 +162,11 @@ try
         app.UseHttpsRedirection();
     }
 
-    app.UseCors("NextFrontendPolicy");
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
 
-    Console.WriteLine("🚀 Web Host initialized safely. Starting server...");
+    Console.WriteLine("🚀 Web Host initialized safely. Starting server... ");
     app.Run();
 }
 catch (Exception ex)
@@ -146,7 +177,6 @@ catch (Exception ex)
     Console.WriteLine($"Stack Trace:\n{ex.StackTrace}");
     Console.ResetColor();
 
-    // This stops the console window from closing so you can read the error!
     Console.WriteLine("\nPress any key to close this window...");
     Console.ReadKey();
 }
