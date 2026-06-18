@@ -27,7 +27,7 @@ try
         });
     });
 
-    // ── Database (Supabase PostgreSQL via EF Core) ───────────────────────────────
+    // ── Database (Supabase PostgreSQL via EF Core) ───────────────────────────
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseNpgsql(
             builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -41,41 +41,35 @@ try
                 npgsqlOptions.CommandTimeout(60);
             }
         ));
-    // ── Supabase Client SDK Registration (CRUCIAL FOR THE TREE ENGINE) ───────────
-    // We trim entries to prevent hidden copy-paste whitespace bugs from crashing the socket parser
-    var supabaseUrl = (builder.Configuration["Supabase:Url"] ?? "https://tojcysqttbbcnvvapkoi.supabase.co").Trim();
-    var supabaseKey = (builder.Configuration["Supabase:Key"] ?? "sb_publishable_-qIK8w1a0eTo-UH4Yd8Eyw_TfxeL2Z3").Trim();
 
-    // Re-verify configuration formatting manually before feeding it to the Client constructor
+    // ── Supabase Client SDK ──────────────────────────────────────────────────
+    var supabaseUrl = (builder.Configuration["Supabase:Url"]
+        ?? "https://tojcysqttbbcnvvapkoi.supabase.co").Trim();
+    var supabaseKey = (builder.Configuration["Supabase:Key"]
+        ?? "sb_publishable_-qIK8w1a0eTo-UH4Yd8Eyw_TfxeL2Z3").Trim();
+
     if (!supabaseUrl.StartsWith("http"))
-    {
         supabaseUrl = $"https://{supabaseUrl}";
-    }
 
-    // This registers Supabase.Client cleanly as a singleton
     builder.Services.AddSingleton(provider =>
         new Supabase.Client(supabaseUrl, supabaseKey, new Supabase.SupabaseOptions
         {
             AutoRefreshToken = true,
-            AutoConnectRealtime = true
+            AutoConnectRealtime = false  // ✅ FIXED: prevents crash on startup
         }));
 
-    // This registers Supabase.Client as a singleton so TreeController can inject it seamlessly
-    builder.Services.AddSingleton(provider =>
-        new Supabase.Client(supabaseUrl, supabaseKey, new Supabase.SupabaseOptions
-        {
-            AutoRefreshToken = true,
-            AutoConnectRealtime = true
-        }));
+    // ── HTTP Client Factory ──────────────────────────────────────────────────
+    builder.Services.AddHttpClient();
 
-    // ── Services ──────────────────────────────────────────────────────────────────
+    // ── Services ─────────────────────────────────────────────────────────────
     builder.Services.AddScoped<IUserService, UserService>();
     builder.Services.AddScoped<IUserIdGenerator, UserIdGenerator>();
     builder.Services.AddScoped<IPasswordService, PasswordService>();
 
-    // ── JWT Auth ──────────────────────────────────────────────────────────────────
+    // ── JWT Auth ─────────────────────────────────────────────────────────────
     var jwtKey = builder.Configuration["Jwt:Key"]
-        ?? throw new InvalidOperationException("Jwt:Key is missing in appsettings.json under 'Jwt' -> 'Key'.");
+        ?? throw new InvalidOperationException(
+            "Jwt:Key is missing in appsettings.json under 'Jwt' -> 'Key'.");
 
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
@@ -88,14 +82,15 @@ try
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = builder.Configuration["Jwt:Issuer"],
                 ValidAudience = builder.Configuration["Jwt:Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)) // Cleaned up key processing redundancy
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(jwtKey))
             };
         });
 
     builder.Services.AddAuthorization();
     builder.Services.AddControllers();
 
-    // ── Swagger ───────────────────────────────────────────────────────────────────
+    // ── Swagger ───────────────────────────────────────────────────────────────
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
     {
@@ -114,16 +109,21 @@ try
             {
                 new OpenApiSecurityScheme
                 {
-                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
                 },
                 Array.Empty<string>()
             }
         });
     });
 
+    // ── Build App ─────────────────────────────────────────────────────────────
     var app = builder.Build();
 
-    // ── Auto-apply migrations on startup ─────────────────────────────────────────
+    // ── Auto-apply Migrations on Startup ─────────────────────────────────────
     using (var scope = app.Services.CreateScope())
     {
         try
@@ -133,8 +133,17 @@ try
 
             if (db.Database.CanConnect())
             {
-                db.Database.Migrate();
-                Console.WriteLine("✅ Database migration completed successfully.");
+                var pending = db.Database.GetPendingMigrations().ToList();
+                if (pending.Count != 0)
+                {
+                    Console.WriteLine($"Applying {pending.Count} pending migration(s)...");
+                    db.Database.Migrate();
+                    Console.WriteLine("✅ Database migration completed successfully.");
+                }
+                else
+                {
+                    Console.WriteLine("✅ No pending migrations. Database is up to date.");
+                }
             }
             else
             {
@@ -149,7 +158,8 @@ try
         }
     }
 
-    // ✅ CORS must be FIRST — before Swagger, auth, and everything else
+    // ── Middleware Pipeline ───────────────────────────────────────────────────
+    // ✅ CORS must be first
     app.UseCors("NextFrontendPolicy");
 
     if (app.Environment.IsDevelopment())
@@ -166,7 +176,7 @@ try
     app.UseAuthorization();
     app.MapControllers();
 
-    Console.WriteLine("🚀 Web Host initialized safely. Starting server... ");
+    Console.WriteLine("🚀 Server started successfully!");
     app.Run();
 }
 catch (Exception ex)
@@ -174,6 +184,7 @@ catch (Exception ex)
     Console.ForegroundColor = ConsoleColor.Red;
     Console.WriteLine("\n❌ FATAL APPLICATION CRASH ON STARTUP!");
     Console.WriteLine($"Exception Message: {ex.Message}");
+    Console.WriteLine($"Inner Exception: {ex.InnerException?.Message}");
     Console.WriteLine($"Stack Trace:\n{ex.StackTrace}");
     Console.ResetColor();
 
