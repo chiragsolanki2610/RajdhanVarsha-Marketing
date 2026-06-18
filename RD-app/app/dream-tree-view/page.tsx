@@ -15,7 +15,7 @@ import {
   Position,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import dagre from "dagre";
+import dagre from "@dagrejs/dagre";
 
 import Sidebar from "@/components/Sidebar";
 import LoginTopbar from "@/components/loginTopbar";
