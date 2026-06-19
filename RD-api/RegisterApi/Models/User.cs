@@ -19,7 +19,6 @@ public class User
     public string? SponsorId { get; set; } = string.Empty;
     public string SponsorIdName { get; set; } = string.Empty;
 
-    // 🛠️ FIX: Made nullable so user can register first and choose their binary tree target layout on plan selection
     public string? Position { get; set; } = null;
 
     public string Address { get; set; } = string.Empty;
@@ -49,6 +48,9 @@ public class User
 
     // Tracks total accumulated Business Volume calculations for payout metrics
     public int BusinessVolume { get; set; } = 0;
+
+    // Tracks activation status shown in dashboard — set to "active" when a valid plan is purchased
+    public string IdStatus { get; set; } = "inactive";
 
 
     // --- Binary Tree Tracking Fields ---

@@ -6,7 +6,8 @@ import Sidebar from '@/components/Sidebar';
 import LoginTopBar from '@/components/loginTopbar';
 import { 
   User, Landmark, Award, Edit, Lock, Download, AlertCircle, 
-  ShieldAlert, CheckCircle, FileText, MapPin, Hash, MoveRight
+  ShieldAlert, CheckCircle, FileText, MapPin, Hash, MoveRight,
+  CircleCheck, CircleX
 } from 'lucide-react';
 
 interface UserProfileData {
@@ -22,6 +23,7 @@ interface UserProfileData {
   email?: string;
   joinDate: string;
   status: string;
+  idStatus: string; // ✅ NEW: active or inactive
   membershipLevel: string;
   bvPoints: number;
   referrals: number;
@@ -47,11 +49,9 @@ export default function ProfilePage() {
         setLoading(true);
         setError(null);
 
-        // ✅ FIX: Use 'authToken' — matches the key saved during login
         const token = localStorage.getItem('authToken');
 
         if (!token) {
-          // No token means not logged in — redirect to login
           router.push('/login');
           return;
         }
@@ -64,7 +64,6 @@ export default function ProfilePage() {
           },
         });
 
-        // ✅ FIX: Handle 401 specifically — token expired or invalid
         if (response.status === 401) {
           localStorage.removeItem('authToken');
           localStorage.removeItem('userProfile');
@@ -92,6 +91,7 @@ export default function ProfilePage() {
           email: apiData.email || 'Not Provided',
           joinDate: apiData.joinDate || '17-06-2026',
           status: apiData.status || 'ACTIVE',
+          idStatus: apiData.idStatus || 'inactive', // ✅ NEW
           membershipLevel: apiData.membershipLevel || 'Registered Member',
           bvPoints: Number(apiData.bvPoints) || 0,
           referrals: Number(apiData.referrals) || 0,
@@ -109,7 +109,6 @@ export default function ProfilePage() {
         console.error("Profile Fetch Exception Error:", err);
         setError("Failed to load real-time database context. Displaying registration session profile schema.");
 
-        // ✅ FIX: Try to load cached profile from localStorage as fallback
         const cached = localStorage.getItem('userProfile');
         if (cached) {
           try {
@@ -126,6 +125,7 @@ export default function ProfilePage() {
               email: parsed.email || 'Not Provided',
               joinDate: parsed.joinDate || '17-Jun-2026',
               status: parsed.status || 'ACTIVE',
+              idStatus: parsed.idStatus || 'inactive', // ✅ NEW
               membershipLevel: parsed.membershipLevel || 'Registered Member',
               bvPoints: Number(parsed.bvPoints) || 0,
               referrals: Number(parsed.referrals) || 0,
@@ -139,7 +139,6 @@ export default function ProfilePage() {
               accountType: parsed.accountType || 'Savings'
             });
           } catch {
-            // If cached data is also corrupt, show hardcoded fallback
             setProfile({
               name: "FIRSTUSER",
               mobileNo: "N/A",
@@ -152,6 +151,7 @@ export default function ProfilePage() {
               email: "N/A",
               joinDate: "17-Jun-2026",
               status: "ACTIVE",
+              idStatus: "inactive", // ✅ NEW
               membershipLevel: "Registered Member",
               bvPoints: 0,
               referrals: 0,
@@ -174,6 +174,7 @@ export default function ProfilePage() {
             email: "N/A",
             joinDate: "17-Jun-2026",
             status: "ACTIVE",
+            idStatus: "inactive", // ✅ NEW
             membershipLevel: "Registered Member",
             bvPoints: 0,
             referrals: 0,
@@ -237,6 +238,17 @@ export default function ProfilePage() {
                         <span className="text-xs font-medium text-gray-400 flex items-center gap-1 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100">
                           <User size={13} /> Member ID: <span className="font-mono font-bold text-gray-700">{profile.memberId}</span>
                         </span>
+
+                        {/* ✅ ID STATUS BADGE — active or inactive */}
+                        {profile.idStatus === 'active' ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-emerald-50 text-emerald-600 border border-emerald-200">
+                            <CircleCheck size={12} className="mr-1" /> ID Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-red-50 text-red-500 border border-red-200">
+                            <CircleX size={12} className="mr-1" /> ID Inactive
+                          </span>
+                        )}
 
                         {profile.isKycCompleted ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-emerald-50 text-emerald-600 border border-emerald-200">

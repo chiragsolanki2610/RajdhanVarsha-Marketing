@@ -14,10 +14,11 @@ namespace RegisterApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]                                          // ← ADDED
+    [Authorize]
     public class TreeController : ControllerBase
     {
         private readonly AppDbContext _db;
+        private const int MaxLevel = 12;
 
         public TreeController(AppDbContext db)
         {
@@ -25,11 +26,10 @@ namespace RegisterApi.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetDownlineTree([FromQuery] int currentLevel = 0)  // ← REMOVED userId param
+        public async Task<IActionResult> GetDownlineTree()
         {
             try
             {
-                // ← ADDED: get userId from JWT token instead of query param
                 var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                           ?? User.FindFirst("UserId")?.Value;
 
@@ -40,26 +40,9 @@ namespace RegisterApi.Controllers
                     .FirstOrDefaultAsync(u => u.UserId == userId.Trim());
 
                 if (user == null)
-                {
                     return NotFound(new { message = "Distributor profile missing in system ledger." });
-                }
 
-                var treeResponse = await BuildNodeDtoAsync(user, currentLevel);
-
-                if (treeResponse.HasChildren && currentLevel < 12)
-                {
-                    var directChildren = await _db.Users
-                        .Where(u => u.SponsorId == user.UserId)
-                        .OrderBy(u => u.UserId)
-                        .Take(10)
-                        .ToListAsync();
-
-                    foreach (var child in directChildren)
-                    {
-                        var childDto = await BuildNodeDtoAsync(child, currentLevel + 1);
-                        treeResponse.Children.Add(childDto);
-                    }
-                }
+                var treeResponse = await BuildTreeRecursiveAsync(user, currentLevel: 0);
 
                 return Ok(treeResponse);
             }
@@ -69,6 +52,45 @@ namespace RegisterApi.Controllers
             }
         }
 
+        /// <summary>
+        /// Recursively builds the full tree up to MaxLevel (12).
+        /// Each node fetches its OWN direct children using SponsorId = node.UserId.
+        /// </summary>
+        private async Task<TreeResponseDto> BuildTreeRecursiveAsync(User node, int currentLevel)
+        {
+            var dto = await BuildNodeDtoAsync(node, currentLevel);
+
+            // Stop recursing beyond level 12
+            if (currentLevel >= MaxLevel)
+            {
+                dto.HasChildren = false;
+                dto.Children = new List<TreeResponseDto>();
+                return dto;
+            }
+
+            // Fetch children of THIS specific node (not the logged-in user)
+            var directChildren = await _db.Users
+                .Where(u => u.SponsorId == node.UserId)
+                .OrderBy(u => u.UserId)
+                .Take(10)
+                .ToListAsync();
+
+            foreach (var child in directChildren)
+            {
+                var childDto = await BuildTreeRecursiveAsync(child, currentLevel + 1);
+                dto.Children.Add(childDto);
+            }
+
+            dto.HasChildren = dto.Children.Count > 0;
+
+            return dto;
+        }
+
+        /// <summary>
+        /// Builds a single node DTO.
+        /// NOTE: IsEligibleForWithdrawal and CalculatedBv are auto-computed by the DTO
+        /// from DirectCount — do NOT assign them manually.
+        /// </summary>
         private async Task<TreeResponseDto> BuildNodeDtoAsync(User node, int level)
         {
             var directCount = await _db.Users.CountAsync(u => u.SponsorId == node.UserId);
@@ -78,10 +100,11 @@ namespace RegisterApi.Controllers
                 Id = node.UserId,
                 Name = node.Name,
                 SponsorId = node.SponsorId ?? string.Empty,
-                SponsorName = node.SponsorIdName,
+                SponsorName = node.SponsorIdName ?? string.Empty,
                 Level = level,
-                DirectCount = directCount,
-                HasChildren = directCount > 0
+                DirectCount = directCount,   // CalculatedBv & IsEligibleForWithdrawal
+                                             // are derived automatically from this
+                HasChildren = directCount > 0,
             };
 
             dto.LevelCommissionPercentage = level switch
@@ -102,7 +125,9 @@ namespace RegisterApi.Controllers
                 _ => 0.0
             };
 
+            // EstimatedEarnings uses CalculatedBv which is auto-computed from DirectCount
             dto.EstimatedEarnings = dto.CalculatedBv * (dto.LevelCommissionPercentage / 100.0);
+
             return dto;
         }
     }

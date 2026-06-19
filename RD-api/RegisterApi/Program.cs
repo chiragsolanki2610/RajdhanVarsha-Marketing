@@ -19,11 +19,12 @@ try
                     "http://localhost:3000",
                     "https://localhost:3000",
                     "http://localhost:3001",
-                    "https://localhost:3001"
+                    "https://localhost:3001",
+                    "https://rd-app.onrender.com"   // ← add your Render URL too
                   )
                   .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
+                  .AllowAnyMethod();
+            // ✅ Removed AllowCredentials() — was causing ERR_EMPTY_RESPONSE
         });
     });
 
@@ -33,14 +34,11 @@ try
             builder.Configuration.GetConnectionString("DefaultConnection"),
             npgsqlOptions =>
             {
-                npgsqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 5,
-                    maxRetryDelay: TimeSpan.FromSeconds(10),
-                    errorCodesToAdd: null
-                );
+                npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorCodesToAdd: null);
                 npgsqlOptions.CommandTimeout(60);
             }
-        ));
+        )
+    );
 
     // ── Supabase Client SDK ──────────────────────────────────────────────────
     var supabaseUrl = (builder.Configuration["Supabase:Url"]
@@ -55,7 +53,7 @@ try
         new Supabase.Client(supabaseUrl, supabaseKey, new Supabase.SupabaseOptions
         {
             AutoRefreshToken = true,
-            AutoConnectRealtime = false  // ✅ FIXED: prevents crash on startup
+            AutoConnectRealtime = false
         }));
 
     // ── HTTP Client Factory ──────────────────────────────────────────────────
@@ -112,7 +110,7 @@ try
                     Reference = new OpenApiReference
                     {
                         Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
+                        Id   = "Bearer"
                     }
                 },
                 Array.Empty<string>()
@@ -159,7 +157,7 @@ try
     }
 
     // ── Middleware Pipeline ───────────────────────────────────────────────────
-    // ✅ CORS must be first
+    // ✅ CORS must be before everything else
     app.UseCors("NextFrontendPolicy");
 
     if (app.Environment.IsDevelopment())
@@ -183,8 +181,8 @@ catch (Exception ex)
 {
     Console.ForegroundColor = ConsoleColor.Red;
     Console.WriteLine("\n❌ FATAL APPLICATION CRASH ON STARTUP!");
-    Console.WriteLine($"Exception Message: {ex.Message}");
-    Console.WriteLine($"Inner Exception: {ex.InnerException?.Message}");
+    Console.WriteLine($"Exception Message:  {ex.Message}");
+    Console.WriteLine($"Inner Exception:    {ex.InnerException?.Message}");
     Console.WriteLine($"Stack Trace:\n{ex.StackTrace}");
     Console.ResetColor();
 

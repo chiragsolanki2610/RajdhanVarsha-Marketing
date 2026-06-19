@@ -38,8 +38,8 @@ function MobileBottomNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
 
   const navItems = [
-    { icon: Home,        label: 'Home',    path: '/dashboard' },
-    { icon: Layers,      label: 'Plans',   path: '/plan' },
+    { icon: Home,        label: 'Home',   path: '/dashboard' },
+    { icon: Layers,      label: 'Plans',  path: '/plan' },
     { icon: ShoppingBag, label: 'Product', path: '/shop' }, 
     { icon: Users,       label: 'Network', path: '/network' }, 
     ...(isAdmin ? [{ icon: ShieldCheck, label: 'Admin', path: '/admin' }] : []),
@@ -209,7 +209,6 @@ export default function Sidebar() {
     { icon: History,     label: 'Order History', path: '/shop/order-history' },
   ];
 
-  // ✅ Updated: Added 2 new admin sub-items
   const adminSubItems = [
     { icon: CheckSquare,  label: 'KYC Requests',            path: '/admin/kyc-requests' },
     { icon: Banknote,     label: 'Withdrawal Requests',      path: '/admin/withdrawal-requests' },
@@ -241,7 +240,7 @@ export default function Sidebar() {
           <ChevronLeft size={16} />
         </button>
 
-        <div className={`bg-[#3B5998] text-white flex flex-col justify-between transition-all duration-300 ease-in-out ${isOpen ? 'w-64' : 'w-16 items-center'}`}>
+        <div className={`bg-[#3B5998] text-white flex flex-col justify-between h-full transition-all duration-300 ease-in-out ${isOpen ? 'w-64' : 'w-16 items-center'}`}>
           <div className="w-full flex flex-col items-center">
 
             {/* ── Logo Block ── */}
@@ -254,12 +253,15 @@ export default function Sidebar() {
                 <img src="/photos/web_logo.jpg" alt="logo" className="w-full h-full object-cover" />
               </div>
               {isOpen && (
-                <div className="flex-1 min-w-0 animate-fadeIn pl-0.5">
-                  <h2 className="font-extrabold text-[13px] tracking-tight whitespace-nowrap leading-tight">
+                /* items-end aligns the contents inside this column layout completely to the right edge of the text stack */
+                <div className="flex-1 min-w-0 animate-fadeIn pl-0.5 flex flex-col items-end justify-center max-w-max">
+                  <h2 className="font-black text-[18px] tracking-tight whitespace-nowrap leading-tight text-right w-full">
                     <span className="text-red-600">RAJ </span>
                     <span className="text-[#3B5998]">DHANVARSHA</span>
                   </h2>
-                  <p className="text-[10px] text-red-600 font-bold tracking-wider leading-none mt-0.5">MARKETING</p>
+                  <p className="text-[11px] text-red-600 font-black tracking-wider leading-none mt-0.5 text-right w-full">
+                    MARKETING
+                  </p>
                 </div>
               )}
             </div>

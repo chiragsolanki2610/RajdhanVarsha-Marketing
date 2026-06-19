@@ -95,6 +95,7 @@ public class AuthController : ControllerBase
             joinDate = user.CreatedAt.ToString("dd-MMM-yyyy"),
             role = user.Role.ToString(),
             status = "ACTIVE",
+            idStatus = user.IdStatus,           // ✅ ADDED
             membershipLevel = user.Role == UserRole.Admin ? "System Administrator" : "Registered Member",
             bvPoints = user.BusinessVolume,
             referrals = 0,
@@ -115,7 +116,7 @@ public class AuthController : ControllerBase
     /// Handles Sidebar profile queries and Registration-form Sponsor matching dynamically.
     /// </summary>
     [HttpGet("{userId}")]
-    [AllowAnonymous] // Handled internally to allow both secure profile fetching and public sponsor lookup
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -142,6 +143,7 @@ public class AuthController : ControllerBase
                 joinDate = user.CreatedAt.ToString("dd-MMM-yyyy"),
                 role = user.Role.ToString(),
                 status = "ACTIVE",
+                idStatus = user.IdStatus,       // ✅ ADDED
                 membershipLevel = user.Role == UserRole.Admin ? "System Administrator" : "Registered Member",
                 bvPoints = user.BusinessVolume,
 
@@ -158,7 +160,7 @@ public class AuthController : ControllerBase
         {
             sponsorId = user.UserId,
             name = user.Name,
-            sponsorIdName = user.Name // Maps directly to both formats expected by Next.js clients
+            sponsorIdName = user.Name
         });
     }
 
