@@ -13,6 +13,11 @@ public class AppDbContext : DbContext
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<PlanItem> PlanItems => Set<PlanItem>();
 
+    // --- Wallet system ---
+    public DbSet<Wallet> Wallets => Set<Wallet>();
+    public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
+    public DbSet<WithdrawalRequest> WithdrawalRequests => Set<WithdrawalRequest>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>
@@ -140,6 +145,58 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(e => e.PlanId);
             entity.HasIndex(e => e.ProductId);
+        });
+
+        // --- Wallet system ---
+
+        modelBuilder.Entity<Wallet>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.PlanType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Balance).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.TotalEarned).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.TotalWithdrawn).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            // One wallet per user per plan
+            entity.HasIndex(e => new { e.UserId, e.PlanType }).IsUnique();
+        });
+
+        modelBuilder.Entity<WalletTransaction>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.PlanType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Type)
+                  .HasConversion<string>()
+                  .HasMaxLength(20)
+                  .IsRequired();
+            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.BalanceAfter).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Source).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => new { e.UserId, e.PlanType });
+            entity.HasIndex(e => e.CreatedAt);
+        });
+
+        modelBuilder.Entity<WithdrawalRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.PlanType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Status)
+                  .HasConversion<string>()
+                  .HasMaxLength(20)
+                  .IsRequired();
+            entity.Property(e => e.RequestedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.Status);
         });
     }
 }
