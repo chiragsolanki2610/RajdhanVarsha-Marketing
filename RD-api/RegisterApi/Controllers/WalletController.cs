@@ -13,10 +13,12 @@ namespace RegisterApi.Controllers;
 public class WalletController : ControllerBase
 {
     private readonly IWalletService _walletService;
+    private readonly ICommissionService _commissionService;
 
-    public WalletController(IWalletService walletService)
+    public WalletController(IWalletService walletService, ICommissionService commissionService)
     {
         _walletService = walletService;
+        _commissionService = commissionService;
     }
 
     private string CurrentUserId =>
@@ -53,5 +55,22 @@ public class WalletController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    // GET /api/wallet/commissions  -> every commission you've earned, with the
+    // downline purchase that triggered each one (who bought what, what level, how much)
+    [HttpGet("commissions")]
+    public async Task<IActionResult> GetCommissionHistory()
+    {
+        var history = await _commissionService.GetCommissionHistoryAsync(CurrentUserId);
+        return Ok(history);
+    }
+
+    // GET /api/wallet/commissions/summary  -> totals: overall, self vs upline, per-level breakdown
+    [HttpGet("commissions/summary")]
+    public async Task<IActionResult> GetCommissionSummary()
+    {
+        var summary = await _commissionService.GetCommissionSummaryAsync(CurrentUserId);
+        return Ok(summary);
     }
 }

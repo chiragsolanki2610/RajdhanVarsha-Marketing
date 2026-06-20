@@ -336,7 +336,7 @@ export default function Sidebar() {
                     }`}
                   >
                     <Home size={16} className={pathname === '/dashboard' ? 'text-blue-600' : 'text-blue-200'} />
-                    {isOpen && <span className="truncate animate-fadeIn">Home (Dashboard)</span>}
+                    {isOpen && <span className="truncate animate-fadeIn">Home</span>}
                   </Link>
 
                   {/* Choose Plan */}
@@ -351,7 +351,7 @@ export default function Sidebar() {
                     }`}
                   >
                     <Layers size={16} className={pathname === '/plan' ? 'text-blue-600' : 'text-blue-200'} />
-                    {isOpen && <span className="truncate animate-fadeIn">Choose Plan</span>}
+                    {isOpen && <span className="truncate animate-fadeIn">Plan</span>}
                   </Link>
 
                   {/* Dropdown: Product */}
@@ -474,17 +474,17 @@ export default function Sidebar() {
 
                   {/* Finance & Earnings */}
                   <Link
-                    href="/finance"
+                    href="/wallet"
                     className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
                       isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
                     } ${
-                      pathname === '/finance'
+                      pathname === '/wallet'
                         ? 'bg-white text-blue-900 font-bold shadow-md'
                         : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
                     }`}
                   >
-                    <Wallet size={16} className={pathname === '/finance' ? 'text-blue-600' : 'text-blue-200'} />
-                    {isOpen && <span className="truncate animate-fadeIn">Finance & Earnings</span>}
+                    <Wallet size={16} className={pathname === '/wallet' ? 'text-blue-600' : 'text-blue-200'} />
+                    {isOpen && <span className="truncate animate-fadeIn">Wallets</span>}
                   </Link>
 
                   {/* ── Admin Panel ── */}

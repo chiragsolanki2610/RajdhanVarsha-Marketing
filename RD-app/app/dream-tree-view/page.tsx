@@ -21,26 +21,34 @@ import dagre from "@dagrejs/dagre";
 import Sidebar from "@/components/Sidebar";
 import LoginTopbar from "@/components/loginTopbar";
 
+// ── API base — matches wallet/page.tsx and dream-purchase/page.tsx ───────────
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:56187";
+
 const getToken = () =>
-  localStorage.getItem("token") ?? sessionStorage.getItem("token") ?? "";
+  localStorage.getItem("authToken") ??
+  localStorage.getItem("token") ??
+  sessionStorage.getItem("token") ??
+  "";
 
 interface TreeNode {
   id: string;
   name: string;
   sponsorId: string;
   sponsorName: string;
+  idStatus: string;
   level: number;
   directCount: number;
   isEligibleForWithdrawal: boolean;
   calculatedBv: number;
   levelCommissionPercentage: number;
   estimatedEarnings: number;
+  totalIncentive: number;
   hasChildren: boolean;
   children: TreeNode[];
 }
 
 async function fetchFullTree(): Promise<TreeNode> {
-  const res = await fetch("http://localhost:56188/api/Tree", {
+  const res = await fetch(`${API_URL}/api/Tree`, {
     headers: {
       Authorization: `Bearer ${getToken()}`,
       "Content-Type": "application/json",
@@ -123,7 +131,18 @@ const CustomUserNode = ({ data }: { data: any }) => {
           </span>
         </div>
 
-        <h3 className="text-base font-bold text-slate-800 truncate">{data.name}</h3>
+        <h3 className="text-base font-bold text-slate-800 truncate flex items-center gap-2">
+          {data.name}
+          <span
+            className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide ${
+              String(data.idStatus).toLowerCase() === "active"
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-rose-100 text-rose-700"
+            }`}
+          >
+            {String(data.idStatus).toLowerCase() === "active" ? "Active" : "Inactive"}
+          </span>
+        </h3>
         <p className="text-xs text-slate-400 font-mono">ID: {data.id}</p>
 
         <div className="mt-2 bg-slate-50 p-2 rounded-lg text-xs space-y-1 text-slate-700 border border-slate-100">
@@ -138,7 +157,7 @@ const CustomUserNode = ({ data }: { data: any }) => {
           <div className="flex justify-between border-t border-slate-200/60 pt-1 mt-1 font-medium">
             <span>Incentive ({data.levelCommissionPercentage}%):</span>
             <span className="text-green-600 font-bold">
-              ₹{Number(data.estimatedEarnings).toFixed(2)}
+              ₹{Number(data.totalIncentive).toFixed(2)}
             </span>
           </div>
         </div>
@@ -285,6 +304,7 @@ function TreeCanvas() {
   const handleExpand = useCallback((id: string) => {
     const node = nodeMap.current.get(id);
     if (!node || !node.hasChildren) return;
+    if (id === focusedNodeId.current) return; // already focused — ignore re-click
 
     // Push current focus onto history stack
     historyStack.current.push(focusedNodeId.current ?? "ROOT");

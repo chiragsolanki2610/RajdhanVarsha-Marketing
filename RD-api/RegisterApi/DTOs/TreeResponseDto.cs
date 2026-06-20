@@ -29,6 +29,11 @@ namespace RegisterApi.Models
         public string SponsorName { get; set; }
 
         /// <summary>
+        /// Active/Inactive status of this distributor's ID (User.IdStatus)
+        /// </summary>
+        public string IdStatus { get; set; }
+
+        /// <summary>
         /// The depth tracking index within the organization matrix layout (Levels 0 through 12)
         /// </summary>
         public int Level { get; set; }
@@ -44,9 +49,11 @@ namespace RegisterApi.Models
         public bool IsEligibleForWithdrawal => DirectCount >= 3;
 
         /// <summary>
-        /// Business Volume metric. Each direct sales account contributes exactly 600 BV.
+        /// Business Volume metric — the sum of this distributor's own PAID purchases
+        /// (Plan.TotalBv). Set explicitly by the controller from real purchase data;
+        /// NOT derived from team size.
         /// </summary>
-        public int CalculatedBv => DirectCount * 600;
+        public int CalculatedBv { get; set; }
 
         /// <summary>
         /// Percentage payout assigned to the active tree node depth level according to the plan chart
@@ -54,9 +61,19 @@ namespace RegisterApi.Models
         public double LevelCommissionPercentage { get; set; }
 
         /// <summary>
-        /// Estimated incentive value in Rs generated from direct node activity (CalculatedBv * LevelCommissionPercentage)
+        /// Estimated incentive value in Rs generated from THIS node's own BV at THIS node's level
+        /// (CalculatedBv * LevelCommissionPercentage). This is the commission this node's purchase
+        /// generates for its upline — it is NOT this node's total wallet incentive.
         /// </summary>
         public double EstimatedEarnings { get; set; }
+
+        /// <summary>
+        /// The TOTAL incentive this node has earned/will earn = its own EstimatedEarnings
+        /// (commission on its own BV) PLUS the sum of EstimatedEarnings contributed by every
+        /// descendant in its downline (up to level 12). This is the correct value to show
+        /// as "Incentive" in the tree UI — it matches what gets credited to the Dream Wallet.
+        /// </summary>
+        public double TotalIncentive { get; set; }
 
         /// <summary>
         /// Flag that controls whether an expansion trigger icon should render in the UI

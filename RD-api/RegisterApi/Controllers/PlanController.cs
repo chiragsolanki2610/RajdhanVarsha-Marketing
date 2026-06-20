@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using RegisterApi.Data;
 using RegisterApi.DTOs;
 using RegisterApi.Models;
+using RegisterApi.Services;
 
 namespace RegisterApi.Controllers
 {
@@ -13,6 +14,7 @@ namespace RegisterApi.Controllers
     public class PlanController : ControllerBase
     {
         private readonly AppDbContext _db;
+        private readonly ICommissionService _commissionService;
 
         // Move this to a DB-backed PlanTypes table later if you want it admin-editable
         private static readonly Dictionary<string, int> PlanBvRequirement = new()
@@ -21,7 +23,11 @@ namespace RegisterApi.Controllers
             { "Binary Plan", 600 }
         };
 
-        public PlanController(AppDbContext db) => _db = db;
+        public PlanController(AppDbContext db, ICommissionService commissionService)
+        {
+            _db = db;
+            _commissionService = commissionService;
+        }
 
         // ---------------------------------------------------------------
         // GET /api/Plans/my-plan
@@ -141,6 +147,17 @@ namespace RegisterApi.Controllers
             }
 
             await _db.SaveChangesAsync();
+
+            // ✅ Pay out level commissions: 10% self bonus to the buyer,
+            //    then 12 levels up the SponsorId chain, into each person's
+            //    "Dream Wallet". Runs for every paid purchase, independent
+            //    of whether this particular order met the activation BV
+            //    threshold above.
+            if (plan.Status == PlanStatus.Paid)
+            {
+                await _commissionService.DistributeProductPurchaseCommissionAsync(
+                    user.UserId, totalBv, plan.Id.ToString());
+            }
 
             return Ok(new
             {

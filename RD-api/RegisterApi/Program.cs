@@ -61,6 +61,7 @@ try
 
     // ── Services ─────────────────────────────────────────────────────────────
     builder.Services.AddScoped<IWalletService, WalletService>();
+    builder.Services.AddScoped<ICommissionService, CommissionService>();
     builder.Services.AddScoped<IUserService, UserService>();
     builder.Services.AddScoped<IUserIdGenerator, UserIdGenerator>();
     builder.Services.AddScoped<IPasswordService, PasswordService>();
