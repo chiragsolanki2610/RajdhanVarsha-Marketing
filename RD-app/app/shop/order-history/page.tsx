@@ -28,7 +28,7 @@ import Sidebar from '@/components/Sidebar';
 import LoginTopbar from '@/components/loginTopbar';
 
 // ─── BASE URL ─────────────────────────────────────────────────────────────────
-const BASE_URL = 'https://localhost:56187';
+const BASE_URL = 'https://rd-api-j7zj.onrender.com';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

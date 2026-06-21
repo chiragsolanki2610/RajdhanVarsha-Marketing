@@ -22,7 +22,7 @@ import Sidebar from "@/components/Sidebar";
 import LoginTopbar from "@/components/loginTopbar";
 
 // ── API base — matches wallet/page.tsx and dream-purchase/page.tsx ───────────
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:56187";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
 
 const getToken = () =>
   localStorage.getItem("authToken") ??

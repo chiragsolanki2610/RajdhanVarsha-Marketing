@@ -41,7 +41,7 @@ export default function PlanPage() {
           return;
         }
 
-        const res = await fetch(`https://localhost:56187/api/Plans/my-plan`, {
+        const res = await fetch(`https://rd-api-j7zj.onrender.com/api/Plans/my-plan`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',

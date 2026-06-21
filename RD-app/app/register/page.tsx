@@ -38,7 +38,7 @@ export default function RegisterPage() {
         setIsFetchingSponsor(true);
         try {
             // ✅ Fixed: Changed endpoint route to target /sponsor-lookup/ to bypass 401 Authorization blocks
-            const response = await fetch(`https://localhost:56187/api/Auth/sponsor-lookup/${sponsorId.trim()}`, {
+            const response = await fetch(`https://rd-api-j7zj.onrender.com/api/Auth/sponsor-lookup/${sponsorId.trim()}`, {
                 method: "GET",
                 headers: {
                     "Content-Type": "application/json",
@@ -96,7 +96,7 @@ export default function RegisterPage() {
                 Address: formData.address
             };
 
-            const response = await fetch("https://localhost:56187/api/Auth/register", {
+            const response = await fetch("https://rd-api-j7zj.onrender.com/api/Auth/register", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -141,7 +141,7 @@ export default function RegisterPage() {
                 Password: generatedCredentials.password
             };
 
-            const response = await fetch("https://localhost:56187/api/Auth/login", {
+            const response = await fetch("https://rd-api-j7zj.onrender.com/api/Auth/login", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
