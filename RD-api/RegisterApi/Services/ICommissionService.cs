@@ -16,7 +16,12 @@ public interface ICommissionService
     /// </summary>
     /// <param name="buyerUserId">UserId (e.g. "RD0013") of the person who made the purchase.</param>
     /// <param name="totalBv">Total BV of the purchase (sum of product BV * quantity).</param>
-    /// <param name="referenceId">Usually the Plan.Id (as string) this commission run is tied to — lets every WalletTransaction be traced back to the purchase.</param>
+    /// <param name="referenceId">
+    /// Traces this commission run back to the purchase that triggered it. Use a bare
+    /// Plan.Id (e.g. "5") for Plan checkouts, or "order-{PaymentOrders.Id}" (e.g. "order-12")
+    /// for shop-order approvals — GetCommissionHistoryAsync uses this prefix to know which
+    /// table to join back to, since the two Id sequences can collide.
+    /// </param>
     Task DistributeProductPurchaseCommissionAsync(string buyerUserId, decimal totalBv, string referenceId);
 
     /// <summary>

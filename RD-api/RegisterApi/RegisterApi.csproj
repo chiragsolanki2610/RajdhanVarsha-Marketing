@@ -22,6 +22,9 @@
 
 		<!-- Swagger -->
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+
+		<!-- PDF receipt generation -->
+		<PackageReference Include="QuestPDF" Version="2024.3.6" />
 	</ItemGroup>
 
 </Project>

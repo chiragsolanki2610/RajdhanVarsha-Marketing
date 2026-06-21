@@ -18,6 +18,9 @@ public class AppDbContext : DbContext
     public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
     public DbSet<WithdrawalRequest> WithdrawalRequests => Set<WithdrawalRequest>();
 
+    // --- Payment Orders (product purchases via UPI) ---
+    public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();  // ← NEW
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>
@@ -50,65 +53,21 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.ToTable("Products");
 
-            // ✅ Explicit column names to match Supabase PascalCase columns
-            entity.Property(e => e.Id)
-                  .HasColumnName("Id");
-
-            entity.Property(e => e.ProductNo)
-                  .HasColumnName("ProductNo")
-                  .HasMaxLength(50)
-                  .IsRequired();
-
-            entity.Property(e => e.ProductName)
-                  .HasColumnName("ProductName")
-                  .HasMaxLength(200)
-                  .IsRequired();
-
-            entity.Property(e => e.Category)
-                  .HasColumnName("Category")
-                  .HasMaxLength(100)
-                  .IsRequired();
-
-            entity.Property(e => e.Description)
-                  .HasColumnName("Description")
-                  .IsRequired();
-
-            entity.Property(e => e.Mrp)
-                  .HasColumnName("Mrp")
-                  .HasColumnType("decimal(18,2)");
-
-            entity.Property(e => e.Gst)
-                  .HasColumnName("Gst")
-                  .HasColumnType("decimal(5,2)");
-
-            entity.Property(e => e.Dp)
-                  .HasColumnName("Dp")
-                  .HasColumnType("decimal(18,2)");
-
-            entity.Property(e => e.Bv)
-                  .HasColumnName("Bv")
-                  .HasColumnType("decimal(18,2)");
-
-            entity.Property(e => e.ImageUrl)
-                  .HasColumnName("ImageUrl");
-
-            entity.Property(e => e.IsActive)
-                  .HasColumnName("IsActive")
-                  .HasDefaultValue(true);
-
-            entity.Property(e => e.AddedBy)
-                  .HasColumnName("AddedBy");
-
-            entity.Property(e => e.CreatedAt)
-                  .HasColumnName("CreatedAt")
-                  .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-            entity.Property(e => e.UpdatedAt)
-                  .HasColumnName("UpdatedAt")
-                  .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-            entity.HasIndex(e => e.ProductNo)
-                  .IsUnique();
+            entity.Property(e => e.Id).HasColumnName("Id");
+            entity.Property(e => e.ProductNo).HasColumnName("ProductNo").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.ProductName).HasColumnName("ProductName").HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Category).HasColumnName("Category").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("Description").IsRequired();
+            entity.Property(e => e.Mrp).HasColumnName("Mrp").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Gst).HasColumnName("Gst").HasColumnType("decimal(5,2)");
+            entity.Property(e => e.Dp).HasColumnName("Dp").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Bv).HasColumnName("Bv").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.ImageUrl).HasColumnName("ImageUrl");
+            entity.Property(e => e.IsActive).HasColumnName("IsActive").HasDefaultValue(true);
+            entity.Property(e => e.AddedBy).HasColumnName("AddedBy");
+            entity.Property(e => e.CreatedAt).HasColumnName("CreatedAt").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasColumnName("UpdatedAt").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.ProductNo).IsUnique();
         });
 
         modelBuilder.Entity<Plan>(entity =>
@@ -123,7 +82,6 @@ public class AppDbContext : DbContext
                   .HasMaxLength(20)
                   .IsRequired();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-
             entity.HasIndex(e => e.UserId);
         });
 
@@ -159,8 +117,6 @@ public class AppDbContext : DbContext
             entity.Property(e => e.TotalWithdrawn).HasColumnType("decimal(18,2)");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-            // One wallet per user per plan
             entity.HasIndex(e => new { e.UserId, e.PlanType }).IsUnique();
         });
 
@@ -177,7 +133,6 @@ public class AppDbContext : DbContext
             entity.Property(e => e.BalanceAfter).HasColumnType("decimal(18,2)");
             entity.Property(e => e.Source).HasMaxLength(100).IsRequired();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-
             entity.HasIndex(e => e.UserId);
             entity.HasIndex(e => new { e.UserId, e.PlanType });
             entity.HasIndex(e => e.CreatedAt);
@@ -194,7 +149,27 @@ public class AppDbContext : DbContext
                   .HasMaxLength(20)
                   .IsRequired();
             entity.Property(e => e.RequestedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.Status);
+        });
 
+        // --- Payment Orders -------------------------------------------------------  ← NEW BLOCK
+        modelBuilder.Entity<PaymentOrder>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.UtrNumber).HasMaxLength(30).IsRequired();
+            entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.TotalBv).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.CartItemsJson).IsRequired();
+            entity.Property(e => e.Status)
+                  .HasConversion<string>()
+                  .HasMaxLength(20)
+                  .IsRequired();
+            entity.Property(e => e.RequestedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.ReceiptPdf).HasColumnType("bytea");
+            entity.Property(e => e.ReceiptTotalAmount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.ReceiptTotalBv).HasColumnType("decimal(18,2)");
             entity.HasIndex(e => e.UserId);
             entity.HasIndex(e => e.Status);
         });

@@ -5,6 +5,9 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 using RegisterApi.Data;
 using RegisterApi.Services;
+using QuestPDF.Infrastructure;
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 try
 {
@@ -65,6 +68,7 @@ try
     builder.Services.AddScoped<IUserService, UserService>();
     builder.Services.AddScoped<IUserIdGenerator, UserIdGenerator>();
     builder.Services.AddScoped<IPasswordService, PasswordService>();
+    builder.Services.AddScoped<IReceiptService, ReceiptService>();
 
     // ── JWT Auth ─────────────────────────────────────────────────────────────
     var jwtKey = builder.Configuration["Jwt:Key"]

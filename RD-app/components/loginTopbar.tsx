@@ -5,7 +5,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-export default function LoginTopbar({ logoSrc }: { logoSrc?: string }) {
+export default function LoginTopbar({
+  logoSrc,
+  pageTitle,
+}: {
+  logoSrc?: string;
+  pageTitle?: string;
+}) {
   const [userName, setUserName] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
@@ -16,7 +22,6 @@ export default function LoginTopbar({ logoSrc }: { logoSrc?: string }) {
           localStorage.getItem("authToken") || localStorage.getItem("token");
 
         if (token) {
-          // Try fetching from API first
           const res = await fetch(
             `${
               process.env.NEXT_PUBLIC_API_URL || "https://localhost:56187"
@@ -33,7 +38,6 @@ export default function LoginTopbar({ logoSrc }: { logoSrc?: string }) {
           }
         }
 
-        // Fallback: try all common localStorage keys
         const keys = ["userProfile", "profile", "user", "userData", "memberProfile"];
         for (const key of keys) {
           const raw = localStorage.getItem(key);
@@ -73,7 +77,7 @@ export default function LoginTopbar({ logoSrc }: { logoSrc?: string }) {
   return (
     <>
       {/* Mobile topbar */}
-      <div className="flex md:hidden w-full items-center justify-between bg-white px-4 py-3 shadow-sm">
+      <div className="flex md:hidden sticky top-0 z-40 w-full items-center justify-between bg-white px-4 py-3 shadow-sm">
         <div className="flex items-center gap-2 min-w-0">
           <div className="h-9 w-9 rounded-full overflow-hidden bg-red-500 flex items-center justify-center flex-shrink-0">
             {logoSrc ? (
@@ -111,7 +115,15 @@ export default function LoginTopbar({ logoSrc }: { logoSrc?: string }) {
       </div>
 
       {/* Desktop topbar */}
-      <div className="hidden md:flex w-full bg-white border-b border-gray-200 px-6 py-6 items-center justify-end">
+      <div className="hidden md:flex sticky top-0 z-40 w-full bg-white border-b border-gray-200 px-6 py-6 items-center justify-between">
+        {/* LEFT: Page title */}
+        <div>
+          {pageTitle && (
+            <h1 className="text-xl font-bold text-gray-800">{pageTitle}</h1>
+          )}
+        </div>
+
+        {/* RIGHT: Welcome + Bell */}
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">
             Welcome back,{" "}

@@ -1,17 +1,71 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { useRouter } from "next/navigation";
-import { Check, Network, ChevronDown, ChevronUp, CircleDot, FileText } from 'lucide-react';
+import { Check, Network, ChevronDown, ChevronUp, CircleDot, FileText, BadgeCheck } from 'lucide-react';
 
 export default function PlanPage() {
   const router = useRouter();
 
+  const [activePlanType, setActivePlanType] = useState<string | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState(true);
 
   // Collapse toggles — Both set to false initially to display "Show Less" view on load
   const [showDreamDetails, setShowDreamDetails] = useState(false);
   const [showBinaryDetails, setShowBinaryDetails] = useState(false);
+
+  // Fetch active plan on mount
+  useEffect(() => {
+    const fetchPlan = async () => {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+
+        // ── Try localStorage cache first (set by dashboard's Promise.allSettled call) ──
+        const cached = localStorage.getItem('userPlanType');
+        if (cached) {
+          setActivePlanType(cached.toLowerCase());
+          setLoadingPlan(false);
+          // still fetch fresh in background to keep in sync
+        }
+
+        // ── Grab JWT token — same key your other pages use ──
+        const token =
+          localStorage.getItem('token') ||
+          localStorage.getItem('authToken') ||
+          localStorage.getItem('jwtToken') ||
+          '';
+
+        if (!token) {
+          setLoadingPlan(false);
+          return;
+        }
+
+        const res = await fetch(`https://localhost:56187/api/Plans/my-plan`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          // Normalize to lowercase — covers both camelCase and PascalCase responses
+          const planType = (data?.planType || data?.PlanType || '').toLowerCase();
+          if (planType) {
+            setActivePlanType(planType);
+            // Cache it so next load is instant
+            localStorage.setItem('userPlanType', planType);
+          }
+        }
+      } catch {
+        // silently fail — treat as no active plan
+      } finally {
+        setLoadingPlan(false);
+      }
+    };
+    fetchPlan();
+  }, []);
 
   // Level Matrix Data extracted directly from your Dream Plan blueprint screenshot
   const matrixData = [
@@ -39,6 +93,10 @@ export default function PlanPage() {
     }
   };
 
+  // Helper: is a given plan currently active?
+  const isDreamActive = activePlanType === 'dream' || activePlanType === 'dream plan' || activePlanType === 'dream-plan';
+  const isBinaryActive = activePlanType === 'binary' || activePlanType === 'binary plan' || activePlanType === 'binary-plan';
+
   return (
     <div className="flex h-screen bg-[#F8FAFC] overflow-hidden font-sans antialiased">
       {/* ── Sidebar Context Component ── */}
@@ -50,15 +108,14 @@ export default function PlanPage() {
         {/* Top Header Navigation Strip */}
         <header className="bg-white border-b border-slate-200 h-16 shrink-0 px-6 flex items-center justify-between sticky top-0 z-20 shadow-sm">
           <div className="flex flex-col">
-            <h1 className="text-sm font-black text-slate-800 tracking-tight uppercase">Plan Management Dashboard</h1>
-            <p className="text-[11px] text-slate-500 font-medium">Configure network acceleration tracking mechanics</p>
+            <h1 className="text-sm font-black text-slate-800 tracking-tight uppercase">Plan  Management </h1>
           </div>
-          <div className="flex items-center gap-4">
+          {/* <div className="flex items-center gap-4">
             <div className="border-l border-slate-200 pl-4 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-red-500 inline-block animate-pulse"></span>
               <span className="text-xs font-black text-red-500 font-mono">INACTIVE profile</span>
             </div>
-          </div>
+          </div> */}
         </header>
 
         {/* ── Primary Main Dashboard Viewport ── */}
@@ -78,7 +135,15 @@ export default function PlanPage() {
 
             {/* Top Summary Block Layout Row */}
             <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-br from-white via-white to-blue-50/20">
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Dream Plan</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Dream Plan</h2>
+                {/* ── ACTIVE BADGE (only shown when dream plan is active) ── */}
+                {isDreamActive && (
+                  <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                    <BadgeCheck size={12} className="text-emerald-500" /> Active
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
                 A comprehensive 12-Level business acceleration matrix allowing up to 10 direct network joinings.
               </p>
@@ -253,13 +318,26 @@ export default function PlanPage() {
                 )}
               </button>
 
+              {/* ── CONDITIONAL FOOTER: Active badge OR Get Started button ── */}
               <div className="p-4 bg-white flex justify-end">
-                <button
-                  onClick={() => router.push("/dream-purchase")}
-                  className="w-full bg-[#2B4C8C] hover:bg-blue-700 text-white py-3.5 px-6 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all"
-                >
-                  Get Started & Select Products
-                </button>
+                {loadingPlan ? (
+                  // Skeleton while loading
+                  <div className="w-full h-12 bg-slate-100 animate-pulse rounded-xl" />
+                ) : isDreamActive ? (
+                  // ── ACTIVE STATE ──
+                  <div className="w-full flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-6 rounded-xl">
+                    <BadgeCheck size={16} className="text-emerald-500 shrink-0" />
+                    <span className="font-black text-xs uppercase tracking-widest">Plan Active — Dream Plan Enrolled</span>
+                  </div>
+                ) : (
+                  // ── DEFAULT STATE ──
+                  <button
+                    onClick={() => router.push("/dream-purchase")}
+                    className="w-full bg-[#2B4C8C] hover:bg-blue-700 text-white py-3.5 px-6 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all"
+                  >
+                    Get Started & Select Products
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -272,7 +350,15 @@ export default function PlanPage() {
             <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-br from-white via-white to-indigo-50/20">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Binary Plan</h2>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Binary Plan</h2>
+                    {/* ── ACTIVE BADGE (only shown when binary plan is active) ── */}
+                    {isBinaryActive && (
+                      <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                        <BadgeCheck size={12} className="text-emerald-500" /> Active
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
                     Unlock compounding dual-team network capabilities. Apply online through our web application form to get started instantly.
                   </p>
@@ -386,13 +472,26 @@ export default function PlanPage() {
                 )}
               </button>
 
+              {/* ── CONDITIONAL FOOTER: Active badge OR Activate button ── */}
               <div className="p-4 bg-white flex justify-end">
-                <button
-                  onClick={() => handleActivation('binary-plan')}
-                  className="w-full bg-[#3B5998] hover:bg-blue-700 text-white py-3.5 px-6 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all"
-                >
-                  Activate Binary Target & Shop
-                </button>
+                {loadingPlan ? (
+                  // Skeleton while loading
+                  <div className="w-full h-12 bg-slate-100 animate-pulse rounded-xl" />
+                ) : isBinaryActive ? (
+                  // ── ACTIVE STATE ──
+                  <div className="w-full flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-6 rounded-xl">
+                    <BadgeCheck size={16} className="text-emerald-500 shrink-0" />
+                    <span className="font-black text-xs uppercase tracking-widest">Plan Active — Binary Plan Enrolled</span>
+                  </div>
+                ) : (
+                  // ── DEFAULT STATE ──
+                  <button
+                    onClick={() => handleActivation('binary-plan')}
+                    className="w-full bg-[#3B5998] hover:bg-blue-700 text-white py-3.5 px-6 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all"
+                  >
+                    Activate Binary Target & Shop
+                  </button>
+                )}
               </div>
             </div>
           </div>

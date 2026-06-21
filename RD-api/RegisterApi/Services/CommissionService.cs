@@ -137,10 +137,20 @@ public class CommissionService : ICommissionService
         if (transactions.Count == 0)
             return new List<CommissionEarningDto>();
 
-        // Batch-load the Plans (purchases) these commissions were triggered by.
+        // referenceId is either a bare Plan.Id ("5", from PlanController.Checkout) or
+        // "order-{PaymentOrders.Id}" (from OrdersController.ApprovePayment) — these are
+        // two different tables that can share the same numeric Id, so we must not
+        // treat them interchangeably.
         var planIds = transactions
-            .Where(t => int.TryParse(t.ReferenceId, out _))
+            .Where(t => t.ReferenceId != null && int.TryParse(t.ReferenceId, out _))
             .Select(t => int.Parse(t.ReferenceId!))
+            .Distinct()
+            .ToList();
+
+        var orderIds = transactions
+            .Where(t => t.ReferenceId != null && t.ReferenceId.StartsWith("order-")
+                        && int.TryParse(t.ReferenceId.Substring("order-".Length), out _))
+            .Select(t => int.Parse(t.ReferenceId!.Substring("order-".Length)))
             .Distinct()
             .ToList();
 
@@ -148,8 +158,15 @@ public class CommissionService : ICommissionService
             .Where(p => planIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, p => p);
 
-        // Batch-load buyer names for those plans.
-        var buyerIds = plans.Values.Select(p => p.UserId).Distinct().ToList();
+        var orders = await _db.PaymentOrders
+            .Where(o => orderIds.Contains(o.Id))
+            .ToDictionaryAsync(o => o.Id, o => o);
+
+        // Batch-load buyer names for both kinds of purchase.
+        var buyerIds = plans.Values.Select(p => p.UserId)
+            .Concat(orders.Values.Select(o => o.UserId))
+            .Distinct()
+            .ToList();
         var buyerNames = await _db.Users
             .Where(u => buyerIds.Contains(u.UserId))
             .ToDictionaryAsync(u => u.UserId, u => u.Name);
@@ -162,11 +179,24 @@ public class CommissionService : ICommissionService
             if (level < 0)
                 continue; // skip anything that isn't one of our own commission entries
 
-            Plan? plan = null;
-            if (int.TryParse(t.ReferenceId, out var planId))
-                plans.TryGetValue(planId, out plan);
+            decimal purchaseBv = 0;
+            string purchaseType = string.Empty;
+            string buyerUserId = string.Empty;
 
-            var buyerUserId = plan?.UserId ?? string.Empty;
+            if (t.ReferenceId != null && t.ReferenceId.StartsWith("order-")
+                && int.TryParse(t.ReferenceId.Substring("order-".Length), out var orderId)
+                && orders.TryGetValue(orderId, out var order))
+            {
+                purchaseBv = order.TotalBv;
+                purchaseType = "Product Order";
+                buyerUserId = order.UserId;
+            }
+            else if (int.TryParse(t.ReferenceId, out var planId) && plans.TryGetValue(planId, out var plan))
+            {
+                purchaseBv = plan.TotalBv;
+                purchaseType = plan.PlanType;
+                buyerUserId = plan.UserId;
+            }
 
             result.Add(new CommissionEarningDto
             {
@@ -174,8 +204,8 @@ public class CommissionService : ICommissionService
                 Level = level,
                 Percentage = LevelPercents[Math.Min(level, LevelPercents.Length - 1)],
                 Amount = t.Amount,
-                PurchaseBv = plan?.TotalBv ?? 0,
-                PurchasePlanType = plan?.PlanType ?? string.Empty,
+                PurchaseBv = purchaseBv,
+                PurchasePlanType = purchaseType,
                 BuyerUserId = buyerUserId,
                 BuyerName = !string.IsNullOrEmpty(buyerUserId) && buyerNames.TryGetValue(buyerUserId, out var name)
                     ? name

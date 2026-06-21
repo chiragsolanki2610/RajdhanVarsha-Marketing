@@ -21,7 +21,8 @@ import {
   Banknote,    
   MapPin,
   PackagePlus,
-  UserSearch
+  UserSearch,
+  ClipboardList
 } from 'lucide-react';
 
 interface UserData {
@@ -30,16 +31,14 @@ interface UserData {
   role: string; 
 }
 
-// ─── Admin Member IDs (always show Admin Panel for these IDs) ─────────────────
 const ADMIN_MEMBER_IDS = ['RD0001'];
 
-// ─── Mobile Bottom Nav ────────────────────────────────────────────────────────
 function MobileBottomNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
 
   const navItems = [
-    { icon: Home,        label: 'Home',   path: '/dashboard' },
-    { icon: Layers,      label: 'Plans',  path: '/plan' },
+    { icon: Home,        label: 'Home',    path: '/dashboard' },
+    { icon: Layers,      label: 'Plans',   path: '/plan' },
     { icon: ShoppingBag, label: 'Product', path: '/shop' }, 
     { icon: Users,       label: 'Network', path: '/network' }, 
     ...(isAdmin ? [{ icon: ShieldCheck, label: 'Admin', path: '/admin' }] : []),
@@ -88,7 +87,6 @@ function MobileBottomNav({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-// ─── Desktop Sidebar ──────────────────────────────────────────────────────────
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(true);
   const [isNetworkOpen, setIsNetworkOpen] = useState(false); 
@@ -101,7 +99,6 @@ export default function Sidebar() {
   const isProfileActive = pathname === '/profile';
   const isAdmin = userData?.role === 'Admin' || ADMIN_MEMBER_IDS.includes(userData?.memberId || '');
 
-  // ─── FETCH PROFILE FROM API ───────────────────────────────────────────────
   const loadUserAndFetchRole = async () => {
     let currentUserId = 'RD0001';
     let fallbackName = 'FIRSTUSER';
@@ -136,7 +133,7 @@ export default function Sidebar() {
 
       setUserData({ name: fallbackName, memberId: currentUserId, role: fallbackRole });
 
-      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:56187';
+      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:56187';
       const savedToken = localStorage.getItem('token');
 
       const response = await fetch(`${BASE_URL}/api/Auth/${currentUserId}`, {
@@ -199,9 +196,9 @@ export default function Sidebar() {
   };
 
   const networkSubItems = [
-    { icon: UserPlus,   label: 'Team Detail',     path: '/network/team-detail' },
-    { icon: GitBranch,  label: 'Dream Tree View',  path: '/dream-tree-view' },
-    { icon: Network,    label: 'Binary View',      path: '/network/binary-view' },
+    { icon: UserPlus,  label: 'Team Detail',    path: '/network/team-detail' },
+    { icon: GitBranch, label: 'Dream Tree View', path: '/dream-tree-view' },
+    { icon: Network,   label: 'Binary View',     path: '/network/binary-view' },
   ];
 
   const productSubItems = [
@@ -210,20 +207,22 @@ export default function Sidebar() {
   ];
 
   const adminSubItems = [
-    { icon: CheckSquare,  label: 'KYC Requests',            path: '/admin/kyc-requests' },
-    { icon: Banknote,     label: 'Withdrawal Requests',      path: '/admin/withdrawal-requests' },
-    { icon: MapPin,       label: 'Pickup Center Requests',   path: '/admin/pickup-center-requests' },
-    { icon: PackagePlus,  label: 'Add Products',             path: '/admin/add-products' },
-    { icon: UserSearch,   label: 'Search User Info',         path: '/admin/search-user' },
+    { icon: CheckSquare,   label: 'KYC Requests',          path: '/admin/kyc-requests' },
+    { icon: Banknote,      label: 'Withdrawal Requests',    path: '/admin/withdrawal-requests' },
+    { icon: MapPin,        label: 'Pickup Center Requests', path: '/admin/pickup-center-requests' },
+    { icon: ClipboardList, label: 'Order Requests',         path: '/admin/order-requests' },  // ← NEW
+    { icon: PackagePlus,   label: 'Add Products',           path: '/admin/add-products' },
+    { icon: UserSearch,    label: 'Search User Info',       path: '/admin/search-user' },
   ];
 
   return (
     <>
       {/* ── Desktop Sidebar ── */}
-      <div className="relative hidden md:flex h-screen shrink-0 font-sans select-none z-40 bg-[#3B5998]">
-        
+      {/* ✅ z-50 here so toggle button always appears above the z-40 topbar */}
+      <div className="relative hidden md:flex shrink-0 font-sans select-none z-50 bg-[#3B5998] h-screen sticky top-0">
+
         {/* Collapse / Expand Toggle */}
-        <button 
+        <button
           onClick={() => {
             setIsOpen(!isOpen);
             if (isOpen) {
@@ -240,42 +239,44 @@ export default function Sidebar() {
           <ChevronLeft size={16} />
         </button>
 
-        <div className={`bg-[#3B5998] text-white flex flex-col justify-between h-full transition-all duration-300 ease-in-out ${isOpen ? 'w-64' : 'w-16 items-center'}`}>
-          <div className="w-full flex flex-col items-center">
+        {/* ── Main sidebar column ── */}
+        <div className={`bg-[#3B5998] text-white flex flex-col h-full transition-all duration-300 ease-in-out ${isOpen ? 'w-64' : 'w-16 items-center'}`}>
 
-            {/* ── Logo Block ── */}
-            <div className={`w-full flex items-center box-border transition-all duration-300 h-20 ${
-              isOpen 
-                ? 'bg-white text-gray-800 px-3 border-b border-gray-200 mb-6 gap-2' 
-                : 'bg-transparent text-white px-2 justify-center border-b border-blue-400/30 mb-4'
-            }`}>
-              <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-lg text-white shrink-0 shadow-sm overflow-hidden bg-gray-100">
-                <img src="/photos/web_logo.jpg" alt="logo" className="w-full h-full object-cover" />
-              </div>
-              {isOpen && (
-                /* items-end aligns the contents inside this column layout completely to the right edge of the text stack */
-                <div className="flex-1 min-w-0 animate-fadeIn pl-0.5 flex flex-col items-end justify-center max-w-max">
-                  <h2 className="font-black text-[18px] tracking-tight whitespace-nowrap leading-tight text-right w-full">
-                    <span className="text-red-600">RAJ </span>
-                    <span className="text-[#3B5998]">DHANVARSHA</span>
-                  </h2>
-                  <p className="text-[11px] text-red-600 font-black tracking-wider leading-none mt-0.5 text-right w-full">
-                    MARKETING
-                  </p>
-                </div>
-              )}
+          {/* ── Logo Block ── */}
+          <div className={`w-full flex items-center box-border transition-all duration-300 shrink-0 h-20 ${
+            isOpen
+              ? 'bg-white text-gray-800 px-3 border-b border-gray-200 gap-2'
+              : 'bg-transparent text-white px-2 justify-center border-b border-blue-400/30'
+          }`}>
+            <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-lg text-white shrink-0 shadow-sm overflow-hidden bg-gray-100">
+              <img src="/photos/web_logo.jpg" alt="logo" className="w-full h-full object-cover" />
             </div>
+            {isOpen && (
+              <div className="flex-1 min-w-0 animate-fadeIn pl-0.5 flex flex-col items-end justify-center max-w-max">
+                <h2 className="font-black text-[18px] tracking-tight whitespace-nowrap leading-tight text-right w-full">
+                  <span className="text-red-600">RAJ </span>
+                  <span className="text-[#3B5998]">DHANVARSHA</span>
+                </h2>
+                <p className="text-[11px] text-red-600 font-black tracking-wider leading-none mt-0.5 text-right w-full">
+                  MARKETING
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Scrollable middle section ── */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden w-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
 
             {/* ── Profile Block ── */}
-            <div className={`w-full ${isOpen ? 'px-4 mb-6' : 'px-2 mb-4 flex justify-center'}`}>
-              <Link 
+            <div className={`w-full mt-6 ${isOpen ? 'px-4 mb-6' : 'px-2 mb-4 flex justify-center'}`}>
+              <Link
                 href="/profile"
                 title={!isOpen ? 'View Profile' : undefined}
                 className={`w-full flex items-center rounded-xl border transition-all ${
                   isOpen ? 'p-3 gap-3' : 'p-0 justify-center w-10 h-10 rounded-full'
                 } ${
-                  isProfileActive 
-                    ? 'bg-white border-white shadow-md text-blue-900 font-bold' 
+                  isProfileActive
+                    ? 'bg-white border-white shadow-md text-blue-900 font-bold'
                     : 'bg-blue-900/30 hover:bg-blue-900/50 border-blue-400/20 text-white'
                 }`}
               >
@@ -339,7 +340,7 @@ export default function Sidebar() {
                     {isOpen && <span className="truncate animate-fadeIn">Home</span>}
                   </Link>
 
-                  {/* Choose Plan */}
+                  {/* Plan */}
                   <Link
                     href="/plan"
                     className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
@@ -472,7 +473,7 @@ export default function Sidebar() {
                     )}
                   </div>
 
-                  {/* Finance & Earnings */}
+                  {/* Wallet */}
                   <Link
                     href="/wallet"
                     className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
@@ -487,7 +488,7 @@ export default function Sidebar() {
                     {isOpen && <span className="truncate animate-fadeIn">Wallets</span>}
                   </Link>
 
-                  {/* ── Admin Panel ── */}
+                  {/* Admin Panel */}
                   {isAdmin && (
                     <div className="pt-2">
                       <button
@@ -551,10 +552,12 @@ export default function Sidebar() {
                 </nav>
               </div>
             </div>
+
+            <div className="h-4" />
           </div>
 
           {/* ── Logout ── */}
-          <div className={`w-full mt-auto pb-4 ${isOpen ? 'px-4' : 'px-2'}`}>
+          <div className={`w-full shrink-0 ${isOpen ? 'px-4 pb-4' : 'px-2 pb-4'}`}>
             <button
               type="button"
               title={!isOpen ? 'Log Out' : undefined}
@@ -570,6 +573,7 @@ export default function Sidebar() {
               {isOpen && <span className="animate-fadeIn">Log Out</span>}
             </button>
           </div>
+
         </div>
       </div>
 

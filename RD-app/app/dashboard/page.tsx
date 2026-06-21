@@ -15,7 +15,6 @@ import {
   UserPlus,
   ShieldAlert,
   AlertTriangle,
-  Loader2,
   Clock,
   XCircle,
 } from 'lucide-react';
@@ -28,6 +27,14 @@ interface PlanInfo {
   isActive: boolean;
   purchaseDate: string | null;
   bv: number;
+}
+
+interface WalletData {
+  planType: string;
+  balance: number;
+  totalEarned: number;
+  totalWithdrawn: number;
+  minWithdrawalAmount: number;
 }
 
 interface ActivityItem {
@@ -46,18 +53,16 @@ interface ProfileData {
   kycStatus: KycStatus;
   plan: PlanInfo;
   totalSells: number;
-  totalPayout: number;
+  totalEarned: number;   // ← was totalPayout
   withdrawal: number;
   balance: number;
   recentActivity?: ActivityItem[];
 }
 
-// Shape returned by /api/Plans/my-plan
 interface MyPlanResponse {
   isActive: boolean;
   purchaseDate: string | null;
   bv: number;
-  // backend may return camelCase or PascalCase — handle both
   IsActive?: boolean;
   PurchaseDate?: string | null;
   Bv?: number;
@@ -65,7 +70,6 @@ interface MyPlanResponse {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Never use https for localhost — the backend has no TLS cert on dev
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   (typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -380,10 +384,11 @@ export default function DashboardPage() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      // Fetch profile and plan in parallel — plan failure must NOT crash the page
-      const [profileResult, planResult] = await Promise.allSettled([
+      // Fetch profile, plan, and wallet in parallel
+      const [profileResult, planResult, walletResult] = await Promise.allSettled([
         fetch(`${API_BASE}/api/Auth/profile`, { headers, cache: 'no-store' }),
         fetch(`${API_BASE}/api/Plans/my-plan`, { headers, cache: 'no-store' }),
+        fetch(`${API_BASE}/api/wallet`, { headers, cache: 'no-store' }),
       ]);
 
       // Profile is mandatory
@@ -396,10 +401,7 @@ export default function DashboardPage() {
       const profileData: ProfileData = await profileRes.json();
 
       // ── Normalise kycStatus ──────────────────────────────────────────────
-      // The backend returns `isKycCompleted` (boolean), not `kycStatus` (string).
-      // We also check for a KycStatus string field as fallback.
       const raw = profileData as any;
-
       const rawKycString = (raw.kycStatus ?? raw.KycStatus ?? raw.kyc_status ?? '') as string;
       const kycUpper = rawKycString?.toString().toUpperCase().trim();
 
@@ -409,7 +411,7 @@ export default function DashboardPage() {
       else if (raw.isKycCompleted === true) profileData.kycStatus = 'VERIFIED';
       else profileData.kycStatus = 'NOT_SUBMITTED';
 
-      // Merge plan data only if the plan fetch succeeded
+      // ── Merge plan data ──────────────────────────────────────────────────
       if (planResult.status === 'fulfilled' && planResult.value.ok) {
         try {
           const planRaw: MyPlanResponse = await planResult.value.json();
@@ -418,15 +420,35 @@ export default function DashboardPage() {
           const bv = planRaw.bv ?? planRaw.Bv ?? 0;
           profileData.plan = { isActive, purchaseDate, bv };
         } catch {
-          // plan JSON parse failed — keep whatever profile returned
+          // plan parse failed — keep profile defaults
         }
+      }
+
+      // ── Merge wallet data ────────────────────────────────────────────────
+      // Backend returns an ARRAY: [{ totalEarned, totalWithdrawn, balance, ... }]
+      if (walletResult.status === 'fulfilled' && walletResult.value.ok) {
+        try {
+          const walletRaw: WalletData[] = await walletResult.value.json();
+          const wallet = Array.isArray(walletRaw) ? walletRaw[0] : walletRaw as any;
+          if (wallet) {
+            profileData.totalEarned = wallet.totalEarned ?? 0;
+            profileData.withdrawal = wallet.totalWithdrawn ?? 0;
+            profileData.balance = wallet.balance ?? 0;
+          }
+        } catch {
+          profileData.totalEarned = 0;
+          profileData.withdrawal = 0;
+          profileData.balance = 0;
+        }
+      } else {
+        profileData.totalEarned = 0;
+        profileData.withdrawal = profileData.withdrawal ?? 0;
+        profileData.balance = profileData.balance ?? 0;
       }
 
       setProfile(profileData);
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : 'Something went wrong'
-      );
+      setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -446,7 +468,6 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex bg-[#F4F6FA] min-h-screen text-gray-800 font-sans antialiased">
-        {/* Sidebar skeleton */}
         <div className="hidden md:flex flex-col w-60 bg-white border-r border-gray-100 p-4 gap-4 shrink-0">
           <div className="h-10 w-36 bg-gray-200 rounded-xl animate-pulse mb-4" />
           <div className="flex items-center gap-3 mb-6">
@@ -462,7 +483,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Topbar skeleton */}
           <div className="h-16 bg-white border-b border-gray-100 px-6 flex items-center justify-between shrink-0">
             <div className="h-8 w-32 bg-gray-200 rounded-lg animate-pulse" />
             <div className="flex items-center gap-3">
@@ -472,10 +492,7 @@ export default function DashboardPage() {
           </div>
 
           <main className="flex-1 p-4 md:p-8 space-y-5">
-            {/* Banner skeleton */}
             <div className="h-16 w-full bg-amber-50 border border-amber-100 rounded-2xl animate-pulse" />
-
-            {/* Stat cards skeleton */}
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
               {[...Array(6)].map((_, i) => (
                 <div
@@ -493,8 +510,6 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-
-            {/* Recent activity skeleton */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6">
               <div className="flex justify-between items-center mb-5">
                 <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
@@ -572,8 +587,7 @@ export default function DashboardPage() {
     },
     {
       title: 'Total Sells',
-      value: `${profile.totalSells ?? 0} Sell${(profile.totalSells ?? 0) === 1 ? '' : 's'
-        }`,
+      value: `${profile.totalSells ?? 0} Sell${(profile.totalSells ?? 0) === 1 ? '' : 's'}`,
       icon: Zap,
       iconBg: 'bg-orange-50',
       iconColor: 'text-orange-500',
@@ -581,8 +595,8 @@ export default function DashboardPage() {
       blurred: !planActive,
     },
     {
-      title: 'Total Payout',
-      value: `₹${money(profile.totalPayout)}`,
+      title: 'Total Earning',                      // ← updated label
+      value: `₹${money(profile.totalEarned)}`,     // ← updated field
       icon: Wallet,
       iconBg: 'bg-green-50',
       iconColor: 'text-green-500',
@@ -645,12 +659,11 @@ export default function DashboardPage() {
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <LoginTopbar logoSrc="/logo.png" />
-
+        <LoginTopbar logoSrc="/logo.png" pageTitle="Dashboard" />
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           <div className="p-4 md:p-8 space-y-5">
 
-            {/* ── Step 1: KYC Alert — only when not verified ── */}
+            {/* ── KYC Alert — only when not verified ── */}
             {!kycVerified && (
               <KycBanner
                 status={profile.kycStatus}
@@ -658,20 +671,10 @@ export default function DashboardPage() {
               />
             )}
 
-            {/* ── Step 2: Plan Alert — only when KYC done but no plan ── */}
+            {/* ── Plan Alert — only when KYC done but no plan ── */}
             {kycVerified && !planActive && (
               <PlanBanner onActivate={() => router.push('/plan')} />
             )}
-
-            {/* ── Step 3: KYC verified + Plan active success pill ── */}
-            {/* {kycVerified && planActive && (
-              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-2xl px-5 py-3 w-fit">
-                <CheckCircle2 className="text-green-600" size={16} />
-                <span className="text-xs font-bold text-green-700">
-                  Account fully active — you&apos;re earning!
-                </span>
-              </div>
-            )} */}
 
             {/* ── Stat Cards Grid ── */}
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
@@ -690,12 +693,9 @@ export default function DashboardPage() {
                   <TrendingUp className="text-blue-400" size={22} />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-gray-700">
-                    No activity yet
-                  </p>
+                  <p className="text-sm font-bold text-gray-700">No activity yet</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Your earnings and team activity will appear here once you
-                    activate a plan.
+                    Your earnings and team activity will appear here once you activate a plan.
                   </p>
                 </div>
                 <button

@@ -134,54 +134,65 @@ public class WalletService : IWalletService
         if (amount < minAmount)
             throw new InvalidOperationException($"Minimum withdrawal amount for {planType} is {minAmount}.");
 
-        var wallet = await GetOrCreateWalletAsync(userId, planType);
-
-        if (wallet.Balance < amount)
+        // Pre-check balance before entering the retry strategy
+        var preCheck = await GetOrCreateWalletAsync(userId, planType);
+        if (preCheck.Balance < amount)
             throw new InvalidOperationException("Insufficient wallet balance.");
 
-        await using var dbTransaction = await _db.Database.BeginTransactionAsync();
+        WithdrawalRequestDto? result = null;
 
-        try
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            // Reserve the funds immediately so the user can't request the same
-            // balance twice while this request is still pending approval.
-            wallet.Balance -= amount;
-            wallet.UpdatedAt = DateTime.UtcNow;
-
-            var request = new WithdrawalRequest
+            await using var dbTransaction = await _db.Database.BeginTransactionAsync();
+            try
             {
-                UserId = userId,
-                PlanType = planType,
-                Amount = amount,
-                Status = WithdrawalStatus.Pending
-            };
-            _db.WithdrawalRequests.Add(request);
-            await _db.SaveChangesAsync();
+                // Re-fetch wallet inside strategy so retries always get fresh data
+                var wallet = await GetOrCreateWalletAsync(userId, planType);
 
-            var walletTxn = new WalletTransaction
+                if (wallet.Balance < amount)
+                    throw new InvalidOperationException("Insufficient wallet balance.");
+
+                wallet.Balance -= amount;
+                wallet.UpdatedAt = DateTime.UtcNow;
+
+                var request = new WithdrawalRequest
+                {
+                    UserId = userId,
+                    PlanType = planType,
+                    Amount = amount,
+                    Status = WithdrawalStatus.Pending
+                };
+                _db.WithdrawalRequests.Add(request);
+                await _db.SaveChangesAsync();
+
+                var walletTxn = new WalletTransaction
+                {
+                    UserId = userId,
+                    PlanType = planType,
+                    Type = WalletTransactionType.Debit,
+                    Amount = amount,
+                    BalanceAfter = wallet.Balance,
+                    Source = "Withdrawal Request",
+                    Description = "Funds reserved pending admin approval",
+                    ReferenceId = request.Id.ToString()
+                };
+                _db.WalletTransactions.Add(walletTxn);
+                await _db.SaveChangesAsync();
+
+                await dbTransaction.CommitAsync();
+
+                var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+                result = ToDto(request, user?.Name ?? userId);
+            }
+            catch
             {
-                UserId = userId,
-                PlanType = planType,
-                Type = WalletTransactionType.Debit,
-                Amount = amount,
-                BalanceAfter = wallet.Balance,
-                Source = "Withdrawal Request",
-                Description = "Funds reserved pending admin approval",
-                ReferenceId = request.Id.ToString()
-            };
-            _db.WalletTransactions.Add(walletTxn);
-            await _db.SaveChangesAsync();
+                await dbTransaction.RollbackAsync();
+                throw;
+            }
+        });
 
-            await dbTransaction.CommitAsync();
-
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
-            return ToDto(request, user?.Name ?? userId);
-        }
-        catch
-        {
-            await dbTransaction.RollbackAsync();
-            throw;
-        }
+        return result!;
     }
 
     public async Task<List<WithdrawalRequestDto>> GetWithdrawalRequestsAsync(WithdrawalStatus? status = null)
@@ -239,42 +250,50 @@ public class WalletService : IWalletService
         if (request.Status != WithdrawalStatus.Pending)
             throw new InvalidOperationException("This request has already been processed.");
 
-        await using var dbTransaction = await _db.Database.BeginTransactionAsync();
-        try
+        WithdrawalRequestDto? result = null;
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            // Refund the reserved amount back into the wallet.
-            var wallet = await GetOrCreateWalletAsync(request.UserId, request.PlanType);
-            wallet.Balance += request.Amount;
-            wallet.UpdatedAt = DateTime.UtcNow;
-
-            request.Status = WithdrawalStatus.Rejected;
-            request.ProcessedAt = DateTime.UtcNow;
-            request.ProcessedByAdminId = adminUserId;
-            request.AdminRemarks = remarks;
-
-            var refundTxn = new WalletTransaction
+            await using var dbTransaction = await _db.Database.BeginTransactionAsync();
+            try
             {
-                UserId = request.UserId,
-                PlanType = request.PlanType,
-                Type = WalletTransactionType.Credit,
-                Amount = request.Amount,
-                BalanceAfter = wallet.Balance,
-                Source = "Withdrawal Rejected",
-                Description = "Refund - withdrawal request rejected by admin",
-                ReferenceId = request.Id.ToString()
-            };
-            _db.WalletTransactions.Add(refundTxn);
+                // Refund the reserved amount back into the wallet.
+                var wallet = await GetOrCreateWalletAsync(request.UserId, request.PlanType);
+                wallet.Balance += request.Amount;
+                wallet.UpdatedAt = DateTime.UtcNow;
 
-            await _db.SaveChangesAsync();
-            await dbTransaction.CommitAsync();
+                request.Status = WithdrawalStatus.Rejected;
+                request.ProcessedAt = DateTime.UtcNow;
+                request.ProcessedByAdminId = adminUserId;
+                request.AdminRemarks = remarks;
 
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == request.UserId);
-            return ToDto(request, user?.Name ?? request.UserId);
-        }
-        catch
-        {
-            await dbTransaction.RollbackAsync();
-            throw;
-        }
+                var refundTxn = new WalletTransaction
+                {
+                    UserId = request.UserId,
+                    PlanType = request.PlanType,
+                    Type = WalletTransactionType.Credit,
+                    Amount = request.Amount,
+                    BalanceAfter = wallet.Balance,
+                    Source = "Withdrawal Rejected",
+                    Description = "Refund - withdrawal request rejected by admin",
+                    ReferenceId = request.Id.ToString()
+                };
+                _db.WalletTransactions.Add(refundTxn);
+
+                await _db.SaveChangesAsync();
+                await dbTransaction.CommitAsync();
+
+                var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == request.UserId);
+                result = ToDto(request, user?.Name ?? request.UserId);
+            }
+            catch
+            {
+                await dbTransaction.RollbackAsync();
+                throw;
+            }
+        });
+
+        return result!;
     }
 }
