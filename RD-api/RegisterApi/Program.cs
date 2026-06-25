@@ -81,9 +81,9 @@ try
     builder.Services.AddScoped<IBinaryPlanService, BinaryPlanService>();
 
     // ── JWT Auth ─────────────────────────────────────────────────────────────
-    var jwtKey = builder.Configuration["Jwt:Key"];
-    var jwtIssuer = builder.Configuration["Jwt:Issuer"];
-    var jwtAudience = builder.Configuration["Jwt:Audience"];
+    var jwtKey = builder.Configuration["Jwt__Key"];
+    var jwtIssuer = builder.Configuration["Jwt__Issuer"];
+    var jwtAudience = builder.Configuration["Jwt__Audience"];
 
     if (string.IsNullOrWhiteSpace(jwtKey))
         throw new InvalidOperationException("❌ 'Jwt:Key' is missing in configuration.");
