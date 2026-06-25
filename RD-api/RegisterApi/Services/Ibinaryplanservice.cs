@@ -1,9 +1,15 @@
-﻿using RegisterApi.DTOs;
+using RegisterApi.DTOs;
 
 namespace RegisterApi.Services;
 
 public interface IBinaryPlanService
 {
+    /// <summary>
+    /// Places RD0001 as the root node of the binary tree.
+    /// No sponsor or position is required — this is the tree's origin point.
+    /// </summary>
+    Task<BinaryPlacementResultDto> PlaceRootNodeAsync(string rootUserId);
+
     /// <summary>
     /// Places a newly activated user into the binary tree under their sponsor.
     /// sponsorId = the user who referred them.
