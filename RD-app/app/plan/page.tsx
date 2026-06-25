@@ -92,13 +92,13 @@ export default function PlanPage() {
     { level: 12, distributor: '531,441', bv: '318,864,600', pct: '1%', income: '₹3,188,646' },
   ];
 
-  // ── UPDATED: now routes to the correct shop pages ──
+  // ── UPDATED: Now points 'binary-plan' right to the correct page route ──
   const handleActivation = (planId: string) => {
     localStorage.setItem('pendingActivationPlan', planId);
     if (planId === 'dream-plan') {
       window.location.href = '/shop/dream-plan';
     } else {
-      window.location.href = '/shop/dream-plan';
+      window.location.href = '/binary-plan';
     }
   };
 
