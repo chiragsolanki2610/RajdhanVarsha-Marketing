@@ -213,6 +213,7 @@ public class UserService : IUserService
     private string GenerateJwtToken(User user)
     {
         var jwtKey = _config["Jwt:Key"]
+            ?? _config["Jwt__Key"]
             ?? throw new InvalidOperationException("JWT key not configured.");
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
