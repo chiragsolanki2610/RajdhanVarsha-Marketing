@@ -50,7 +50,7 @@ export default function BinaryPlanPage() {
   const [status,  setStatus]  = useState<BinaryStatus | null>(null);
   const [wallet,  setWallet]  = useState<WalletData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');         // ✅ BUG 2 fix
+  const [error,   setError]   = useState('');
   const [showRules,  setShowRules]  = useState(false);
   const [showWallet, setShowWallet] = useState(false);
 
@@ -65,13 +65,12 @@ export default function BinaryPlanPage() {
   const [withdrawMsg,   setWithdrawMsg]   = useState('');
   const [withdrawError, setWithdrawError] = useState('');
 
-  // ✅ BUG 1 fix — read token once, not as a recreated function
-  const token = useMemo(
-    () => localStorage.getItem('token') || localStorage.getItem('authToken') || '',
-    []
-  );
+  // ✅ FIX — guard localStorage for SSR (server doesn't have window)
+  const token = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem('token') || localStorage.getItem('authToken') || '';
+  }, []);
 
-  // ✅ BUG 3 fix — token in dep array
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/binary/status`, {
@@ -79,9 +78,9 @@ export default function BinaryPlanPage() {
         cache: 'no-store',
       });
       if (res.ok) setStatus(await res.json());
-      else setError('Failed to load binary status.'); // ✅ BUG 2 fix
+      else setError('Failed to load binary status.');
     } catch {
-      setError('Network error loading status.');       // ✅ BUG 2 fix
+      setError('Network error loading status.');
     }
   }, [token]);
 
@@ -92,14 +91,13 @@ export default function BinaryPlanPage() {
         cache: 'no-store',
       });
       if (res.ok) setWallet(await res.json());
-      else setError('Failed to load wallet.');         // ✅ BUG 2 fix
+      else setError('Failed to load wallet.');
     } catch {
-      setError('Network error loading wallet.');       // ✅ BUG 2 fix
+      setError('Network error loading wallet.');
     }
   }, [token]);
 
   useEffect(() => {
-    // ✅ BUG 8 fix — redirect if no token
     if (!token) {
       router.push('/login');
       return;
@@ -142,7 +140,6 @@ export default function BinaryPlanPage() {
       setWithdrawError('Enter a valid amount.');
       return;
     }
-    // ✅ BUG 6 fix — enforce ₹250 minimum on client side
     if (amt < 250) {
       setWithdrawError('Minimum withdrawal amount is ₹250.');
       return;
@@ -197,7 +194,6 @@ export default function BinaryPlanPage() {
           <p className="text-xs text-gray-400 mt-0.5">Earn ₹150 for every pair in your downline</p>
         </div>
 
-        {/* ✅ BUG 2 fix — show error banner */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3 mb-4">
             {error}
@@ -281,7 +277,6 @@ export default function BinaryPlanPage() {
             <input
               type="text"
               value={sponsorInput}
-              // ✅ BUG 7 fix — trim on change
               onChange={e => setSponsorInput(e.target.value.trim().toUpperCase())}
               placeholder="e.g. RD0001"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-purple-300"
@@ -387,7 +382,6 @@ export default function BinaryPlanPage() {
                     {withdrawMsg   && <p className="text-xs text-emerald-600 mt-1">{withdrawMsg}</p>}
                   </div>
                 )}
-                {/* ✅ BUG 5 fix — safe access on recentTransactions */}
                 {(wallet.recentTransactions ?? []).length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent Transactions</p>
