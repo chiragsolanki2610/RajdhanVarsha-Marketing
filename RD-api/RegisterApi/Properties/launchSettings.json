@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "RegisterApi": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://rd-api-j7zj.onrender.com;http://localhost:56188"
+    }
+  }
+}
