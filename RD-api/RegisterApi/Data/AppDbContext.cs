@@ -30,6 +30,8 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // --- Core Models (From Old File) ---
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.Id);
@@ -58,22 +60,19 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Product>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("Products");
-
-            entity.Property(e => e.Id).HasColumnName("Id");
-            entity.Property(e => e.ProductNo).HasColumnName("ProductNo").HasMaxLength(50).IsRequired();
-            entity.Property(e => e.ProductName).HasColumnName("ProductName").HasMaxLength(200).IsRequired();
-            entity.Property(e => e.Category).HasColumnName("Category").HasMaxLength(100).IsRequired();
-            entity.Property(e => e.Description).HasColumnName("Description").IsRequired();
-            entity.Property(e => e.Mrp).HasColumnName("Mrp").HasColumnType("decimal(18,2)");
-            entity.Property(e => e.Gst).HasColumnName("Gst").HasColumnType("decimal(5,2)");
-            entity.Property(e => e.Dp).HasColumnName("Dp").HasColumnType("decimal(18,2)");
-            entity.Property(e => e.Bv).HasColumnName("Bv").HasColumnType("decimal(18,2)");
-            entity.Property(e => e.ImageUrl).HasColumnName("ImageUrl");
-            entity.Property(e => e.IsActive).HasColumnName("IsActive").HasDefaultValue(true);
-            entity.Property(e => e.AddedBy).HasColumnName("AddedBy");
-            entity.Property(e => e.CreatedAt).HasColumnName("CreatedAt").HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(e => e.UpdatedAt).HasColumnName("UpdatedAt").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.ProductNo).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.ProductName).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Category).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Description).IsRequired();
+            entity.Property(e => e.Mrp).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Gst).HasColumnType("decimal(5,2)");
+            entity.Property(e => e.Dp).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Bv).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.ImageUrl);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.AddedBy);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasIndex(e => e.ProductNo).IsUnique();
         });
 
@@ -112,7 +111,7 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.ProductId);
         });
 
-        // --- Wallet system ---
+        // --- Wallet System Models (From Old File) ---
 
         modelBuilder.Entity<Wallet>(entity =>
         {
@@ -160,7 +159,8 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.Status);
         });
 
-        // --- Payment Orders ---
+        // --- Payment Orders Model (From Old File) ---
+
         modelBuilder.Entity<PaymentOrder>(entity =>
         {
             entity.HasKey(e => e.Id);
@@ -181,13 +181,11 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.Status);
         });
 
-        // --- Binary Plan (Updated with correct database snake_case names) ---
+        // --- Binary Plan Models ---
 
         modelBuilder.Entity<BinaryNode>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("binary_nodes");
-
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.SponsorId).HasMaxLength(10);
             entity.Property(e => e.ParentId).HasMaxLength(10);
@@ -199,7 +197,6 @@ public class AppDbContext : DbContext
             entity.Property(e => e.TotalBv).HasColumnType("decimal(18,2)");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-
             entity.HasIndex(e => e.UserId).IsUnique();
             entity.HasIndex(e => e.ParentId);
             entity.HasIndex(e => e.SponsorId);
@@ -208,37 +205,29 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<BinaryPair>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("binary_pairs");
-
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.LeftChildId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.RightChildId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.CommissionAmt).HasColumnType("decimal(18,2)");
             entity.Property(e => e.CreditedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-
             entity.HasIndex(e => e.UserId);
         });
 
         modelBuilder.Entity<BinaryWallet>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("binary_wallet");
-
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.Balance).HasColumnType("decimal(18,2)");
             entity.Property(e => e.TotalEarned).HasColumnType("decimal(18,2)");
             entity.Property(e => e.TotalWithdrawn).HasColumnType("decimal(18,2)");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-
             entity.HasIndex(e => e.UserId).IsUnique();
         });
 
         modelBuilder.Entity<BinaryWalletTransaction>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("binary_wallet_transactions");
-
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.Type)
                   .HasConversion<string>()
@@ -249,7 +238,6 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Source).HasMaxLength(100).IsRequired();
             entity.Property(e => e.ReferenceId).HasMaxLength(50);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-
             entity.HasIndex(e => e.UserId);
             entity.HasIndex(e => e.CreatedAt);
         });
@@ -257,15 +245,52 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<BinaryWithdrawalRequest>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("binary_withdrawal_requests");
-
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
             entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
             entity.Property(e => e.RequestedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-
             entity.HasIndex(e => e.UserId);
             entity.HasIndex(e => e.Status);
         });
+
+        // 🌟 AUTOMATIC POSTGRES REFORMATTER FOR SCHEMAS 🌟
+        foreach (var entity in modelBuilder.Model.GetEntityTypes())
+        {
+            var tableName = entity.GetTableName();
+            if (!string.IsNullOrEmpty(tableName))
+            {
+                // Explicitly intercept and force matching your exact Supabase structural layouts
+                if (tableName == "BinaryWallets") 
+                    entity.SetTableName("binary_wallet");
+                else
+                    entity.SetTableName(ConvertToSnakeCase(tableName));
+            }
+
+            foreach (var property in entity.GetProperties())
+            {
+                property.SetColumnName(ConvertToSnakeCase(property.Name));
+            }
+
+            foreach (var key in entity.GetKeys())
+            {
+                key.SetName(ConvertToSnakeCase(key.GetName()));
+            }
+
+            foreach (var foreignKey in entity.GetForeignKeys())
+            {
+                foreignKey.SetConstraintName(ConvertToSnakeCase(foreignKey.GetConstraintName()));
+            }
+
+            foreach (var index in entity.GetIndexes())
+            {
+                index.SetDatabaseName(ConvertToSnakeCase(index.GetDatabaseName()));
+            }
+        }
+    }
+
+    private static string ConvertToSnakeCase(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return input;
+        return string.Concat(input.Select((x, i) => i > 0 && char.IsUpper(x) ? "_" + x.ToString() : x.ToString())).ToLower();
     }
 }
