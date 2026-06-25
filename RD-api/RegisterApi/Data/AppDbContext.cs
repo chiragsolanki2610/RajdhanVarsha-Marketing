@@ -181,12 +181,12 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.Status);
         });
 
-        // --- Binary Plan ---
+        // --- Binary Plan (Updated with correct database snake_case names) ---
 
         modelBuilder.Entity<BinaryNode>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("BinaryNodes");
+            entity.ToTable("binary_nodes");
 
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.SponsorId).HasMaxLength(10);
@@ -208,7 +208,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<BinaryPair>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("BinaryPairs");
+            entity.ToTable("binary_pairs");
 
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.LeftChildId).HasMaxLength(10).IsRequired();
@@ -222,7 +222,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<BinaryWallet>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("BinaryWallets");
+            entity.ToTable("binary_wallet");
 
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.Balance).HasColumnType("decimal(18,2)");
@@ -237,7 +237,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<BinaryWalletTransaction>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("BinaryWalletTransactions");
+            entity.ToTable("binary_wallet_transactions");
 
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.Type)
@@ -257,7 +257,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<BinaryWithdrawalRequest>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.ToTable("BinaryWithdrawalRequests");
+            entity.ToTable("binary_withdrawal_requests");
 
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
