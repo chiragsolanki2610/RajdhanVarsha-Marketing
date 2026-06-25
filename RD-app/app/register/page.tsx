@@ -307,13 +307,12 @@ export default function RegisterPage() {
                                     type="text"
                                     id="sponsorId"
                                     name="sponsorId"
-                                    placeholder="Sponsor code"
+                                    placeholder="Sponsor code (leave blank if root)"
                                     value={formData.sponsorId}
                                     onChange={handleChange}
                                     onBlur={(e) => fetchSponsorName(e.target.value)}
                                     className={inputStyles}
                                     disabled={isLoading}
-                                    required
                                 />
                             </div>
 
