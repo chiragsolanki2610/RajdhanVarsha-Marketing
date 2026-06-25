@@ -198,7 +198,7 @@ export default function Sidebar() {
   const networkSubItems = [
     { icon: UserPlus,  label: 'Team Detail',    path: '/network/team-detail' },
     { icon: GitBranch, label: 'Dream Tree View', path: '/dream-tree-view' },
-    { icon: Network,   label: 'Binary View',     path: '/network/binary-view' },
+    { icon: Network,   label: 'Binary View',     path: '/binary-tree-view' },
   ];
 
   const productSubItems = [
