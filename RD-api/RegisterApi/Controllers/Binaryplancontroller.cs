@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RegisterApi.Data;
@@ -70,6 +70,15 @@ public class BinaryPlanController : ControllerBase
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
+
+        // ── RD0001 is the root node — no sponsor or position required ──
+        if (userId == "RD0001")
+        {
+            var rootResult = await _binaryService.PlaceRootNodeAsync(userId);
+            if (!rootResult.Success)
+                return BadRequest(new { message = rootResult.Message });
+            return Ok(rootResult);
+        }
 
         if (string.IsNullOrWhiteSpace(dto.SponsorId))
             return BadRequest(new { message = "sponsorId is required." });
