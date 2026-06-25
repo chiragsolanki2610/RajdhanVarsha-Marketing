@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using RegisterApi.Data;
 using RegisterApi.DTOs;
 using RegisterApi.Models;
@@ -14,6 +14,56 @@ public class BinaryPlanService : IBinaryPlanService
     public BinaryPlanService(AppDbContext db)
     {
         _db = db;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 0. PLACE ROOT NODE (RD0001 only — no sponsor, no position)
+    // ─────────────────────────────────────────────────────────────────────────
+    public async Task<BinaryPlacementResultDto> PlaceRootNodeAsync(string rootUserId)
+    {
+        // Prevent duplicate placement
+        var existing = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == rootUserId);
+        if (existing != null)
+            return Fail($"{rootUserId} is already placed in the binary tree as root.");
+
+        // Ensure no other root exists
+        var existingRoot = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.ParentId == null);
+        if (existingRoot != null)
+            return Fail($"A root node already exists: {existingRoot.UserId}. Only one root is allowed.");
+
+        var rootNode = new BinaryNode
+        {
+            UserId = rootUserId,
+            SponsorId = null,
+            ParentId = null,         // no parent — this IS the root
+            Position = "ROOT",
+            TreeLevel = 0,
+            IsActive = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _db.BinaryNodes.Add(rootNode);
+
+        // Create the root user's binary wallet
+        var wallet = new BinaryWallet
+        {
+            UserId = rootUserId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _db.BinaryWallets.Add(wallet);
+
+        await _db.SaveChangesAsync();
+
+        return new BinaryPlacementResultDto
+        {
+            Success = true,
+            Message = $"{rootUserId} placed as the ROOT of the binary tree.",
+            UserId = rootUserId,
+            ParentId = "",
+            Position = "ROOT",
+            TreeLevel = 0
+        };
     }
 
     // ─────────────────────────────────────────────────────────────────────────
