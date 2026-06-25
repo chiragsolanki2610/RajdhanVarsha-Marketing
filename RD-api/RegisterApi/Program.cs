@@ -19,31 +19,44 @@ try
         options.AddPolicy("NextFrontendPolicy", policy =>
         {
             policy.WithOrigins(
-                    "https://rd-app-piwd.onrender.com"   // ← add your Render URL too
+                    "https://rd-app-piwd.onrender.com",
+                    "http://localhost:3000",   // for local dev
+                    "http://localhost:5173"    // for Vite dev
                   )
                   .AllowAnyHeader()
                   .AllowAnyMethod();
-            // ✅ Removed AllowCredentials() — was causing ERR_EMPTY_RESPONSE
         });
     });
 
     // ── Database (Supabase PostgreSQL via EF Core) ───────────────────────────
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+    if (string.IsNullOrWhiteSpace(connectionString))
+        throw new InvalidOperationException("❌ 'DefaultConnection' is missing in configuration.");
+
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseNpgsql(
-            builder.Configuration.GetConnectionString("DefaultConnection"),
+            connectionString,
             npgsqlOptions =>
             {
-                npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorCodesToAdd: null);
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(10),
+                    errorCodesToAdd: null);
                 npgsqlOptions.CommandTimeout(60);
             }
         )
     );
 
     // ── Supabase Client SDK ──────────────────────────────────────────────────
-    var supabaseUrl = (builder.Configuration["Supabase:Url"]
-        ?? "https://tojcysqttbbcnvvapkoi.supabase.co").Trim();
-    var supabaseKey = (builder.Configuration["Supabase:Key"]
-        ?? "sb_publishable_-qIK8w1a0eTo-UH4Yd8Eyw_TfxeL2Z3").Trim();
+    var supabaseUrl = (builder.Configuration["Supabase:Url"] ?? "").Trim();
+    var supabaseKey = (builder.Configuration["Supabase:Key"] ?? "").Trim();
+
+    if (string.IsNullOrWhiteSpace(supabaseUrl))
+        throw new InvalidOperationException("❌ 'Supabase:Url' is missing in configuration.");
+
+    if (string.IsNullOrWhiteSpace(supabaseKey))
+        throw new InvalidOperationException("❌ 'Supabase:Key' is missing in configuration.");
 
     if (!supabaseUrl.StartsWith("http"))
         supabaseUrl = $"https://{supabaseUrl}";
@@ -65,12 +78,21 @@ try
     builder.Services.AddScoped<IUserIdGenerator, UserIdGenerator>();
     builder.Services.AddScoped<IPasswordService, PasswordService>();
     builder.Services.AddScoped<IReceiptService, ReceiptService>();
-    builder.Services.AddScoped<IBinaryPlanService, BinaryPlanService>();//new
+    builder.Services.AddScoped<IBinaryPlanService, BinaryPlanService>();
 
     // ── JWT Auth ─────────────────────────────────────────────────────────────
-    var jwtKey = builder.Configuration["Jwt:Key"]
-        ?? throw new InvalidOperationException(
-            "Jwt:Key is missing in appsettings.json under 'Jwt' -> 'Key'.");
+    var jwtKey = builder.Configuration["Jwt:Key"];
+    var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+    var jwtAudience = builder.Configuration["Jwt:Audience"];
+
+    if (string.IsNullOrWhiteSpace(jwtKey))
+        throw new InvalidOperationException("❌ 'Jwt:Key' is missing in configuration.");
+
+    if (string.IsNullOrWhiteSpace(jwtIssuer))
+        throw new InvalidOperationException("❌ 'Jwt:Issuer' is missing in configuration.");
+
+    if (string.IsNullOrWhiteSpace(jwtAudience))
+        throw new InvalidOperationException("❌ 'Jwt:Audience' is missing in configuration.");
 
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
@@ -81,8 +103,8 @@ try
                 ValidateAudience = true,
                 ValidateLifetime = true,
                 ValidateIssuerSigningKey = true,
-                ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                ValidAudience = builder.Configuration["Jwt:Audience"],
+                ValidIssuer = jwtIssuer,
+                ValidAudience = jwtAudience,
                 IssuerSigningKey = new SymmetricSecurityKey(
                     Encoding.UTF8.GetBytes(jwtKey))
             };
@@ -155,23 +177,25 @@ try
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine($"[Warning] Migration issue: {ex.Message}");
+            Console.WriteLine($"[Warning] Inner: {ex.InnerException?.Message}");
             Console.ResetColor();
         }
     }
 
     // ── Middleware Pipeline ───────────────────────────────────────────────────
-    // ✅ CORS must be before everything else
+    // ✅ CORS must be FIRST
     app.UseCors("NextFrontendPolicy");
 
-    if (app.Environment.IsDevelopment())
+    // ✅ Swagger available in all environments (helpful for Render debugging)
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
     {
-        app.UseSwagger();
-        app.UseSwaggerUI();
-    }
-    else
-    {
-        app.UseHttpsRedirection();
-    }
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Register API v1");
+        c.RoutePrefix = "swagger";
+    });
+
+    // ✅ Do NOT use HttpsRedirection on Render — it handles HTTPS itself
+    // app.UseHttpsRedirection(); ← keep this commented out
 
     app.UseAuthentication();
     app.UseAuthorization();
@@ -184,11 +208,9 @@ catch (Exception ex)
 {
     Console.ForegroundColor = ConsoleColor.Red;
     Console.WriteLine("\n❌ FATAL APPLICATION CRASH ON STARTUP!");
+    Console.WriteLine($"Exception Type:     {ex.GetType().FullName}");
     Console.WriteLine($"Exception Message:  {ex.Message}");
     Console.WriteLine($"Inner Exception:    {ex.InnerException?.Message}");
     Console.WriteLine($"Stack Trace:\n{ex.StackTrace}");
     Console.ResetColor();
-
-    Console.WriteLine("\nPress any key to close this window...");
-    Console.ReadKey();
 }
