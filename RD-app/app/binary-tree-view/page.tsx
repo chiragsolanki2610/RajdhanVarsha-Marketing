@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { ChevronRight, ChevronDown, User, AlertCircle, Loader2, RefreshCw, GitBranch } from 'lucide-react';
 
-const API_BASE = 'https://localhost:56187';
+const API_BASE = 'https://rd-api-j7zj.onrender.com';
 
 interface BinaryTreeNode {
   userId: string;
@@ -218,63 +218,7 @@ function EmptySlot({ label }: { label: string }) {
   );
 }
 
-// ── Draggable pan container ─────────────────────────────────────────────────
-function PannableArea({ children }: { children: React.ReactNode }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
-  const moved = useRef(false);
-  const start = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (!scrollRef.current) return;
-    isDragging.current = true;
-    moved.current = false;
-    start.current = {
-      x: e.clientX,
-      y: e.clientY,
-      scrollLeft: scrollRef.current.scrollLeft,
-      scrollTop: scrollRef.current.scrollTop,
-    };
-    scrollRef.current.setPointerCapture(e.pointerId);
-    scrollRef.current.style.cursor = 'grabbing';
-  };
-
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!isDragging.current || !scrollRef.current) return;
-    const dx = e.clientX - start.current.x;
-    const dy = e.clientY - start.current.y;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved.current = true;
-    scrollRef.current.scrollLeft = start.current.scrollLeft - dx;
-    scrollRef.current.scrollTop = start.current.scrollTop - dy;
-  };
-
-  const stopDragging = (e: React.PointerEvent) => {
-    isDragging.current = false;
-    if (scrollRef.current) {
-      try { scrollRef.current.releasePointerCapture(e.pointerId); } catch {}
-      scrollRef.current.style.cursor = 'grab';
-    }
-  };
-
-  return (
-    <div
-      ref={scrollRef}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={stopDragging}
-      onPointerCancel={stopDragging}
-      onClickCapture={(e) => { if (moved.current) { e.preventDefault(); e.stopPropagation(); } }}
-      className="overflow-auto pb-10 select-none touch-none"
-      style={{ cursor: 'grab', height: 'calc(100vh - 220px)' }}
-    >
-      <div className="inline-block min-w-full" draggable={false}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-
+// ── Main page ────────────────────────────────────────────────────────────────
 export default function BinaryTreeViewPage() {
   const [tree, setTree]       = useState<BinaryTreeNode | null>(null);
   const [loading, setLoading] = useState(true);
@@ -312,7 +256,7 @@ export default function BinaryTreeViewPage() {
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar />
 
-      <main className="flex-1 p-4 md:p-6 overflow-hidden">
+      <main className="flex-1 p-4 md:p-6 overflow-x-auto">
         {/* Header */}
         <div className="mb-5 flex items-center justify-between">
           <div>
@@ -386,9 +330,11 @@ export default function BinaryTreeViewPage() {
         )}
 
         {!loading && !error && tree && (
-          <PannableArea>
-            <TreeNodeCard node={tree} isRoot />
-          </PannableArea>
+          <div className="overflow-x-auto pb-10">
+            <div className="inline-block min-w-full">
+              <TreeNodeCard node={tree} isRoot />
+            </div>
+          </div>
         )}
       </main>
     </div>

@@ -21,7 +21,7 @@ import dagre from "@dagrejs/dagre";
 import Sidebar from "@/components/Sidebar";
 import LoginTopbar from "@/components/loginTopbar";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:56187";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
 
 const getToken = () =>
   localStorage.getItem("authToken") ??

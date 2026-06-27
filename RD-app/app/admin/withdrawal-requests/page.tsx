@@ -27,7 +27,7 @@ export default function AdminWithdrawalPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<WithdrawalRequest | null>(null);
 
-  const API = "https://localhost:56187";
+  const API = "https://rd-api-j7zj.onrender.com";
 
   const getAuthHeaders = () => {
     if (typeof window !== "undefined") {
@@ -94,7 +94,7 @@ export default function AdminWithdrawalPage() {
     try {
       const response = await fetch(`${API}/api/admin/withdrawals/${id}/approve`, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders() as HeadersInit,
         body: JSON.stringify({}),
       });
 
@@ -116,7 +116,7 @@ export default function AdminWithdrawalPage() {
     try {
       const response = await fetch(`${API}/api/admin/withdrawals/${id}/reject`, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders() as HeadersInit,
         body: JSON.stringify({}),
       });
 
