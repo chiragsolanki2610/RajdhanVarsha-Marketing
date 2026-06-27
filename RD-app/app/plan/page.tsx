@@ -3,21 +3,31 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { useRouter } from "next/navigation";
-import { Check, Network, ChevronDown, ChevronUp, CircleDot, FileText, BadgeCheck } from 'lucide-react';
+import { Check, Network, ChevronDown, ChevronUp, CircleDot, FileText, BadgeCheck, Clock } from 'lucide-react';
+
+// ── Plan status shape returned from API ──────────────────────────────────────
+// dreamIsActive   → user has purchased a product and is truly active
+// dreamIsEnrolled → user joined the plan but hasn't purchased yet
+// (same pattern for binary)
+// -----------------------------------------------------------------------------
 
 export default function PlanPage() {
   const router = useRouter();
 
-  // ── Separate active state for each plan ──
-  const [isDreamActive, setIsDreamActive] = useState(false);
-  const [isBinaryActive, setIsBinaryActive] = useState(false);
+  // ── True "active" = product purchased & account confirmed active ──
+  const [isDreamActive,   setIsDreamActive]   = useState(false);
+  const [isBinaryActive,  setIsBinaryActive]  = useState(false);
+
+  // ── "Enrolled" = user joined the plan but hasn't purchased a product yet ──
+  const [isDreamEnrolled,  setIsDreamEnrolled]  = useState(false);
+  const [isBinaryEnrolled, setIsBinaryEnrolled] = useState(false);
+
   const [loadingPlan, setLoadingPlan] = useState(true);
 
-  // Collapse toggles — Both set to false initially to display "Show Less" view on load
-  const [showDreamDetails, setShowDreamDetails] = useState(false);
+  const [showDreamDetails,  setShowDreamDetails]  = useState(false);
   const [showBinaryDetails, setShowBinaryDetails] = useState(false);
 
-  // Fetch active plan on mount — always fetch fresh from API
+  // ── Fetch plan status on mount ────────────────────────────────────────────
   useEffect(() => {
     const fetchPlan = async () => {
       try {
@@ -27,43 +37,80 @@ export default function PlanPage() {
           localStorage.getItem('jwtToken') ||
           '';
 
-        if (!token) {
-          setLoadingPlan(false);
-          return;
-        }
+        if (!token) { setLoadingPlan(false); return; }
 
         const headers = {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         };
 
-        // ── Fetch both endpoints in parallel ──
         const [planRes, binaryRes] = await Promise.all([
-          fetch(`https://localhost:56187/api/Plans/my-plan`, { headers, cache: 'no-store' }),
-          fetch(`https://localhost:56187/api/Binary/status`, { headers, cache: 'no-store' }),
+          fetch(`https://localhost:56187/api/Plans/my-plan`,  { headers, cache: 'no-store' }),
+          fetch(`https://localhost:56187/api/Binary/status`,  { headers, cache: 'no-store' }),
         ]);
 
+        // ── Dream Plan ──────────────────────────────────────────────────────
         if (planRes.ok) {
           const data = await planRes.json();
-          const dreamActive: boolean = data?.dreamIsActive ?? data?.DreamIsActive ?? false;
+
+          // "isActive" should only be true when a product purchase confirms it
+          // Check both possible field names your API might return
+          const dreamActive: boolean =
+            data?.dreamIsActive       ??   // product purchased & confirmed
+            data?.DreamIsActive       ??
+            data?.isActive            ??
+            data?.IsActive            ??
+            false;
+
+          // "isEnrolled" = joined plan but product not yet purchased
+          const dreamEnrolled: boolean =
+            data?.dreamIsEnrolled     ??
+            data?.DreamIsEnrolled     ??
+            data?.isEnrolled          ??
+            data?.IsEnrolled          ??
+            data?.hasDreamPlan        ??
+            data?.HasDreamPlan        ??
+            false;
+
           setIsDreamActive(dreamActive);
+          // Only mark enrolled if NOT already fully active
+          setIsDreamEnrolled(!dreamActive && dreamEnrolled);
         } else {
           setIsDreamActive(false);
+          setIsDreamEnrolled(false);
         }
 
+        // ── Binary Plan ─────────────────────────────────────────────────────
         if (binaryRes.ok) {
           const data = await binaryRes.json();
-          // API returns "isInBinaryPlan": true
-          const binaryActive: boolean = data?.isInBinaryPlan ?? data?.IsInBinaryPlan ?? false;
+
+          // "isInBinaryPlan: true" from your API means ENROLLED, not active.
+          // A separate field (e.g. isBinaryActive) should confirm true activity.
+          const binaryActive: boolean =
+            data?.isBinaryActive      ??
+            data?.IsBinaryActive      ??
+            data?.isActive            ??
+            data?.IsActive            ??
+            false;
+
+          // isInBinaryPlan = enrolled (joined) but may not have purchased yet
+          const binaryEnrolled: boolean =
+            data?.isInBinaryPlan      ??
+            data?.IsInBinaryPlan      ??
+            false;
+
           setIsBinaryActive(binaryActive);
+          // Only show enrolled state if NOT already fully active
+          setIsBinaryEnrolled(!binaryActive && binaryEnrolled);
         } else {
           setIsBinaryActive(false);
+          setIsBinaryEnrolled(false);
         }
 
       } catch (err) {
         console.error(err);
-        setIsDreamActive(false);
-        setIsBinaryActive(false);
+        setIsDreamActive(false);   setIsDreamEnrolled(false);
+        setIsBinaryActive(false);  setIsBinaryEnrolled(false);
       } finally {
         setLoadingPlan(false);
       }
@@ -71,7 +118,7 @@ export default function PlanPage() {
     fetchPlan();
   }, []);
 
-  // Level Matrix Data extracted directly from your Dream Plan blueprint screenshot
+  // ── Level Matrix Data ─────────────────────────────────────────────────────
   const matrixData = [
     { level: 1,  distributor: '3',       bv: '1,800',       pct: '10%', income: '₹180' },
     { level: 2,  distributor: '9',       bv: '5,400',       pct: '7%',  income: '₹378' },
@@ -87,63 +134,103 @@ export default function PlanPage() {
     { level: 12, distributor: '531,441', bv: '318,864,600', pct: '1%',  income: '₹3,188,646' },
   ];
 
-  // ── Routes to the correct purchase page per plan ──
   const handleActivation = (planId: string) => {
     localStorage.setItem('pendingActivationPlan', planId);
-    if (planId === 'dream-plan') {
-      window.location.href = '/dream-purchase';
-    } else if (planId === 'binary-plan') {
-      window.location.href = '/binary-purchase';
+    if (planId === 'dream-plan')  window.location.href = '/dream-purchase';
+    if (planId === 'binary-plan') window.location.href = '/binary-purchase';
+  };
+
+  // ── Reusable footer renderer ──────────────────────────────────────────────
+  // State priority: loading → active → enrolled (pending) → not enrolled
+  const renderPlanFooter = (
+    isActive: boolean,
+    isEnrolled: boolean,
+    activeLabel: string,
+    enrolledLabel: string,
+    onActivate: () => void,
+    activateLabel: string,
+  ) => {
+    if (loadingPlan) {
+      return <div className="w-full h-12 bg-slate-100 animate-pulse rounded-xl" />;
     }
+    if (isActive) {
+      // ── Fully active: product purchased ──
+      return (
+        <div className="w-full flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-6 rounded-xl">
+          <BadgeCheck size={16} className="text-emerald-500 shrink-0" />
+          <span className="font-black text-xs uppercase tracking-widest">{activeLabel}</span>
+        </div>
+      );
+    }
+    if (isEnrolled) {
+      // ── Enrolled but NOT active (no product purchased yet) ──
+      return (
+        <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 py-3 px-5 rounded-xl flex-1">
+            <Clock size={15} className="text-amber-500 shrink-0" />
+            <span className="font-black text-xs uppercase tracking-widest">{enrolledLabel}</span>
+          </div>
+          <button
+            onClick={onActivate}
+            className="shrink-0 bg-[#2B4C8C] hover:bg-blue-700 text-white py-3.5 px-5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all"
+          >
+            Purchase to Activate
+          </button>
+        </div>
+      );
+    }
+    // ── Not enrolled ──
+    return (
+      <button
+        onClick={onActivate}
+        className="w-full bg-[#2B4C8C] hover:bg-blue-700 text-white py-3.5 px-6 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all"
+      >
+        {activateLabel}
+      </button>
+    );
   };
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] overflow-hidden font-sans antialiased">
-      {/* ── Sidebar Context Component ── */}
       <Sidebar />
 
-      {/* ── Main Workspace Content Area ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-
-        {/* Top Header Navigation Strip */}
         <header className="bg-white border-b border-slate-200 h-16 shrink-0 px-6 flex items-center justify-between sticky top-0 z-20 shadow-sm">
           <div className="flex flex-col">
-            <h1 className="text-sm font-black text-slate-800 tracking-tight uppercase">Plan  Management </h1>
+            <h1 className="text-sm font-black text-slate-800 tracking-tight uppercase">Plan Management</h1>
           </div>
-          {/* <div className="flex items-center gap-4">
-            <div className="border-l border-slate-200 pl-4 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500 inline-block animate-pulse"></span>
-              <span className="text-xs font-black text-red-500 font-mono">INACTIVE profile</span>
-            </div>
-          </div> */}
         </header>
 
-        {/* ── Primary Main Dashboard Viewport ── */}
         <main className="p-4 md:p-6 max-w-[1600px] w-full mx-auto space-y-8">
 
-          {/* ──────────────────────────────────────────────────────────────────
-             1. DREAM PLAN FULL SPECIFICATION VIEWPORT
-             ────────────────────────────────────────────────────────────────── */}
+          {/* ── DREAM PLAN ───────────────────────────────────────────────── */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden relative transition-all duration-300">
 
-            {/* Top Graphic Most Popular Ribbon Accent */}
             <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-10">
               <span className="bg-[#1E40AF] text-white text-[9px] font-black px-6 py-1 rounded-b-xl uppercase tracking-widest shadow-md border-x border-b border-blue-400/20">
                 MOST POPULAR
               </span>
             </div>
 
-            {/* Top Summary Block Layout Row */}
             <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-br from-white via-white to-blue-50/20">
               <div className="flex items-center gap-3">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">Dream Plan</h2>
-                {/* ── ACTIVE BADGE (only shown when dream plan is active) ── */}
+
+                {/* Active badge */}
                 {isDreamActive && (
                   <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                     <BadgeCheck size={12} className="text-emerald-500" /> Active
                   </span>
                 )}
+
+                {/* Enrolled-but-pending badge */}
+                {!isDreamActive && isDreamEnrolled && (
+                  <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                    <Clock size={11} className="text-amber-500" /> Enrolled — Purchase Pending
+                  </span>
+                )}
               </div>
+
               <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
                 A comprehensive 12-Level business acceleration matrix allowing up to 10 direct network joinings.
               </p>
@@ -154,7 +241,6 @@ export default function PlanPage() {
                 </span>
               </div>
 
-              {/* Checklist Rules Strip Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6 border-t border-slate-100 pt-5">
                 <div className="flex items-start gap-2.5 text-xs text-slate-600 font-medium">
                   <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
@@ -167,11 +253,8 @@ export default function PlanPage() {
               </div>
             </div>
 
-            {/* ── Toggled Complete Matrix Breakdown Content Frame ── */}
             {showDreamDetails && (
               <div className="p-6 md:p-8 bg-white grid grid-cols-1 xl:grid-cols-12 gap-8 border-b border-slate-100 transition-all duration-300">
-
-                {/* LEFT WING: Operational Rules Checklist Deck */}
                 <div className="xl:col-span-5 space-y-6">
                   <div>
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-3 flex items-center gap-1.5">
@@ -213,7 +296,6 @@ export default function PlanPage() {
                     </ul>
                   </div>
 
-                  {/* Network Tree Flowchart Architecture Slots */}
                   <div className="pt-4 border-t border-slate-100">
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-4">Network Tree Matrix Previews</h4>
                     <div className="grid grid-cols-2 gap-4">
@@ -243,7 +325,6 @@ export default function PlanPage() {
                   </div>
                 </div>
 
-                {/* RIGHT WING: Dynamic Table Ledger Matrix Layout Grid */}
                 <div className="xl:col-span-7 flex flex-col justify-between gap-6">
                   <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
                     <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 text-center">
@@ -282,7 +363,6 @@ export default function PlanPage() {
                     </div>
                   </div>
 
-                  {/* Marketing Flyers Graphic Banner Card */}
                   <div className="bg-gradient-to-r from-red-50 to-blue-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <span className="text-[9px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-md uppercase tracking-wider">Compulsory Rule Set</span>
@@ -305,7 +385,6 @@ export default function PlanPage() {
               </div>
             )}
 
-            {/* ── Dream Plan Accordion & Activation Control Footer ── */}
             <div className="flex flex-col border-t border-slate-100">
               <button
                 onClick={() => setShowDreamDetails(!showDreamDetails)}
@@ -318,32 +397,20 @@ export default function PlanPage() {
                 )}
               </button>
 
-              {/* ── CONDITIONAL FOOTER: Active badge OR Get Started button ── */}
               <div className="p-4 bg-white flex justify-end">
-                {loadingPlan ? (
-                  <div className="w-full h-12 bg-slate-100 animate-pulse rounded-xl" />
-                ) : isDreamActive ? (
-                  // ── ACTIVE STATE ──
-                  <div className="w-full flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-6 rounded-xl">
-                    <BadgeCheck size={16} className="text-emerald-500 shrink-0" />
-                    <span className="font-black text-xs uppercase tracking-widest">Plan Active — Dream Plan Enrolled</span>
-                  </div>
-                ) : (
-                  // ── DEFAULT STATE ──
-                  <button
-                    onClick={() => router.push("/dream-purchase")}
-                    className="w-full bg-[#2B4C8C] hover:bg-blue-700 text-white py-3.5 px-6 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all"
-                  >
-                    Get Started & Select Products
-                  </button>
+                {renderPlanFooter(
+                  isDreamActive,
+                  isDreamEnrolled,
+                  'Plan Active — Dream Plan Enrolled',
+                  'Enrolled — Purchase Product to Activate',
+                  () => router.push('/dream-purchase'),
+                  'Get Started & Select Products',
                 )}
               </div>
             </div>
           </div>
 
-          {/* ──────────────────────────────────────────────────────────────────
-             2. BINARY PLAN SPECIFICATION VIEWPORT
-             ────────────────────────────────────────────────────────────────── */}
+          {/* ── BINARY PLAN ──────────────────────────────────────────────── */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden relative transition-all duration-300">
 
             <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-br from-white via-white to-indigo-50/20">
@@ -351,10 +418,16 @@ export default function PlanPage() {
                 <div>
                   <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-black text-slate-900 tracking-tight">Binary Plan</h2>
-                    {/* ── ACTIVE BADGE (only shown when binary plan is active) ── */}
+
                     {isBinaryActive && (
                       <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                         <BadgeCheck size={12} className="text-emerald-500" /> Active
+                      </span>
+                    )}
+
+                    {!isBinaryActive && isBinaryEnrolled && (
+                      <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                        <Clock size={11} className="text-amber-500" /> Enrolled — Purchase Pending
                       </span>
                     )}
                   </div>
@@ -388,7 +461,6 @@ export default function PlanPage() {
 
             {showBinaryDetails && (
               <div className="p-6 md:p-8 bg-white grid grid-cols-1 xl:grid-cols-12 gap-8 border-b border-slate-100 transition-all duration-300">
-
                 <div className="xl:col-span-6 space-y-6">
                   <div>
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-3 flex items-center gap-1.5">
@@ -471,24 +543,14 @@ export default function PlanPage() {
                 )}
               </button>
 
-              {/* ── CONDITIONAL FOOTER: Active badge OR Activate button ── */}
               <div className="p-4 bg-white flex justify-end">
-                {loadingPlan ? (
-                  <div className="w-full h-12 bg-slate-100 animate-pulse rounded-xl" />
-                ) : isBinaryActive ? (
-                  // ── ACTIVE STATE ──
-                  <div className="w-full flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-6 rounded-xl">
-                    <BadgeCheck size={16} className="text-emerald-500 shrink-0" />
-                    <span className="font-black text-xs uppercase tracking-widest">Plan Active — Binary Plan Enrolled</span>
-                  </div>
-                ) : (
-                  // ── DEFAULT STATE ──
-                  <button
-                    onClick={() => handleActivation('binary-plan')}
-                    className="w-full bg-[#3B5998] hover:bg-blue-700 text-white py-3.5 px-6 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all"
-                  >
-                    Activate Binary Target & Shop
-                  </button>
+                {renderPlanFooter(
+                  isBinaryActive,
+                  isBinaryEnrolled,
+                  'Plan Active — Binary Plan Enrolled',
+                  'Enrolled — Purchase Product to Activate',
+                  () => handleActivation('binary-plan'),
+                  'Activate Binary Target & Shop',
                 )}
               </div>
             </div>

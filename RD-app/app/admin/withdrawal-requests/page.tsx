@@ -46,7 +46,7 @@ export default function AdminWithdrawalPage() {
       setError(null);
       const response = await fetch(`${API}/api/admin/withdrawals`, {
         method: "GET",
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders() as HeadersInit,
       });
 
       if (!response.ok) {

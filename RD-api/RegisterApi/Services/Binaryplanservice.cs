@@ -9,7 +9,6 @@ public class BinaryPlanService : IBinaryPlanService
 {
     private readonly AppDbContext _db;
     private const decimal PairCommission = 150m;
-    private const int MinDownlineForWithdrawal = 3; // at least 3 downlines (e.g. 2L+1R or 1L+2R)
 
     public BinaryPlanService(AppDbContext db)
     {
@@ -163,8 +162,7 @@ public class BinaryPlanService : IBinaryPlanService
         await _db.SaveChangesAsync();
 
         // Check if parent now has BOTH children active → award pair commission.
-        // This can be skipped when `awardPairs` is false (e.g., Binary Plan
-        // purchases that should not pay pair commissions to uplines).
+        // This can be skipped when `awardPairs` is false.
         if (awardPairs && !string.IsNullOrEmpty(node.ParentId))
         {
             await CheckAndAwardPairCommissionAsync(node.ParentId);
@@ -221,9 +219,6 @@ public class BinaryPlanService : IBinaryPlanService
             };
         }
 
-        var node = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == userId);
-        var totalDownline = (node?.LeftLegCount ?? 0) + (node?.RightLegCount ?? 0);
-
         var txns = await _db.BinaryWalletTransactions
             .Where(t => t.UserId == userId)
             .OrderByDescending(t => t.CreatedAt)
@@ -242,8 +237,8 @@ public class BinaryPlanService : IBinaryPlanService
 
         string unlockMsg = wallet.WithdrawalUnlocked
             ? "Withdrawal unlocked ✓"
-            : $"Need {MinDownlineForWithdrawal - totalDownline} more downline member(s) to unlock withdrawal. " +
-              $"(Current: {totalDownline}, Need: {MinDownlineForWithdrawal})";
+            : "Withdrawal locked. You need: (1) an active LEFT child, (2) an active RIGHT child, " +
+              "and (3) at least 1 active grandchild (child of your LEFT or RIGHT node).";
 
         return new BinaryWalletDto
         {
@@ -268,7 +263,7 @@ public class BinaryPlanService : IBinaryPlanService
             return (false, "Binary wallet not found. Join the Binary Plan first.");
 
         if (!wallet.WithdrawalUnlocked)
-            return (false, "Withdrawal is locked. You need at least 3 downline members (e.g., 2 on one side + 1 on the other) before your first withdrawal.");
+            return (false, "Withdrawal is locked. You need an active LEFT child, an active RIGHT child, and at least 1 active grandchild before your first withdrawal.");
 
         if (amount <= 0)
             return (false, "Amount must be greater than 0.");
@@ -399,7 +394,7 @@ public class BinaryPlanService : IBinaryPlanService
     private async Task IncrementLegCountsUpAsync(BinaryNode startNode, string childPosition)
     {
         var current = startNode;
-        var comingFromPosition = childPosition; // which leg the new member is on relative to current
+        var comingFromPosition = childPosition;
 
         while (current != null)
         {
@@ -413,7 +408,7 @@ public class BinaryPlanService : IBinaryPlanService
             if (string.IsNullOrEmpty(current.ParentId)) break;
 
             var parent = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == current.ParentId);
-            comingFromPosition = current.Position; // which leg current is under its parent
+            comingFromPosition = current.Position;
             current = parent;
         }
     }
@@ -445,9 +440,6 @@ public class BinaryPlanService : IBinaryPlanService
     /// <summary>
     /// Checks if parentId now has both left AND right children ACTIVE.
     /// If so, awards ₹150 pair commission once per pair event.
-    /// A "pair event" happens each time a NEW active member completes
-    /// both sides — but we only fire it for the newly activated child's
-    /// contribution (i.e., one side was already active and now the other just activated).
     /// </summary>
     private async Task CheckAndAwardPairCommissionAsync(string parentUserId)
     {
@@ -510,7 +502,7 @@ public class BinaryPlanService : IBinaryPlanService
         };
         _db.BinaryWalletTransactions.Add(txn);
 
-        // Unlock withdrawal once ≥3 downlines exist
+        // Check withdrawal unlock after crediting
         await UpdateWithdrawalUnlockAsync(parentUserId);
 
         await _db.SaveChangesAsync();
@@ -521,8 +513,11 @@ public class BinaryPlanService : IBinaryPlanService
     }
 
     /// <summary>
-    /// Unlocks withdrawal if the user has ≥3 total downline members
-    /// (the rule requires at least one leg to have ≥2).
+    /// Unlocks withdrawal when ALL of the following are true:
+    ///   1. The user has a direct LEFT child that is active.
+    ///   2. The user has a direct RIGHT child that is active.
+    ///   3. At least one grandchild (child of the LEFT or RIGHT node) is active.
+    /// This means a minimum of 3 active nodes directly beneath the user.
     /// </summary>
     private async Task UpdateWithdrawalUnlockAsync(string userId)
     {
@@ -532,19 +527,35 @@ public class BinaryPlanService : IBinaryPlanService
         var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == userId);
         if (wallet == null) return;
 
-        int leftCount = node.LeftLegCount;
-        int rightCount = node.RightLegCount;
-        int total = leftCount + rightCount;
+        if (wallet.WithdrawalUnlocked) return; // already unlocked — no need to re-check
 
-        // Rule: total ≥ 3 AND at least one leg has ≥ 2 (i.e., 2+1 or 1+2 or 2+2 or more)
-        bool unlocked = total >= MinDownlineForWithdrawal &&
-                        (leftCount >= 2 || rightCount >= 2);
+        // Condition 1 & 2: both direct children must exist and be active
+        if (string.IsNullOrEmpty(node.LeftChildId) || string.IsNullOrEmpty(node.RightChildId))
+            return;
 
-        if (!wallet.WithdrawalUnlocked && unlocked)
-        {
-            wallet.WithdrawalUnlocked = true;
-            wallet.UpdatedAt = DateTime.UtcNow;
-        }
+        var leftChild = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == node.LeftChildId);
+        var rightChild = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == node.RightChildId);
+
+        if (leftChild == null || !leftChild.IsActive) return;
+        if (rightChild == null || !rightChild.IsActive) return;
+
+        // Condition 3: at least one grandchild (under left OR right child) must be active
+        var grandchildIds = new List<string>();
+        if (!string.IsNullOrEmpty(leftChild.LeftChildId)) grandchildIds.Add(leftChild.LeftChildId);
+        if (!string.IsNullOrEmpty(leftChild.RightChildId)) grandchildIds.Add(leftChild.RightChildId);
+        if (!string.IsNullOrEmpty(rightChild.LeftChildId)) grandchildIds.Add(rightChild.LeftChildId);
+        if (!string.IsNullOrEmpty(rightChild.RightChildId)) grandchildIds.Add(rightChild.RightChildId);
+
+        if (grandchildIds.Count == 0) return;
+
+        bool hasActiveGrandchild = await _db.BinaryNodes
+            .AnyAsync(n => grandchildIds.Contains(n.UserId) && n.IsActive);
+
+        if (!hasActiveGrandchild) return;
+
+        // All 3 conditions met — unlock withdrawal
+        wallet.WithdrawalUnlocked = true;
+        wallet.UpdatedAt = DateTime.UtcNow;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -579,7 +590,6 @@ public class BinaryPlanService : IBinaryPlanService
             IsDirectPlacement = isDirect
         };
     }
-
 
     private static BinaryPlacementResultDto Fail(string msg) =>
         new() { Success = false, Message = msg };

@@ -197,9 +197,9 @@ public class BinaryPlanController : ControllerBase
         await _db.SaveChangesAsync();
 
         // Activate the binary node
-            // Activate the binary node. Do NOT award pair commissions for a
-            // direct Binary Plan purchase (owner requested no commissions)
-            await _binaryService.ActivateBinaryNodeAsync(userId, totalBv, awardPairs: false);
+        // Activate the binary node and award pair commissions to uplines
+        // when both LEFT and RIGHT children are active.
+        await _binaryService.ActivateBinaryNodeAsync(userId, totalBv, awardPairs: true);
 
         return Ok(new
         {

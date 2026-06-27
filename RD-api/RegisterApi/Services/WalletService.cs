@@ -77,7 +77,28 @@ public class WalletService : IWalletService
             .Where(w => w.UserId == userId)
             .ToListAsync();
 
-        return wallets.Select(ToDto).ToList();
+        var result = wallets.Select(ToDto).ToList();
+
+        // Binary Plan commissions are credited to BinaryWallets (separate table).
+        // Replace the stale placeholder row with live BinaryWallet data.
+        var binaryWallet = await _db.BinaryWallets
+            .FirstOrDefaultAsync(w => w.UserId == userId);
+
+        if (binaryWallet != null)
+        {
+            result.RemoveAll(w => w.PlanType == "Binary Plan");
+
+            result.Add(new WalletDto
+            {
+                PlanType = "Binary Plan",
+                Balance = binaryWallet.Balance,
+                TotalEarned = binaryWallet.TotalEarned,
+                TotalWithdrawn = binaryWallet.TotalWithdrawn,
+                MinWithdrawalAmount = WalletRules.GetMinWithdrawal("Binary Plan")
+            });
+        }
+
+        return result;
     }
 
     public async Task<List<WalletTransactionDto>> GetTransactionHistoryAsync(string userId, string? planType = null)
