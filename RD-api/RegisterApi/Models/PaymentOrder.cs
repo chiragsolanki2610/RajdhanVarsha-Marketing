@@ -15,6 +15,12 @@ public class PaymentOrder
     public string UserId { get; set; } = string.Empty;       // e.g. RD0001
     public string UtrNumber { get; set; } = string.Empty;    // 12-digit UTR
     public string? ScreenshotUrl { get; set; }               // Supabase Storage URL
+
+    // "Dream Plan" or "Binary Plan" — decides how ApprovePayment credits BV
+    // and whether commission is paid. Defaults to "Dream Plan" for any
+    // older rows / clients that don't send it yet.
+    public string PlanType { get; set; } = "Dream Plan";
+
     public decimal TotalAmount { get; set; }
     public decimal TotalBv { get; set; }
     public string CartItemsJson { get; set; } = "[]";        // serialized cart

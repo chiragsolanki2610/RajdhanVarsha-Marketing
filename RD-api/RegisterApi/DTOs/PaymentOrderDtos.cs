@@ -10,6 +10,7 @@ public class PaymentOrderDto
     public string UserName { get; set; } = string.Empty;
     public string UtrNumber { get; set; } = string.Empty;
     public string? ScreenshotUrl { get; set; }
+    public string PlanType { get; set; } = "Dream Plan";
     public decimal TotalAmount { get; set; }
     public decimal TotalBv { get; set; }
     public string CartItemsJson { get; set; } = "[]";
@@ -36,6 +37,11 @@ public class SubmitPaymentFormDto
 {
     public string? Utr { get; set; }
     public IFormFile? Screenshot { get; set; }
+
+    // "Dream Plan" or "Binary Plan". Defaults to "Dream Plan" if the
+    // client doesn't send it (keeps old frontend calls working).
+    public string? PlanType { get; set; }
+
     public string? TotalAmount { get; set; }
     public string? TotalBv { get; set; }
     public string? CartItems { get; set; }   // JSON string

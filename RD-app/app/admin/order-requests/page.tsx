@@ -32,49 +32,118 @@ import {
 import Sidebar from '@/components/Sidebar';
 import LoginTopbar from '@/components/loginTopbar';
 
-const BASE_URL = 'https://rd-api-j7zj.onrender.com';
+const BASE_URL = 'https://localhost:56187'; // Updated to match your Swagger UI port
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type OrderStatus = 'Pending' | 'Approved' | 'Rejected' | 'Processing' | 'Delivered';
 
 interface ApiOrder {
+  // IDs
   id: string | number;
+  // User identifiers (camelCase + PascalCase)
   userId?: string;
+  UserId?: string;
   memberId?: string;
+  MemberId?: string;
+  // Names (camelCase + PascalCase)
   userName?: string;
+  UserName?: string;
   memberName?: string;
+  MemberName?: string;
   name?: string;
+  Name?: string;
+  // Phone (camelCase + PascalCase)
   phone?: string;
+  Phone?: string;
   phoneNumber?: string;
+  PhoneNumber?: string;
+  // Address (camelCase + PascalCase)
   address?: string;
+  Address?: string;
   deliveryAddress?: string;
+  DeliveryAddress?: string;
+  // Product fields (single-item legacy, camelCase + PascalCase)
   productName?: string;
+  ProductName?: string;
   productId?: string | number;
+  ProductId?: string | number;
   quantity?: number;
+  Quantity?: number;
   amount?: number;
+  Amount?: number;
   totalAmount?: number;
+  TotalAmount?: number;
   price?: number;
+  Price?: number;
+  // Status + dates (camelCase + PascalCase)
   status?: string;
+  Status?: string;
   createdAt?: string;
+  CreatedAt?: string;
   requestedAt?: string;
+  RequestedAt?: string;
   updatedAt?: string;
+  UpdatedAt?: string;
+  // Payment (camelCase + PascalCase)
   utrNumber?: string;
+  UtrNumber?: string;
   screenshotUrl?: string;
+  ScreenshotUrl?: string;
+  // Cart
   cartItemsJson?: string;
+  CartItemsJson?: string;
   items?: ApiOrderItem[];
+  Items?: ApiOrderItem[];
+  totalBv?: number;
+  TotalBv?: number;
+  // Binary Plan
+  planType?: string;
+  PlanType?: string;
+  binarySponsorId?: string;
+  BinarySponsorId?: string;
+  binaryPosition?: string;
+  BinaryPosition?: string;
+  // Receipt fields
+  adminRemarks?: string;
+  AdminRemarks?: string;
+  processedAt?: string;
+  ProcessedAt?: string;
+  receiptAvailable?: boolean;
+  ReceiptAvailable?: boolean;
+  receiptDraftReady?: boolean;
+  ReceiptDraftReady?: boolean;
 }
 
 interface ApiOrderItem {
   productId?: string | number;
+  ProductId?: string | number;
   productName?: string;
+  ProductName?: string;
   name?: string;
+  Name?: string;
   quantity?: number;
+  Quantity?: number;
   price?: number;
+  Price?: number;
   amount?: number;
+  Amount?: number;
   unitPrice?: number;
+  UnitPrice?: number;
   dp?: number;
+  Dp?: number;
   bv?: number;
+  Bv?: number;
+  hsnCode?: string;
+  HsnCode?: string;
+  title?: string;
+  Title?: string;
+  sgst?: number;
+  Sgst?: number;
+  cgst?: number;
+  Cgst?: number;
+  cess?: number;
+  Cess?: number;
 }
 
 interface OrderRequest {
@@ -85,11 +154,21 @@ interface OrderRequest {
   address: string;
   items: OrderItem[];
   totalAmount: number;
+  totalBv: number;
   status: OrderStatus;
   requestedAt: string;
   updatedAt?: string;
   utrNumber: string;
   screenshotUrl?: string;
+  // Binary Plan fields
+  planType?: string;
+  binarySponsorId?: string;
+  binaryPosition?: string;
+  // Receipt fields
+  adminRemarks?: string;
+  processedAt?: string;
+  receiptAvailable?: boolean;
+  receiptDraftReady?: boolean;
 }
 
 interface OrderItem {
@@ -97,6 +176,11 @@ interface OrderItem {
   productName: string;
   quantity: number;
   price: number;
+  bv: number;
+  hsnCode?: string;
+  sgst?: number;
+  cgst?: number;
+  cess?: number;
 }
 
 // ─── Auth Headers ─────────────────────────────────────────────────────────────
@@ -132,33 +216,60 @@ function parseCartItems(cartItemsJson?: string): ApiOrderItem[] {
 }
 
 function normaliseOrder(o: ApiOrder): OrderRequest {
+  // Support both camelCase (configured ASP.NET) and PascalCase (default ASP.NET)
   const rawItems: ApiOrderItem[] =
-    o.items?.length ? o.items
-    : parseCartItems(o.cartItemsJson).length ? parseCartItems(o.cartItemsJson)
-    : [{ productId: o.productId, productName: o.productName ?? 'Product', quantity: o.quantity ?? 1, price: o.price ?? o.amount ?? o.totalAmount ?? 0 }];
+    (o.items ?? o.Items ?? []).length
+      ? (o.items ?? o.Items ?? [])
+      : parseCartItems(o.cartItemsJson ?? o.CartItemsJson).length
+        ? parseCartItems(o.cartItemsJson ?? o.CartItemsJson)
+        : [{
+            productId:   o.productId   ?? o.ProductId,
+            productName: o.productName ?? o.ProductName ?? 'Product',
+            quantity:    o.quantity    ?? o.Quantity    ?? 1,
+            price:       o.price       ?? o.Price       ?? o.amount ?? o.Amount ?? o.totalAmount ?? o.TotalAmount ?? 0,
+          }];
 
   const items: OrderItem[] = rawItems.map((it, idx) => ({
-    productId: String(it.productId ?? idx),
-    productName: it.productName ?? it.name ?? `Product ${it.productId ?? idx + 1}`,
-    quantity: it.quantity ?? 1,
-    price: it.dp ?? it.price ?? it.unitPrice ?? it.amount ?? 0,
+    productId:   String(it.productId   ?? it.ProductId   ?? idx),
+    productName: it.productName ?? it.ProductName ?? it.name ?? it.Name ?? it.title ?? it.Title ?? '—',
+    quantity:    it.quantity    ?? it.Quantity    ?? 1,
+    price:       it.dp ?? it.Dp ?? it.price ?? it.Price ?? it.unitPrice ?? it.UnitPrice ?? it.amount ?? it.Amount ?? 0,
+    bv:          it.bv ?? it.Bv ?? 0,
+    hsnCode:     it.hsnCode     ?? it.HsnCode,
+    sgst:        it.sgst        ?? it.Sgst,
+    cgst:        it.cgst        ?? it.Cgst,
+    cess:        it.cess        ?? it.Cess,
   }));
 
-  const totalAmount = o.totalAmount ?? o.amount ?? items.reduce((s, it) => s + it.price * it.quantity, 0);
+  const totalAmount =
+    o.totalAmount ?? o.TotalAmount ?? o.amount ?? o.Amount ??
+    items.reduce((s, it) => s + it.price * it.quantity, 0);
+
+  const totalBv =
+    o.totalBv ?? o.TotalBv ??
+    items.reduce((s, it) => s + it.bv * it.quantity, 0);
 
   return {
-    orderId: String(o.id),
-    memberId: o.memberId ?? o.userId ?? '—',
-    memberName: o.memberName ?? o.userName ?? o.name ?? 'Unknown',
-    phone: o.phone ?? o.phoneNumber ?? '—',
-    address: o.address ?? o.deliveryAddress ?? '—',
+    orderId:      String(o.id),
+    memberId:     o.memberId     || o.MemberId     || o.userId || o.UserId || '—',
+    memberName:   o.memberName   || o.MemberName   || o.userName || o.UserName || o.name || o.Name || 'Unknown',
+    phone:        o.phone        || o.Phone        || o.phoneNumber || o.PhoneNumber || '—',
+    address:      o.address      || o.Address      || o.deliveryAddress || o.DeliveryAddress || '—',
     items,
     totalAmount,
-    status: normaliseStatus(o.status),
-    requestedAt: o.requestedAt ?? o.createdAt ?? new Date().toISOString(),
-    updatedAt: o.updatedAt,
-    utrNumber: o.utrNumber ?? '—',
-    screenshotUrl: o.screenshotUrl,
+    totalBv,
+    status:       normaliseStatus(o.status ?? o.Status),
+    requestedAt:  o.requestedAt  ?? o.RequestedAt  ?? o.createdAt ?? o.CreatedAt ?? new Date().toISOString(),
+    updatedAt:    o.updatedAt    ?? o.UpdatedAt,
+    utrNumber:    o.utrNumber    || o.UtrNumber    || '—',
+    screenshotUrl: o.screenshotUrl ?? o.ScreenshotUrl,
+    planType:      o.planType     ?? o.PlanType,
+    binarySponsorId: o.binarySponsorId ?? o.BinarySponsorId,
+    binaryPosition:  o.binaryPosition  ?? o.BinaryPosition,
+    adminRemarks:    o.adminRemarks    ?? o.AdminRemarks,
+    processedAt:     o.processedAt     ?? o.ProcessedAt,
+    receiptAvailable: o.receiptAvailable ?? o.ReceiptAvailable,
+    receiptDraftReady: o.receiptDraftReady ?? o.ReceiptDraftReady,
   };
 }
 
@@ -183,164 +294,257 @@ function formatCurrency(amount: number) {
   return `₹${amount.toLocaleString('en-IN')}`;
 }
 
-// ─── Receipt PDF Generator ────────────────────────────────────────────────────
+// ─── Company Constants — ✏️ EDIT THESE WITH YOUR REAL VALUES ─────────────────
+const COMPANY = {
+  name:    'RAJ DHANVARSHA',
+  address1: 'Gali No.3 Near Tailor Market, Azad Nagar, Hisar, Haryana',
+  contact: 'Contact No.: +91-7404526380  |  Email: info@rajdhanvarsha.in',
+  gstNo:   'YOUR-GST-NUMBER',   // ✏️ e.g. 06AAGFR1234C1Z5
+  fssaiNo: 'YOUR-FSSAI-NUMBER: 20821006001885', // ✏️ e.g. 10012345000123
+};
+
+// ─── Receipt PDF Generator (Tax Invoice Format) ───────────────────────────────
 
 function buildReceiptPDF(order: OrderRequest, adminRemarks: string): jsPDF {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const doc   = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 50;
-  let y = margin;
+  const margin = 40;
+  let y = 36;
 
-  // Header
-  doc.setFillColor(30, 41, 59);
-  doc.rect(0, 0, pageW, 90, 'F');
-  doc.setTextColor(255, 255, 255);
+  // ── Company Name ──
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  doc.text('RAJ DHAN VARSHA', margin, 40);
+  doc.setFontSize(15);
+  doc.setTextColor(0, 0, 0);
+  doc.text(COMPANY.name, pageW / 2, y, { align: 'center' });
+  y += 18;
+
+  // ── Address ──
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text('Official Order Receipt', margin, 58);
-  doc.text(`Receipt #${order.orderId}`, pageW - margin, 40, { align: 'right' });
-  doc.text(
-    `Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`,
-    pageW - margin, 55, { align: 'right' }
-  );
+  doc.setFontSize(8);
+  doc.setTextColor(50, 50, 50);
+  doc.text(COMPANY.address1, pageW / 2, y, { align: 'center' });
+  y += 12;
+  doc.text(COMPANY.contact, pageW / 2, y, { align: 'center' });
+  y += 13;
 
-  y = 115;
+  // ── GST + FSSAI ──
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`GST No.: ${COMPANY.gstNo}`, margin, y);
+  doc.text(`FSSAI Licence No.: 20821006001885`, pageW - margin, y, { align: 'right' });
+  y += 10;
 
-  // Approved badge
-  doc.setFillColor(34, 197, 94);
-  doc.roundedRect(margin, y - 14, 80, 20, 4, 4, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('APPROVED', margin + 40, y, { align: 'center' });
-  y += 30;
-
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.5);
+  // ── Border lines ──
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(1);
   doc.line(margin, y, pageW - margin, y);
-  y += 20;
+  y += 2;
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageW - margin, y);
+  y += 12;
 
-  // Two-column member + order info
-  const col2X = pageW / 2 + 10;
-
-  doc.setTextColor(100, 116, 139);
+  // ── TAX INVOICE label ──
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text('MEMBER INFORMATION', margin, y);
-
-  doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  y += 16;
-  doc.text(order.memberName, margin, y);
-  y += 15;
-  doc.setFontSize(10);
-  doc.setTextColor(71, 85, 105);
-  doc.text(`Member ID: ${order.memberId}`, margin, y);
-  y += 13;
-  doc.text(`Phone: ${order.phone}`, margin, y);
-  y += 13;
-  doc.text(`Address: ${order.address}`, margin, y);
-
-  let ry = y - 57;
-  doc.setTextColor(100, 116, 139);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text('ORDER INFORMATION', col2X, ry);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(71, 85, 105);
-  ry += 16;
-  doc.text(`Order ID: #${order.orderId}`, col2X, ry);
-  ry += 13;
-  doc.text(`Requested: ${new Date(order.requestedAt).toLocaleString('en-IN')}`, col2X, ry);
-  ry += 13;
-  doc.text(`UTR / Ref: ${order.utrNumber}`, col2X, ry);
-  ry += 13;
-  doc.text('Payment: Verified', col2X, ry);
-
-  y += 30;
-
-  doc.setDrawColor(226, 232, 240);
+  doc.setTextColor(0, 0, 0);
+  doc.text('TAX INVOICE', pageW / 2, y, { align: 'center' });
+  y += 6;
+  doc.setLineWidth(0.3);
   doc.line(margin, y, pageW - margin, y);
-  y += 20;
-
-  // Items table
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.text('ORDERED ITEMS', margin, y);
   y += 14;
 
-  doc.setFillColor(241, 245, 249);
-  doc.rect(margin, y - 12, pageW - margin * 2, 22, 'F');
-  doc.setTextColor(30, 41, 59);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('Product', margin + 8, y + 3);
-  doc.text('Qty', pageW - margin - 160, y + 3, { align: 'right' });
-  doc.text('Unit Price', pageW - margin - 80, y + 3, { align: 'right' });
-  doc.text('Amount', pageW - margin - 8, y + 3, { align: 'right' });
-  y += 22;
+  // ── Member / Order Info ──
+  const labelX = margin + 5;
+  const colonX = margin + 115;
+  const valueX = margin + 122;
 
-  order.items.forEach((item, idx) => {
-    if (idx % 2 === 0) {
-      doc.setFillColor(248, 250, 252);
-      doc.rect(margin, y - 12, pageW - margin * 2, 20, 'F');
-    }
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(10);
-    doc.text(item.productName, margin + 8, y + 1);
-    doc.text(String(item.quantity), pageW - margin - 160, y + 1, { align: 'right' });
-    doc.text(`Rs.${item.price}`, pageW - margin - 80, y + 1, { align: 'right' });
-    doc.text(`Rs.${item.quantity * item.price}`, pageW - margin - 8, y + 1, { align: 'right' });
-    y += 20;
+  const invoiceDate = new Date(order.requestedAt).toLocaleDateString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
   });
 
-  // Total
-  y += 8;
-  doc.setDrawColor(226, 232, 240);
-  doc.line(margin, y, pageW - margin, y);
-  y += 16;
-  doc.setFillColor(30, 41, 59);
-  doc.rect(pageW - margin - 200, y - 14, 200, 28, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('TOTAL AMOUNT', pageW - margin - 110, y + 1, { align: 'center' });
-  doc.setFontSize(14);
-  doc.text(`Rs.${order.totalAmount}`, pageW - margin - 15, y + 1, { align: 'right' });
-  y += 45;
+  const infoRows: [string, string][] = [
+    ['ID/Reference No.', order.memberId   || '—'],
+    ['Name',             order.memberName || '—'],
+    ['Phone',            order.phone      || '—'],
+    ['Invoice No.',      order.orderId    || '—'],
+    ['Invoice Date',     invoiceDate],
+    ['UTR / Ref No.',    order.utrNumber  || '—'],
+  ];
 
-  // Admin remarks
-  if (adminRemarks.trim()) {
-    doc.setTextColor(100, 116, 139);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text('ADMIN REMARKS', margin, y);
-    y += 14;
-    doc.setFillColor(254, 249, 195);
-    doc.rect(margin, y - 12, pageW - margin * 2, 30, 'F');
+  doc.setFontSize(9.5);
+  infoRows.forEach(([label, value]) => {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(113, 63, 18);
-    doc.text(adminRemarks.trim(), margin + 8, y + 4);
-    y += 40;
+    doc.setTextColor(40, 40, 40);
+    doc.text(label, labelX, y);
+    doc.text(':', colonX, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text(value, valueX, y);
+    y += 15;
+  });
+
+  y += 4;
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
+  y += 12;
+
+  // ── Items Table Header ──
+  const C = {
+    product:  margin + 2,
+    qty:      margin + 175,
+    rate:     margin + 215,
+    bv:       margin + 265,
+    sgst:     margin + 305,
+    cess:     margin + 345,
+    totalTax: margin + 385,
+    hsn:      margin + 2,
+    amount:   margin + 175,
+    totalBv:  margin + 215,
+    cgst:     margin + 305,
+    totalAmt: pageW - margin - 5,
+  };
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Product Name', C.product,  y);
+  doc.text('Qty',          C.qty,      y);
+  doc.text('Rate',         C.rate,     y);
+  doc.text('B.V.',         C.bv,       y);
+  doc.text('SGST%',        C.sgst,     y);
+  doc.text('Cess%',        C.cess,     y);
+  doc.text('Total Tax',    C.totalTax, y);
+  y += 11;
+
+  doc.text('HSNCode',      C.hsn,      y);
+  doc.text('Amount',       C.amount,   y);
+  doc.text('Total B.V.',   C.totalBv,  y);
+  doc.text('CGST%',        C.cgst,     y);
+  doc.text('Total Amount', C.totalAmt, y, { align: 'right' });
+  y += 6;
+
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
+  y += 10;
+
+  // ── Items ──
+  order.items.forEach((item) => {
+    const qty     = item.quantity;
+    const rate    = item.price;
+    const lineAmt = rate * qty;
+    const bvUnit  = item.bv;
+    const bvTotal = bvUnit * qty;
+    const sgst    = item.sgst  ?? 0;
+    const cgst    = item.cgst  ?? 0;
+    const cess    = item.cess  ?? 0.00;
+    const taxAmt  = parseFloat(((lineAmt * (sgst + cgst)) / 100).toFixed(2));
+    const billAmt = parseFloat((lineAmt + taxAmt).toFixed(2));
+    const hsn     = item.hsnCode ?? '15159040';
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+    const productLines = doc.splitTextToSize(item.productName, 160) as string[];
+    doc.text(productLines, C.product, y);
+    y += productLines.length > 1 ? 12 : 0;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.text(String(qty),        C.qty,      y);
+    doc.text(rate.toFixed(2),    C.rate,     y);
+    doc.text(String(bvUnit),     C.bv,       y);
+    doc.text(sgst.toFixed(2),    C.sgst,     y);
+    doc.text(cess.toFixed(2),    C.cess,     y);
+    doc.text(taxAmt.toFixed(2),  C.totalTax, y);
+    y += 12;
+
+    doc.text(hsn,                C.hsn,      y);
+    doc.text(lineAmt.toFixed(2), C.amount,   y);
+    doc.text(String(bvTotal),    C.totalBv,  y);
+    doc.text(cgst.toFixed(2),    C.cgst,     y);
+    doc.text(billAmt.toFixed(2), C.totalAmt, y, { align: 'right' });
+    y += 14;
+
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y, pageW - margin, y);
+    doc.setDrawColor(0, 0, 0);
+    y += 8;
+  });
+
+  y += 4;
+
+  // ── Summary ──
+  const sumLabelX = margin + 10;
+  const sumColon  = pageW - margin - 90;
+  const sumValX   = pageW - margin - 5;
+
+  const cgstRate = order.items[0]?.cgst ?? 0;
+  const sgstRate = order.items[0]?.sgst ?? 0;
+  const cgstAmt  = parseFloat(((order.totalAmount * cgstRate) / (100 + cgstRate + sgstRate)).toFixed(2));
+  const sgstAmt  = parseFloat(((order.totalAmount * sgstRate) / (100 + cgstRate + sgstRate)).toFixed(2));
+  const totalBv = order.totalBv;
+
+  const summaryRows: [string, string, boolean][] = [
+    ['Total Amount',   order.totalAmount.toFixed(2), false],
+    ['CGST Amount',    cgstAmt.toFixed(0),           false],
+    ['SGST Amount',    sgstAmt.toFixed(0),           false],
+    ['Other Tax/Cess', '0.00',                       false],
+    ['Total B.V.',     totalBv.toFixed(1),           true ],
+    ['Bill Value',     order.totalAmount.toFixed(2), true ],
+  ];
+
+  doc.setFontSize(9);
+  summaryRows.forEach(([label, value, bold]) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setTextColor(0, 0, 0);
+    doc.text(label,  sumLabelX, y);
+    doc.text(':',    sumColon,  y);
+    doc.text(value,  sumValX,   y, { align: 'right' });
+    y += 13;
+  });
+
+  // ── Net Amount Payable ──
+  y += 4;
+  doc.setLineWidth(0.8);
+  doc.line(margin, y, pageW - margin, y);
+  y += 13;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Net Amount Payable', sumLabelX, y);
+  doc.text(':',                  sumColon,  y);
+  doc.text(order.totalAmount.toFixed(2), sumValX, y, { align: 'right' });
+  y += 5;
+  doc.setLineWidth(0.8);
+  doc.line(margin, y, pageW - margin, y);
+  y += 20;
+
+  // ── Admin Remarks ──
+  if (adminRemarks.trim()) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(80, 80, 80);
+    doc.text(`Remarks: ${adminRemarks.trim()}`, margin + 5, y);
+    y += 18;
   }
 
-  // Footer
-  doc.setFillColor(30, 41, 59);
-  doc.rect(0, pageH - 60, pageW, 60, 'F');
-  doc.setTextColor(148, 163, 184);
+  // ── Authorised Signatory ──
+  const sigY = Math.max(y + 30, pageH - 80);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text('This is a computer-generated receipt. No signature required.', pageW / 2, pageH - 35, { align: 'center' });
-  doc.text(`Raj Dhan Varsha | Generated on ${new Date().toLocaleString('en-IN')}`, pageW / 2, pageH - 20, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+  doc.line(pageW - margin - 110, sigY, pageW - margin, sigY);
+  doc.text('Authorised Signatory', pageW - margin, sigY + 12, { align: 'right' });
+
+  // ── Footer ──
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(120, 120, 120);
+  doc.text(
+    `Raj Dhan Varsha  |  Computer-generated receipt  |  Generated: ${new Date().toLocaleString('en-IN')}`,
+    pageW / 2, pageH - 18, { align: 'center' }
+  );
 
   return doc;
 }
@@ -380,23 +584,46 @@ function OrderDetailModal({
   onClose: () => void;
   onStatusChange: (orderId: string, status: OrderStatus) => void;
 }) {
-  const [updating, setUpdating]           = useState(false);
-  const [actionError, setActionError]     = useState<string | null>(null);
+  const [fullOrder, setFullOrder]           = useState<OrderRequest>(order);
+  const [loading, setLoading]               = useState(false);
+  const [updating, setUpdating]             = useState(false);
+  const [actionError, setActionError]       = useState<string | null>(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const [remarks, setRemarks]             = useState('');
-  const [step, setStep]                   = useState<ModalStep>('view');
-  const [pdfUrl, setPdfUrl]               = useState<string | null>(null);
-  const [editRemarks, setEditRemarks]     = useState('');
+  const [remarks, setRemarks]               = useState('');
+  const [step, setStep]                     = useState<ModalStep>('view');
+  const [pdfUrl, setPdfUrl]                 = useState<string | null>(null);
+  const [editRemarks, setEditRemarks]       = useState('');
 
-  // Regenerate PDF preview whenever editRemarks changes
+  // ── Fetch full order data (with screenshot) when modal opens ──
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${BASE_URL}/api/Orders/payment-requests/${order.orderId}`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    })
+      .then(r => {
+        if (!r.ok) throw new Error('Failed to load full order data');
+        return r.json();
+      })
+      .then(data => {
+        setFullOrder(normaliseOrder(data));
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error fetching full order:', err);
+        // Fall back to list data if fetch fails
+        setLoading(false);
+      });
+  }, [order.orderId]);
+
   useEffect(() => {
     if (step !== 'receipt') return;
-    const doc = buildReceiptPDF(order, editRemarks);
+    const doc  = buildReceiptPDF(fullOrder, editRemarks);
     const blob = doc.output('blob');
-    const url = URL.createObjectURL(blob);
+    const url  = URL.createObjectURL(blob);
     setPdfUrl(url);
     return () => URL.revokeObjectURL(url);
-  }, [step, editRemarks, order]);
+  }, [step, editRemarks, fullOrder]);
 
   const handleGenerateReceipt = () => {
     setEditRemarks(remarks);
@@ -404,23 +631,23 @@ function OrderDetailModal({
   };
 
   const handleDownload = () => {
-    const doc = buildReceiptPDF(order, editRemarks);
-    doc.save(`receipt-order-${order.orderId}.pdf`);
+    const doc = buildReceiptPDF(fullOrder, editRemarks);
+    doc.save(`receipt-order-${fullOrder.orderId}.pdf`);
   };
 
   const handleApprove = async () => {
     setUpdating(true);
     setActionError(null);
     try {
-      const doc = buildReceiptPDF(order, editRemarks);
+      const doc           = buildReceiptPDF(fullOrder, editRemarks);
       const receiptBase64 = doc.output('datauristring');
 
-      const res = await fetch(`${BASE_URL}/api/Orders/payment-requests/${order.orderId}/approve`, {
+      const res = await fetch(`${BASE_URL}/api/Orders/payment-requests/${fullOrder.orderId}/approve`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
           adminRemarks: editRemarks.trim() || 'Approved by admin',
-          receiptPdf: receiptBase64,
+          receiptPdf:   receiptBase64,
         }),
       });
 
@@ -431,7 +658,7 @@ function OrderDetailModal({
         throw new Error(errMsg);
       }
 
-      onStatusChange(order.orderId, 'Approved');
+      onStatusChange(fullOrder.orderId, 'Approved');
       onClose();
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Approval failed. Please try again.');
@@ -444,7 +671,7 @@ function OrderDetailModal({
     setUpdating(true);
     setActionError(null);
     try {
-      const res = await fetch(`${BASE_URL}/api/Orders/payment-requests/${order.orderId}/reject`, {
+      const res = await fetch(`${BASE_URL}/api/Orders/payment-requests/${fullOrder.orderId}/reject`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ adminRemarks: remarks.trim() || 'Rejected by admin' }),
@@ -455,7 +682,7 @@ function OrderDetailModal({
         try { errMsg = JSON.parse(text).message ?? errMsg; } catch { errMsg = text || errMsg; }
         throw new Error(errMsg);
       }
-      onStatusChange(order.orderId, 'Rejected');
+      onStatusChange(fullOrder.orderId, 'Rejected');
       onClose();
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Action failed. Please try again.');
@@ -472,18 +699,22 @@ function OrderDetailModal({
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
           <div className="flex items-center gap-2">
             {step === 'receipt' && (
-              <button
-                onClick={() => setStep('view')}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors mr-1"
-              >
+              <button onClick={() => setStep('view')} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors mr-1">
                 <ArrowLeft size={16} className="text-gray-500" />
               </button>
             )}
             <div>
-              <h2 className="text-base font-bold text-gray-900">
-                {step === 'view' ? 'Order Details' : 'Receipt Preview'}
-              </h2>
-              <p className="text-xs text-gray-400 font-mono mt-0.5"># {order.orderId}</p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-gray-900">
+                  {step === 'view' ? 'Order Details' : 'Receipt Preview'}
+                </h2>
+                {fullOrder.planType === 'Binary Plan' && (
+                  <span className="bg-indigo-100 text-indigo-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border border-indigo-200">
+                    Binary Plan
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 font-mono mt-0.5"># {fullOrder.orderId}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
@@ -495,163 +726,192 @@ function OrderDetailModal({
         {step === 'view' && (
           <div className="px-4 sm:px-6 py-5 space-y-5">
 
-            {/* Status */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Current Status</span>
-              <StatusBadge status={order.status} />
-            </div>
+            {/* Loading State */}
+            {loading && (
+              <div className="flex items-center justify-center py-12 gap-2">
+                <Loader2 size={16} className="animate-spin text-[#3B5998]" />
+                <span className="text-xs text-gray-400">Loading order details…</span>
+              </div>
+            )}
 
-            {/* Member Info */}
-            <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Member Info</p>
-              <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
-                <div className="flex items-start gap-2">
-                  <User size={14} className="text-[#3B5998] mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-gray-400">Name</p>
-                    <p className="text-xs font-semibold text-gray-800 break-words">{order.memberName}</p>
-                  </div>
+            {!loading && (
+              <>
+                {/* Status */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Current Status</span>
+                  <StatusBadge status={fullOrder.status} />
                 </div>
-                <div className="flex items-start gap-2">
-                  <Hash size={14} className="text-[#3B5998] mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-gray-400">Member ID</p>
-                    <p className="text-xs font-semibold text-gray-800 font-mono break-all">{order.memberId}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Phone size={14} className="text-[#3B5998] mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-gray-400">Phone</p>
-                    <p className="text-xs font-semibold text-gray-800">{order.phone}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Calendar size={14} className="text-[#3B5998] mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-gray-400">Requested</p>
-                    <p className="text-xs font-semibold text-gray-800">{formatDate(order.requestedAt)}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-start gap-2 pt-2 border-t border-gray-200/60">
-                <MapPin size={14} className="text-[#3B5998] mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[10px] text-gray-400">Delivery Address</p>
-                  <p className="text-xs font-semibold text-gray-800 break-words">{order.address}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* Payment Verification */}
-            <div className="bg-blue-50/40 rounded-xl p-4 border border-blue-100/60 space-y-3">
-              <p className="text-[11px] font-bold text-blue-600/80 uppercase tracking-widest">Payment Verification</p>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 bg-white p-2.5 rounded-lg border border-gray-100 shadow-sm overflow-hidden">
-                <span className="text-xs font-medium text-gray-500 flex items-center gap-1 shrink-0">
-                  <LinkIcon size={12} className="text-blue-500" /> UTR / Ref:
-                </span>
-                <span className="font-mono font-bold text-xs text-gray-800 tracking-wide select-all bg-gray-50 px-2 py-0.5 rounded border border-gray-200 break-all text-left sm:text-right">
-                  {order.utrNumber}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
-                  <FileText size={12} className="text-blue-500" /> Payment Snapshot:
-                </span>
-                {order.screenshotUrl ? (
-                  <div
-                    onClick={() => setIsLightboxOpen(true)}
-                    className="relative group border border-gray-200 rounded-lg overflow-hidden cursor-zoom-in bg-white h-32 sm:h-36 flex items-center justify-center transition-all hover:border-blue-400 shadow-sm"
-                  >
-                    <img
-                      src={order.screenshotUrl}
-                      alt="Receipt payment snapshot"
-                      className="h-full w-full object-contain p-2 transition-transform duration-200 group-hover:scale-[1.02]"
-                    />
-                    <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      <span className="bg-black/70 text-white text-[10px] px-2.5 py-1 rounded-md backdrop-blur-sm font-medium">
-                        Tap to expand
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="border border-dashed border-gray-200 rounded-lg bg-gray-50 h-16 flex items-center justify-center">
-                    <p className="text-xs text-gray-400 italic">No image receipt uploaded</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Items */}
-            <div>
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Ordered Items</p>
-              <div className="space-y-2">
-                {order.items.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 sm:px-4 py-3 gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <ShoppingCart size={13} className="text-[#3B5998] shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-800 truncate">{item.productName}</p>
-                        <p className="text-[10px] text-gray-400">
-                          Qty: {item.quantity} × {formatCurrency(item.price)}
-                        </p>
+                {/* Member Info */}
+                <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Member Info</p>
+                  <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
+                    <div className="flex items-start gap-2">
+                      <User size={14} className="text-[#3B5998] mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-gray-400">Name</p>
+                        <p className="text-xs font-semibold text-gray-800 break-words">{fullOrder.memberName}</p>
                       </div>
                     </div>
-                    <p className="text-xs font-bold text-gray-800 shrink-0">{formatCurrency(item.quantity * item.price)}</p>
+                    <div className="flex items-start gap-2">
+                      <Hash size={14} className="text-[#3B5998] mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-gray-400">Member ID</p>
+                        <p className="text-xs font-semibold text-gray-800 font-mono break-all">{fullOrder.memberId}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Phone size={14} className="text-[#3B5998] mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-gray-400">Phone</p>
+                        <p className="text-xs font-semibold text-gray-800">{fullOrder.phone}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Calendar size={14} className="text-[#3B5998] mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-gray-400">Requested</p>
+                        <p className="text-xs font-semibold text-gray-800">{formatDate(fullOrder.requestedAt)}</p>
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
-              <div className="flex items-center justify-between mt-3 px-4 py-3 bg-[#3B5998]/5 rounded-xl border border-[#3B5998]/10">
-                <span className="text-xs font-bold text-[#3B5998]">Total Amount</span>
-                <span className="text-sm font-black text-[#3B5998]">{formatCurrency(order.totalAmount)}</span>
-              </div>
-            </div>
-
-            {/* Error */}
-            {actionError && (
-              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
-                <AlertCircle size={14} className="shrink-0" />
-                {actionError}
-              </div>
-            )}
-
-            {/* Actions */}
-            {order.status === 'Pending' && (
-              <div className="space-y-3 pt-1 pb-4 sm:pb-0">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Take Action</p>
-                <textarea
-                  value={remarks}
-                  onChange={e => setRemarks(e.target.value)}
-                  placeholder="Admin remarks (optional)…"
-                  rows={2}
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3B5998]/30 resize-none"
-                />
-                <div className="grid grid-cols-2 gap-2.5">
-                  {/* GENERATE RECEIPT — replaces old Approve button */}
-                  <button
-                    onClick={handleGenerateReceipt}
-                    disabled={updating}
-                    className="flex items-center justify-center gap-1.5 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-60"
-                  >
-                    <FileText size={13} />
-                    Generate Receipt
-                  </button>
-                  <button
-                    onClick={handleReject}
-                    disabled={updating}
-                    className="flex items-center justify-center gap-1.5 px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold rounded-xl transition-colors disabled:opacity-60"
-                  >
-                    {updating ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
-                    Reject
-                  </button>
+                  <div className="flex items-start gap-2 pt-2 border-t border-gray-200/60">
+                    <MapPin size={14} className="text-[#3B5998] mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-gray-400">Delivery Address</p>
+                      <p className="text-xs font-semibold text-gray-800 break-words">{fullOrder.address}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {order.status !== 'Pending' && order.updatedAt && (
-              <p className="text-[11px] text-gray-400 text-center pb-4 sm:pb-0">
-                Last updated: {formatDate(order.updatedAt)}
-              </p>
+                {/* Binary Plan Placement Info (shown only for Binary Plan orders) */}
+                {fullOrder.planType === 'Binary Plan' && (
+                  <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-200 space-y-2">
+                    <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
+                      🔗 Binary Plan Placement
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex-1 bg-white rounded-lg px-3 py-2 border border-indigo-100">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Sponsor ID</p>
+                        <p className="font-mono font-bold text-sm text-indigo-700">{fullOrder.binarySponsorId ?? '—'}</p>
+                      </div>
+                      <div className="flex-1 bg-white rounded-lg px-3 py-2 border border-indigo-100">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Position</p>
+                        <p className="font-bold text-sm text-indigo-700">{fullOrder.binaryPosition ?? '—'} Leg</p>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-indigo-500 font-medium">
+                      ⚠️ Approving this order will enrol the user in the Binary Plan and place them under the sponsor above.
+                    </p>
+                  </div>
+                )}
+
+                {/* Payment Verification */}
+                <div className="bg-blue-50/40 rounded-xl p-4 border border-blue-100/60 space-y-3">
+                  <p className="text-[11px] font-bold text-blue-600/80 uppercase tracking-widest">Payment Verification</p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 bg-white p-2.5 rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+                    <span className="text-xs font-medium text-gray-500 flex items-center gap-1 shrink-0">
+                      <LinkIcon size={12} className="text-blue-500" /> UTR / Ref:
+                    </span>
+                    <span className="font-mono font-bold text-xs text-gray-800 tracking-wide select-all bg-gray-50 px-2 py-0.5 rounded border border-gray-200 break-all text-left sm:text-right">
+                      {fullOrder.utrNumber}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
+                      <FileText size={12} className="text-blue-500" /> Payment Snapshot:
+                    </span>
+                    {fullOrder.screenshotUrl ? (
+                      <div
+                        onClick={() => setIsLightboxOpen(true)}
+                        className="relative group border border-gray-200 rounded-lg overflow-hidden cursor-zoom-in bg-white h-32 sm:h-36 flex items-center justify-center transition-all hover:border-blue-400 shadow-sm"
+                      >
+                        <img
+                          src={fullOrder.screenshotUrl}
+                          alt="Receipt payment snapshot"
+                          className="h-full w-full object-contain p-2 transition-transform duration-200 group-hover:scale-[1.02]"
+                        />
+                        <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <span className="bg-black/70 text-white text-[10px] px-2.5 py-1 rounded-md backdrop-blur-sm font-medium">Tap to expand</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border border-dashed border-gray-200 rounded-lg bg-gray-50 h-16 flex items-center justify-center">
+                        <p className="text-xs text-gray-400 italic">No image receipt uploaded</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Items */}
+                <div>
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Ordered Items</p>
+                  <div className="space-y-2">
+                    {fullOrder.items.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 sm:px-4 py-3 gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <ShoppingCart size={13} className="text-[#3B5998] shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-gray-800 truncate">{item.productName}</p>
+                            <p className="text-[10px] text-gray-400">Qty: {item.quantity} × {formatCurrency(item.price)}</p>
+                          </div>
+                        </div>
+                        <p className="text-xs font-bold text-gray-800 shrink-0">{formatCurrency(item.quantity * item.price)}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between mt-3 px-4 py-3 bg-[#3B5998]/5 rounded-xl border border-[#3B5998]/10">
+                    <span className="text-xs font-bold text-[#3B5998]">Total Amount</span>
+                    <span className="text-sm font-black text-[#3B5998]">{formatCurrency(fullOrder.totalAmount)}</span>
+                  </div>
+                </div>
+
+                {/* Error */}
+                {actionError && (
+                  <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+                    <AlertCircle size={14} className="shrink-0" />
+                    {actionError}
+                  </div>
+                )}
+
+                {/* Actions */}
+                {fullOrder.status === 'Pending' && (
+                  <div className="space-y-3 pt-1 pb-4 sm:pb-0">
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Take Action</p>
+                    <textarea
+                      value={remarks}
+                      onChange={e => setRemarks(e.target.value)}
+                      placeholder="Admin remarks (optional)…"
+                      rows={2}
+                      className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3B5998]/30 resize-none"
+                    />
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        onClick={handleGenerateReceipt}
+                        disabled={updating}
+                        className="flex items-center justify-center gap-1.5 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-60"
+                      >
+                        <FileText size={13} />
+                        Generate Receipt
+                      </button>
+                      <button
+                        onClick={handleReject}
+                        disabled={updating}
+                        className="flex items-center justify-center gap-1.5 px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold rounded-xl transition-colors disabled:opacity-60"
+                      >
+                        {updating ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {fullOrder.status !== 'Pending' && fullOrder.updatedAt && (
+                  <p className="text-[11px] text-gray-400 text-center pb-4 sm:pb-0">
+                    Last updated: {formatDate(fullOrder.updatedAt)}
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
@@ -661,7 +921,7 @@ function OrderDetailModal({
           <div className="px-4 sm:px-6 py-5 space-y-4 pb-6">
 
             {/* PDF iframe preview */}
-            <div className="border border-gray-200 rounded-xl overflow-hidden bg-gray-50" style={{ height: 380 }}>
+            <div className="border border-gray-200 rounded-xl overflow-hidden bg-gray-50" style={{ height: 420 }}>
               {pdfUrl ? (
                 <iframe src={pdfUrl} className="w-full h-full" title="Receipt Preview" />
               ) : (
@@ -672,7 +932,7 @@ function OrderDetailModal({
               )}
             </div>
 
-            {/* Editable remarks — live-updates the PDF */}
+            {/* Editable remarks */}
             <div>
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
                 Edit Remarks <span className="normal-case font-normal text-gray-300">(updates receipt live)</span>
@@ -708,10 +968,7 @@ function OrderDetailModal({
               disabled={updating}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-xs font-bold rounded-xl transition-colors"
             >
-              {updating
-                ? <Loader2 size={13} className="animate-spin" />
-                : <CheckCircle size={13} />
-              }
+              {updating ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
               Approve &amp; Send Receipt to User
             </button>
           </div>
@@ -719,26 +976,17 @@ function OrderDetailModal({
       </div>
 
       {/* Lightbox */}
-      {isLightboxOpen && order.screenshotUrl && (
+      {isLightboxOpen && fullOrder.screenshotUrl && (
         <div
           className="fixed inset-0 bg-black/95 z-[60] flex flex-col items-center justify-center p-4 cursor-zoom-out"
           onClick={() => setIsLightboxOpen(false)}
         >
-          <button className="absolute top-4 right-4 text-white hover:text-gray-300 text-xl bg-white/10 w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-sm">
-            ✕
-          </button>
-          <div
-            className="max-w-4xl max-h-[80vh] w-full h-full flex items-center justify-center"
-            onClick={e => e.stopPropagation()}
-          >
-            <img
-              src={order.screenshotUrl}
-              alt="Receipt snapshot full view"
-              className="max-w-full max-h-full object-contain rounded-md shadow-2xl"
-            />
+          <button className="absolute top-4 right-4 text-white hover:text-gray-300 text-xl bg-white/10 w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-sm">✕</button>
+          <div className="max-w-4xl max-h-[80vh] w-full h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
+            <img src={fullOrder.screenshotUrl} alt="Receipt snapshot full view" className="max-w-full max-h-full object-contain rounded-md shadow-2xl" />
           </div>
           <p className="text-gray-400 text-[11px] sm:text-xs mt-4 select-all bg-black/40 px-3 py-1 rounded font-mono tracking-wide max-w-full truncate">
-            UTR Reference: {order.utrNumber}
+            UTR Reference: {fullOrder.utrNumber}
           </p>
         </div>
       )}
@@ -781,7 +1029,7 @@ export default function OrderRequestsPage() {
         throw new Error(msg);
       }
       const data: ApiOrder[] = await res.json();
-      const raw: ApiOrder[] = Array.isArray(data) ? data : (data as unknown as { data?: ApiOrder[] }).data ?? [];
+      const raw: ApiOrder[]  = Array.isArray(data) ? data : (data as unknown as { data?: ApiOrder[] }).data ?? [];
       setOrders(raw.map(normaliseOrder));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load orders';

@@ -47,7 +47,7 @@ export default function LoginPage() {
         setSuccessMessage("");
 
         try {
-            const API_URL = "https://rd-api-j7zj.onrender.com/api/Auth/login"; 
+            const API_URL = "https://localhost:56187/api/Auth/login"; 
 
             const response = await fetch(API_URL, {
                 method: "POST",
@@ -79,6 +79,11 @@ export default function LoginPage() {
             if (typeof window !== "undefined") {
                 const token = data.token || data.tokenString || data.jwt;
                 
+                // Clear stale per-user cache from any previous session
+                // so a different user logging in doesn't see the old user's plan status
+                localStorage.removeItem("userPlanType");
+                localStorage.removeItem("userProfile");
+
                 // Set tokens consistently
                 if (token) {
                     localStorage.setItem("authToken", token);

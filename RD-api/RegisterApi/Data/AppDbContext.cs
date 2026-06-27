@@ -19,7 +19,14 @@ public class AppDbContext : DbContext
     public DbSet<WithdrawalRequest> WithdrawalRequests => Set<WithdrawalRequest>();
 
     // --- Payment Orders (product purchases via UPI) ---
-    public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();  // ← NEW
+    public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
+
+    // --- Binary Plan ---
+    public DbSet<BinaryNode> BinaryNodes => Set<BinaryNode>();
+    public DbSet<BinaryWallet> BinaryWallets => Set<BinaryWallet>();
+    public DbSet<BinaryWalletTransaction> BinaryWalletTransactions => Set<BinaryWalletTransaction>();
+    public DbSet<BinaryWithdrawalRequest> BinaryWithdrawalRequests => Set<BinaryWithdrawalRequest>();
+    public DbSet<BinaryPair> BinaryPairs => Set<BinaryPair>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -153,12 +160,13 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.Status);
         });
 
-        // --- Payment Orders -------------------------------------------------------  ← NEW BLOCK
+        // --- Payment Orders ---
         modelBuilder.Entity<PaymentOrder>(entity =>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.UtrNumber).HasMaxLength(30).IsRequired();
+            entity.Property(e => e.PlanType).HasMaxLength(50).IsRequired().HasDefaultValue("Dream Plan");
             entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
             entity.Property(e => e.TotalBv).HasColumnType("decimal(18,2)");
             entity.Property(e => e.CartItemsJson).IsRequired();
@@ -172,6 +180,81 @@ public class AppDbContext : DbContext
             entity.Property(e => e.ReceiptTotalBv).HasColumnType("decimal(18,2)");
             entity.HasIndex(e => e.UserId);
             entity.HasIndex(e => e.Status);
+        });
+
+        // --- Binary Plan ---
+
+        modelBuilder.Entity<BinaryNode>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.SponsorId).HasMaxLength(10);
+            entity.Property(e => e.ParentId).HasMaxLength(10);
+            entity.Property(e => e.Position).HasMaxLength(10);
+            entity.Property(e => e.LeftChildId).HasMaxLength(10);
+            entity.Property(e => e.RightChildId).HasMaxLength(10);
+            entity.Property(e => e.TotalBv).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.LeftLegBv).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.RightLegBv).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.UserId).IsUnique();
+            entity.HasIndex(e => e.ParentId);
+            entity.HasIndex(e => e.SponsorId);
+        });
+
+        modelBuilder.Entity<BinaryWallet>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.Balance).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.TotalEarned).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.TotalWithdrawn).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.UserId).IsUnique();
+        });
+
+        modelBuilder.Entity<BinaryWalletTransaction>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.Type)
+                  .HasConversion<string>()
+                  .HasMaxLength(20)
+                  .IsRequired();
+            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.BalanceAfter).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Source).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ReferenceId).HasMaxLength(50);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.CreatedAt);
+        });
+
+        modelBuilder.Entity<BinaryWithdrawalRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.AdminNote).HasMaxLength(500);
+            entity.Property(e => e.RequestedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.Status);
+        });
+
+        modelBuilder.Entity<BinaryPair>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.LeftChildId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.RightChildId).HasMaxLength(10).IsRequired();
+            entity.Property(e => e.CommissionAmt).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.CreditedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.UserId);
+            // Prevents double-crediting the same pair (matches AnyAsync check in service)
+            entity.HasIndex(e => new { e.UserId, e.LeftChildId, e.RightChildId }).IsUnique();
         });
     }
 }

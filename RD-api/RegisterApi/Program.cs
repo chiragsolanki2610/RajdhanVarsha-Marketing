@@ -23,11 +23,10 @@ try
                     "https://localhost:3000",
                     "http://localhost:3001",
                     "https://localhost:3001",
-                    "https://rd-app.onrender.com"   // ← add your Render URL too
+                    "https://rd-app.onrender.com"
                   )
                   .AllowAnyHeader()
                   .AllowAnyMethod();
-            // ✅ Removed AllowCredentials() — was causing ERR_EMPTY_RESPONSE
         });
     });
 
@@ -69,6 +68,7 @@ try
     builder.Services.AddScoped<IUserIdGenerator, UserIdGenerator>();
     builder.Services.AddScoped<IPasswordService, PasswordService>();
     builder.Services.AddScoped<IReceiptService, ReceiptService>();
+    builder.Services.AddScoped<IBinaryPlanService, BinaryPlanService>();  // ← ADDED
 
     // ── JWT Auth ─────────────────────────────────────────────────────────────
     var jwtKey = builder.Configuration["Jwt:Key"]

@@ -46,14 +46,24 @@ namespace RegisterApi.Controllers
             if (user == null)
                 return NotFound(new { message = "User not found." });
 
-            // Most recent paid plan for this user
-            var latestPlan = await _db.Plans
-                .Where(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid)
+            // Fetch latest of EACH plan type separately
+            var latestDreamPlan = await _db.Plans
+                .Where(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid && p.PlanType == "Dream Plan")
+                .OrderByDescending(p => p.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            var latestBinaryPlan = await _db.Plans
+                .Where(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid && p.PlanType == "Binary Plan")
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync();
 
             var totalSells = await _db.Plans
                 .CountAsync(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid);
+
+            // Use whichever is more recent as the "primary" plan
+            var latestPlan = (latestDreamPlan?.CreatedAt ?? DateTime.MinValue) >= (latestBinaryPlan?.CreatedAt ?? DateTime.MinValue)
+                ? latestDreamPlan
+                : latestBinaryPlan;
 
             return Ok(new
             {
@@ -61,13 +71,10 @@ namespace RegisterApi.Controllers
                 purchaseDate = latestPlan?.CreatedAt,
                 bv = latestPlan?.TotalBv ?? 0,
                 planType = latestPlan?.PlanType,
-                totalSells
-
-                // NOTE: totalPayout, withdrawal, balance intentionally NOT
-                // included here — those belong to a Wallet/Commission/
-                // Transaction entity that doesn't exist in this controller's
-                // scope. Add a WalletController (or extend this one) once
-                // you have that table, then merge into the dashboard fetch.
+                totalSells,
+                // ── NEW: individual active flags for each plan ──
+                dreamIsActive = latestDreamPlan != null,
+                binaryIsActive = latestBinaryPlan != null
             });
         }
 

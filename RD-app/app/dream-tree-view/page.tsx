@@ -21,8 +21,7 @@ import dagre from "@dagrejs/dagre";
 import Sidebar from "@/components/Sidebar";
 import LoginTopbar from "@/components/loginTopbar";
 
-// ── API base — matches wallet/page.tsx and dream-purchase/page.tsx ───────────
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:56187";
 
 const getToken = () =>
   localStorage.getItem("authToken") ??
@@ -47,6 +46,13 @@ interface TreeNode {
   children: TreeNode[];
 }
 
+interface WalletDto {
+  planType: string;
+  balance: number;
+  totalEarned: number;
+  totalWithdrawn: number;
+}
+
 async function fetchFullTree(): Promise<TreeNode> {
   const res = await fetch(`${API_URL}/api/Tree`, {
     headers: {
@@ -58,7 +64,22 @@ async function fetchFullTree(): Promise<TreeNode> {
   return res.json();
 }
 
-// ── Dagre Layout ──────────────────────────────────────────────────────────────
+async function fetchTotalEarned(): Promise<number> {
+  try {
+    const res = await fetch(`${API_URL}/api/wallet`, {
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (!res.ok) return 0;
+    const wallets: WalletDto[] = await res.json();
+    return wallets.reduce((sum, w) => sum + (w.totalEarned ?? 0), 0);
+  } catch {
+    return 0;
+  }
+}
+
 const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
@@ -75,48 +96,23 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
   };
 };
 
-// ── Build a map of nodeId → TreeNode for quick lookup ─────────────────────────
 function buildNodeMap(node: TreeNode, map: Map<string, TreeNode>) {
   map.set(node.id, node);
   node.children.forEach((c) => buildNodeMap(c, map));
 }
 
-// ── Get all ancestor IDs of a node (path from root to node) ──────────────────
-function getAncestorIds(nodeId: string, nodeMap: Map<string, TreeNode>): Set<string> {
-  const ancestors = new Set<string>();
-  const node = nodeMap.get(nodeId);
-  if (!node) return ancestors;
-
-  // Walk up via sponsorId
-  let current: TreeNode | undefined = node;
-  while (current && current.sponsorId) {
-    const parent = nodeMap.get(current.sponsorId);
-    if (!parent) break;
-    ancestors.add(parent.id);
-    current = parent;
-  }
-  return ancestors;
-}
-
-// ── Collect all IDs in a subtree ─────────────────────────────────────────────
-function getSubtreeIds(node: TreeNode): Set<string> {
-  const ids = new Set<string>();
-  const walk = (n: TreeNode) => {
-    ids.add(n.id);
-    n.children.forEach(walk);
-  };
-  walk(node);
-  return ids;
-}
-
-// ── Custom Node ───────────────────────────────────────────────────────────────
 const CustomUserNode = ({ data }: { data: any }) => {
   const requirementMet = data.directCount >= 3;
+  const isRoot = data.level === 0;
 
   return (
-    <div className={`select-text p-4 rounded-xl shadow-lg border-2 w-72 bg-white transition-all ${
-      requirementMet ? "border-green-500 shadow-green-100" : "border-amber-500 shadow-amber-100"
-    }`}>
+    <div
+      className={`select-text p-4 rounded-xl shadow-lg border-2 w-72 bg-white transition-all ${
+        requirementMet
+          ? "border-green-500 shadow-green-100"
+          : "border-amber-500 shadow-amber-100"
+      }`}
+    >
       <Handle type="target" position={Position.Top} className="!bg-slate-400" />
 
       <div className="flex flex-col gap-1">
@@ -124,9 +120,13 @@ const CustomUserNode = ({ data }: { data: any }) => {
           <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
             Level {data.level}
           </span>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-            requirementMet ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
-          }`}>
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+              requirementMet
+                ? "bg-green-100 text-green-700"
+                : "bg-amber-100 text-amber-700"
+            }`}
+          >
             {requirementMet ? "Withdrawal Active" : "Locked (Min 3 Directs)"}
           </span>
         </div>
@@ -155,28 +155,43 @@ const CustomUserNode = ({ data }: { data: any }) => {
             <span className="font-semibold text-blue-600">{data.calculatedBv} BV</span>
           </div>
           <div className="flex justify-between border-t border-slate-200/60 pt-1 mt-1 font-medium">
-            <span>Incentive ({data.levelCommissionPercentage}%):</span>
-            <span className="text-green-600 font-bold">
-              ₹{Number(data.totalIncentive).toFixed(2)}
-            </span>
+            {isRoot ? (
+              <>
+                <span>Total Earning:</span>
+                <span className="text-green-600 font-bold">
+                  ₹{Number(data.rootTotalEarned ?? 0).toFixed(2)}
+                </span>
+              </>
+            ) : (
+              <>
+                <span>Commission to Parent:</span>
+                <span className="text-green-600 font-bold">
+                  ₹{Number(data.estimatedEarnings).toFixed(2)}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
         <div className="flex gap-2 mt-2">
-          {/* Expand: focus into this node's subtree, hide siblings */}
           {data.hasChildren && (
             <button
-              onClick={(e) => { e.stopPropagation(); data.onExpand(data.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onExpand(data.id);
+              }}
               className="flex-1 text-xs text-white bg-blue-500 hover:bg-blue-600 font-semibold py-1 px-2 rounded cursor-pointer border-none outline-none"
             >
               ▼ Expand
             </button>
           )}
 
-          {/* Back: go up one level (show parent's siblings again) */}
           {data.canGoBack && (
             <button
-              onClick={(e) => { e.stopPropagation(); data.onBack(data.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onBack(data.id);
+              }}
               className="flex-1 text-xs text-white bg-slate-500 hover:bg-slate-600 font-semibold py-1 px-2 rounded cursor-pointer border-none outline-none"
             >
               ← Back
@@ -198,29 +213,26 @@ const CustomUserNode = ({ data }: { data: any }) => {
 
 const nodeTypes = { userNode: CustomUserNode };
 
-// ── Tree Canvas ───────────────────────────────────────────────────────────────
 function TreeCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Full tree from API — never mutated
   const fullTree = useRef<TreeNode | null>(null);
-  // Map of id → TreeNode for O(1) lookup
   const nodeMap = useRef<Map<string, TreeNode>>(new Map());
-  // Current focused node id (null = show root + level 1)
   const focusedNodeId = useRef<string | null>(null);
-  // Stack of previously focused node ids for "Back" navigation
   const historyStack = useRef<string[]>([]);
+  const rootTotalEarned = useRef<number>(0);
+  const isInitialLoad = useRef<boolean>(true);
 
-  const { fitView } = useReactFlow();
+  const { fitView, setCenter } = useReactFlow();
 
-  // ── Render a specific subtree into ReactFlow ────────────────────────────────
   const renderView = useCallback(
     (
       focusNode: TreeNode | null,
-      callbacks: { onExpand: (id: string) => void; onBack: (id: string) => void }
+      callbacks: { onExpand: (id: string) => void; onBack: (id: string) => void },
+      shouldFitView = false
     ) => {
       const allNodes: Node[] = [];
       const allEdges: Edge[] = [];
@@ -237,6 +249,7 @@ function TreeCanvas() {
             canGoBack: canGoBack && n.id === focusNode?.id,
             onExpand: callbacks.onExpand,
             onBack: callbacks.onBack,
+            rootTotalEarned: rootTotalEarned.current,
           },
           position: { x: 0, y: 0 },
         });
@@ -253,16 +266,12 @@ function TreeCanvas() {
       };
 
       if (!focusNode) {
-        // Root view: show root + its direct children only
         const root = fullTree.current!;
         addNode(root);
         root.children.forEach((child) => addNode(child, root.id));
       } else {
-        // Focused view: show FULL ANCESTOR CHAIN → focused node → focused node's children
-        // Build ancestor list from history stack (oldest → newest)
         const stack = historyStack.current;
 
-        // Resolve each history entry to a TreeNode
         const ancestorNodes: TreeNode[] = [];
         for (const histId of stack) {
           if (histId === "ROOT") {
@@ -273,76 +282,84 @@ function TreeCanvas() {
           }
         }
 
-        // Render ancestor chain as a vertical spine (no siblings)
         let prevId: string | undefined = undefined;
         for (const ancestor of ancestorNodes) {
           addNode(ancestor, prevId);
           prevId = ancestor.id;
         }
 
-        // Render focused node connected to last ancestor
         addNode(focusNode, prevId);
-
-        // Render focused node's children
         focusNode.children.forEach((child) => addNode(child, focusNode.id));
       }
 
       const layouted = getLayoutedElements(allNodes, allEdges);
       setNodes(layouted.nodes);
       setEdges(layouted.edges);
-      setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 60);
+
+      // Only fitView on initial load or when explicitly requested (back button)
+      if (shouldFitView) {
+        setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 60);
+      }
     },
     [setNodes, setEdges, fitView]
   );
 
-  // ── Callbacks (stable refs to avoid stale closures) ────────────────────────
   const callbacksRef = useRef({
     onExpand: (id: string) => {},
     onBack: (id: string) => {},
   });
 
-  const handleExpand = useCallback((id: string) => {
-    const node = nodeMap.current.get(id);
-    if (!node || !node.hasChildren) return;
-    if (id === focusedNodeId.current) return; // already focused — ignore re-click
+  const handleExpand = useCallback(
+    (id: string) => {
+      const node = nodeMap.current.get(id);
+      if (!node || !node.hasChildren) return;
+      if (id === focusedNodeId.current) return;
 
-    // Push current focus onto history stack
-    historyStack.current.push(focusedNodeId.current ?? "ROOT");
-    focusedNodeId.current = id;
+      historyStack.current.push(focusedNodeId.current ?? "ROOT");
+      focusedNodeId.current = id;
 
-    renderView(node, callbacksRef.current);
-  }, [renderView]);
+      // No fitView on expand — keep current zoom level
+      renderView(node, callbacksRef.current, false);
+    },
+    [renderView]
+  );
 
-  const handleBack = useCallback((_id: string) => {
-    const prev = historyStack.current.pop();
-    if (prev === undefined) return;
+  const handleBack = useCallback(
+    (_id: string) => {
+      const prev = historyStack.current.pop();
+      if (prev === undefined) return;
 
-    if (prev === "ROOT") {
-      focusedNodeId.current = null;
-      renderView(null, callbacksRef.current);
-    } else {
-      const prevNode = nodeMap.current.get(prev);
-      focusedNodeId.current = prev;
-      renderView(prevNode ?? null, callbacksRef.current);
-    }
-  }, [renderView]);
+      if (prev === "ROOT") {
+        focusedNodeId.current = null;
+        // fitView on back so user can see the full tree again
+        renderView(null, callbacksRef.current, true);
+      } else {
+        const prevNode = nodeMap.current.get(prev);
+        focusedNodeId.current = prev;
+        renderView(prevNode ?? null, callbacksRef.current, true);
+      }
+    },
+    [renderView]
+  );
 
-  // Keep callbacksRef up to date
   useEffect(() => {
     callbacksRef.current = { onExpand: handleExpand, onBack: handleBack };
   }, [handleExpand, handleBack]);
 
-  // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const tree = await fetchFullTree();
+        const [tree, totalEarned] = await Promise.all([
+          fetchFullTree(),
+          fetchTotalEarned(),
+        ]);
         fullTree.current = tree;
+        rootTotalEarned.current = totalEarned;
         buildNodeMap(tree, nodeMap.current);
-        // Start with root view
-        renderView(null, callbacksRef.current);
+        // fitView only on first load
+        renderView(null, callbacksRef.current, true);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -350,13 +367,12 @@ function TreeCanvas() {
       }
     };
     load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="relative flex-1 w-full h-full bg-white overflow-hidden">
 
-      {/* Breadcrumb trail */}
       {historyStack.current.length > 0 && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 bg-white border border-slate-200 rounded-full px-4 py-1.5 shadow text-xs text-slate-500">
           <span
@@ -364,7 +380,7 @@ function TreeCanvas() {
             onClick={() => {
               historyStack.current = [];
               focusedNodeId.current = null;
-              renderView(null, callbacksRef.current);
+              renderView(null, callbacksRef.current, true);
             }}
           >
             🌳 Root
@@ -377,12 +393,11 @@ function TreeCanvas() {
                 <span
                   className="cursor-pointer hover:text-blue-600 font-medium text-slate-700"
                   onClick={() => {
-                    // Navigate back to this breadcrumb level
                     historyStack.current = historyStack.current.slice(0, i);
                     const targetId = id === "ROOT" ? null : id;
                     focusedNodeId.current = targetId;
                     const targetNode = targetId ? nodeMap.current.get(targetId) : null;
-                    renderView(targetNode ?? null, callbacksRef.current);
+                    renderView(targetNode ?? null, callbacksRef.current, true);
                   }}
                 >
                   {n?.name ?? id}
@@ -437,7 +452,8 @@ function TreeCanvas() {
         <MiniMap
           className="!right-4 !bottom-4 !m-0 rounded-lg shadow border border-slate-200"
           style={{ width: 180, height: 120, backgroundColor: "#f8fafc" }}
-          zoomable pannable
+          zoomable
+          pannable
           nodeColor="#94a3b8"
           maskColor="rgba(148, 163, 184, 0.2)"
           nodeClassName={(n) => n.type || ""}

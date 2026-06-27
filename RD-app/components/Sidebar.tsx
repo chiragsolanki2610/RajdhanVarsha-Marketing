@@ -133,7 +133,7 @@ export default function Sidebar() {
 
       setUserData({ name: fallbackName, memberId: currentUserId, role: fallbackRole });
 
-      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
+      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:56187';
       const savedToken = localStorage.getItem('token');
 
       const response = await fetch(`${BASE_URL}/api/Auth/${currentUserId}`, {
@@ -198,7 +198,7 @@ export default function Sidebar() {
   const networkSubItems = [
     { icon: UserPlus,  label: 'Team Detail',    path: '/network/team-detail' },
     { icon: GitBranch, label: 'Dream Tree View', path: '/dream-tree-view' },
-    { icon: Network,   label: 'Binary View',     path: '/network/binary-view' },
+    { icon: Network,   label: 'Binary Tree View',     path: '/binary-tree-view' },
   ];
 
   const productSubItems = [
@@ -212,7 +212,7 @@ export default function Sidebar() {
     { icon: MapPin,        label: 'Pickup Center Requests', path: '/admin/pickup-center-requests' },
     { icon: ClipboardList, label: 'Order Requests',         path: '/admin/order-requests' },  // ← NEW
     { icon: PackagePlus,   label: 'Add Products',           path: '/admin/add-products' },
-    { icon: UserSearch,    label: 'Search User Info',       path: '/admin/search-user' },
+    { icon: UserSearch,    label: 'Search User Info',       path: '/admin/search-user-info' },
   ];
 
   return (

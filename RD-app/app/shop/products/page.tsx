@@ -6,7 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import LoginTopbar from "@/components/loginTopbar";
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:56187";
 
 // ─── Exact backend shape from GET /api/Products ───────────────────────────────
 interface ApiProduct {
@@ -454,6 +454,36 @@ export default function ProductsPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [viewProduct, setViewProduct]       = useState<{ product: Product; accent: string } | null>(null);
 
+  // ─── Plan Guard ───────────────────────────────────────────────────────────
+  const [planChecked, setPlanChecked]   = useState(false);
+  const [planActive, setPlanActive]     = useState(false);
+
+  useEffect(() => {
+    const checkPlan = async () => {
+      try {
+        const token = getToken();
+        if (!token) { setPlanActive(false); setPlanChecked(true); return; }
+
+        const res = await fetch(`${BASE_URL}/api/Plans/my-plan`, {
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const active: boolean = data?.isActive ?? data?.IsActive ?? false;
+          setPlanActive(active);
+        } else {
+          setPlanActive(false);
+        }
+      } catch {
+        setPlanActive(false);
+      } finally {
+        setPlanChecked(true);
+      }
+    };
+    checkPlan();
+  }, []);
+
   const load = () => {
     setLoading(true);
     setError(null);
@@ -503,6 +533,40 @@ export default function ProductsPage() {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <LoginTopbar pageTitle="Shop Products" />
 
+        {/* ── Plan Guard: block access until check is done ── */}
+        {!planChecked ? (
+          <main className="flex-1 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3 text-gray-400">
+              <div className="w-10 h-10 border-[3px] border-gray-200 border-t-[#3B5998] rounded-full animate-spin" />
+              <span className="text-sm font-medium">Checking your plan…</span>
+            </div>
+          </main>
+        ) : !planActive ? (
+          <main className="flex-1 flex items-center justify-center p-6">
+            <div className="bg-white rounded-2xl border border-amber-200 shadow-lg p-8 max-w-md w-full text-center flex flex-col items-center gap-5">
+              <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center text-3xl">🔒</div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">Plan Required</h2>
+                <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                  You need an active plan to purchase products from the shop.
+                  Activate a plan first to unlock shopping and start earning commissions.
+                </p>
+              </div>
+              <button
+                onClick={() => router.push("/plan")}
+                className="w-full bg-[#3B5998] hover:bg-[#2d4578] text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md"
+              >
+                View & Activate a Plan →
+              </button>
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="text-xs text-gray-400 hover:text-gray-600 underline"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </main>
+        ) : (
         <main className="flex-1 overflow-y-auto pb-20 md:pb-8">
 
           {/* Page header */}
@@ -600,8 +664,9 @@ export default function ProductsPage() {
             )}
           </div>
         </main>
+        )} {/* end planActive ternary */}
 
-        {/* Floating Cart Bar */}
+        {/* Floating Cart Bar — shown regardless of plan status when items are in cart */}
         {cartCount > 0 && (
           <div
             className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[150]"

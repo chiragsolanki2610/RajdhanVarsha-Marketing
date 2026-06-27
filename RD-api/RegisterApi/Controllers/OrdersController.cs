@@ -16,50 +16,60 @@ public class OrdersController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IReceiptService _receiptService;
     private readonly ICommissionService _commissionService;
+    private readonly IBinaryPlanService _binaryService;
 
-    public OrdersController(AppDbContext db, IReceiptService receiptService, ICommissionService commissionService)
+    public OrdersController(
+        AppDbContext db,
+        IReceiptService receiptService,
+        ICommissionService commissionService,
+        IBinaryPlanService binaryService)
     {
         _db = db;
         _receiptService = receiptService;
         _commissionService = commissionService;
+        _binaryService = binaryService;
     }
 
-    // ── Helper: get logged-in userId from JWT ──
-    private string CurrentUserId =>
-        User.FindFirst("userId")?.Value
-        ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-        ?? throw new UnauthorizedAccessException("userId claim missing from token.");
+    // ── Helper: get logged-in userId from JWT ──
+    private string CurrentUserId =>
+    User.FindFirst("userId")?.Value
+    ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+    ?? throw new UnauthorizedAccessException("userId claim missing from token.");
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // POST /api/Orders/payment
-    // Accepts multipart/form-data: utr, screenshot (file), totalAmount, totalBv, cartItems
-    // Screenshot is stored as Base64 string directly in the database
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpPost("payment")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/Orders/payment
+    // Accepts multipart/form-data: utr, screenshot (file), totalAmount, totalBv, cartItems
+    // Screenshot is stored as Base64 string directly in the database
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpPost("payment")]
     [Authorize]
     public async Task<IActionResult> SubmitPayment([FromForm] SubmitPaymentFormDto dto)
     {
-        // 1. Basic validation
-        if (string.IsNullOrWhiteSpace(dto.Utr))
+        // 1. Basic validation
+        if (string.IsNullOrWhiteSpace(dto.Utr))
             return BadRequest(new { message = "UTR / Transaction ID is required." });
+
+        var planType = string.IsNullOrWhiteSpace(dto.PlanType) ? "Dream Plan" : dto.PlanType.Trim();
+        if (planType != "Dream Plan" && planType != "Binary Plan")
+            return BadRequest(new { message = $"Unknown plan '{dto.PlanType}'." });
 
         if (dto.Screenshot == null || dto.Screenshot.Length == 0)
             return BadRequest(new { message = "Payment screenshot is required." });
 
-        // 2. File size check (max 5MB)
-        if (dto.Screenshot.Length > 5 * 1024 * 1024)
+        // 2. File size check (max 5MB)
+        if (dto.Screenshot.Length > 5 * 1024 * 1024)
             return BadRequest(new { message = "Screenshot must be smaller than 5MB." });
 
-        // 3. File type check
-        var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/webp" };
+        // 3. File type check
+        var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/webp" };
         if (!allowedTypes.Contains(dto.Screenshot.ContentType?.ToLower()))
             return BadRequest(new { message = "Screenshot must be a JPG, PNG, or WEBP image." });
 
         var userId = CurrentUserId;
         string screenshotUrl;
 
-        // 4. Convert screenshot to Base64 — stored directly in DB (no bucket needed)
-        try
+        // 4. Convert screenshot to Base64 — stored directly in DB (no bucket needed)
+        try
         {
             using var ms = new MemoryStream();
             await dto.Screenshot.CopyToAsync(ms);
@@ -74,15 +84,14 @@ public class OrdersController : ControllerBase
             return StatusCode(500, new { message = "Failed to process screenshot. Please try again." });
         }
 
-        // 5. Parse + validate the cart, then recompute totals from the database —
-        //    never trust totalAmount/totalBv sent by the client. This is the only
-        //    thing that's authoritative: real Product.Dp / Product.Bv right now.
-        List<CartItemSubmissionDto>? cartItems;
+        // 5. Parse + validate the cart, then recompute totals from the database —
+        //    never trust totalAmount/totalBv sent by the client.
+        List<CartItemSubmissionDto>? cartItems;
         try
         {
             cartItems = JsonSerializer.Deserialize<List<CartItemSubmissionDto>>(
-                dto.CartItems ?? "[]",
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+              dto.CartItems ?? "[]",
+              new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         }
         catch (JsonException)
         {
@@ -97,8 +106,8 @@ public class OrdersController : ControllerBase
 
         var productIds = cartItems.Select(i => i.ProductId).Distinct().ToList();
         var products = await _db.Products
-            .Where(p => productIds.Contains(p.Id) && p.IsActive)
-            .ToListAsync();
+          .Where(p => productIds.Contains(p.Id) && p.IsActive)
+          .ToListAsync();
 
         if (products.Count != productIds.Count)
             return BadRequest(new { message = "One or more products in your cart are no longer available." });
@@ -111,24 +120,47 @@ public class OrdersController : ControllerBase
             totalBv += product.Bv * item.Quantity;
         }
 
-        // The client's numbers are only used here to flag a mismatch worth investigating —
-        // they never affect what actually gets charged or credited.
         decimal.TryParse(dto.TotalAmount, out var clientTotalAmount);
         decimal.TryParse(dto.TotalBv, out var clientTotalBv);
         if (Math.Abs(clientTotalAmount - totalAmount) > 0.01m || Math.Abs(clientTotalBv - totalBv) > 0.01m)
         {
             Console.WriteLine(
-                $"[Cart Mismatch] user={userId} clientAmount={clientTotalAmount} serverAmount={totalAmount} " +
-                $"clientBv={clientTotalBv} serverBv={totalBv} cartItems={dto.CartItems}");
+              $"[Cart Mismatch] user={userId} clientAmount={clientTotalAmount} serverAmount={totalAmount} " +
+              $"clientBv={clientTotalBv} serverBv={totalBv} cartItems={dto.CartItems}");
         }
 
-        // 6. Save payment order to database
-        try
+
+        // 5b. Binary Plan: must already be joined into the tree, must not
+        //     already be activated (one-time purchase only), and must clear
+        //     the 600 BV activation threshold. Checked here so we don't even
+        //     create a pending order an admin would have to reject later.
+        if (planType == "Binary Plan")
+        {
+            var binaryNode = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == userId);
+            if (binaryNode == null)
+                return BadRequest(new { message = "You must join the Binary Plan first via POST /api/binary/join." });
+
+            if (binaryNode.IsActive)
+                return BadRequest(new { message = "Your Binary Plan ID is already active. Binary Plan is a one-time purchase." });
+
+            const decimal binaryActivationBv = 600m;
+            if (totalBv < binaryActivationBv)
+                return BadRequest(new
+                {
+                    message = $"Binary Plan requires at least {binaryActivationBv} BV. You selected {totalBv} BV.",
+                    required = binaryActivationBv,
+                    selected = totalBv
+                });
+        }
+
+        // 6. Save payment order to database
+        try
         {
             var order = new PaymentOrder
             {
                 UserId = userId,
                 UtrNumber = dto.Utr.Trim(),
+                PlanType = planType,
                 ScreenshotUrl = screenshotUrl,
                 TotalAmount = totalAmount,
                 TotalBv = totalBv,
@@ -155,28 +187,55 @@ public class OrdersController : ControllerBase
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/payment-requests?status=Pending
-    // Admin: view all payment submissions
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("payment-requests")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/Orders/payment-requests?status=Pending&page=1&pageSize=20
+    // Admin: view all payment submissions
+    // OPTIMIZED: excludes Base64 screenshot + ReceiptPdf from list query,
+    //            adds pagination, fetches userNames in one batched query.
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpGet("payment-requests")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> GetPaymentRequests([FromQuery] PaymentOrderStatus? status = null)
+    public async Task<IActionResult> GetPaymentRequests(
+    [FromQuery] PaymentOrderStatus? status = null,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20)
     {
         var query = _db.PaymentOrders.AsQueryable();
 
         if (status.HasValue)
             query = query.Where(o => o.Status == status.Value);
 
-        var orders = await query
-            .OrderByDescending(o => o.RequestedAt)
-            .ToListAsync();
+        // ── Project at the DB level so EF never reads ScreenshotUrl or ReceiptPdf bytes ──
+        var projected = query
+      .OrderByDescending(o => o.RequestedAt)
+      .Select(o => new
+      {
+          o.Id,
+          o.UserId,
+          o.UtrNumber,
+          o.PlanType,
+          o.TotalAmount,
+          o.TotalBv,
+          o.CartItemsJson,
+          o.Status,
+          o.RequestedAt,
+          o.ProcessedAt,
+          o.AdminRemarks,
+          o.ReceiptFinalized,
+          HasReceiptPdf = o.ReceiptPdf != null   // bool only — never load the bytes
+      });
 
-        // Batch-fetch user names
-        var userIds = orders.Select(o => o.UserId).Distinct().ToList();
+        var total = await projected.CountAsync();
+        var orders = await projected
+          .Skip((page - 1) * pageSize)
+          .Take(pageSize)
+          .ToListAsync();
+
+        // Batch-fetch user names in one round-trip
+        var userIds = orders.Select(o => o.UserId).Distinct().ToList();
         var userNames = await _db.Users
-            .Where(u => userIds.Contains(u.UserId))
-            .ToDictionaryAsync(u => u.UserId, u => u.Name);
+          .Where(u => userIds.Contains(u.UserId))
+          .ToDictionaryAsync(u => u.UserId, u => u.Name);
 
         var result = orders.Select(o => new PaymentOrderDto
         {
@@ -184,8 +243,9 @@ public class OrdersController : ControllerBase
             UserId = o.UserId,
             UserName = userNames.TryGetValue(o.UserId, out var n) ? n : o.UserId,
             UtrNumber = o.UtrNumber,
-            ScreenshotUrl = o.ScreenshotUrl,
-            TotalAmount = o.TotalAmount,
+            PlanType = o.PlanType,
+            ScreenshotUrl = null,          // loaded on-demand via GET .../screenshot
+            TotalAmount = o.TotalAmount,
             TotalBv = o.TotalBv,
             CartItemsJson = o.CartItemsJson,
             Status = o.Status.ToString(),
@@ -193,26 +253,107 @@ public class OrdersController : ControllerBase
             ProcessedAt = o.ProcessedAt,
             AdminRemarks = o.AdminRemarks,
             ReceiptAvailable = o.ReceiptFinalized,
-            ReceiptDraftReady = o.ReceiptPdf != null
+            ReceiptDraftReady = o.HasReceiptPdf
         });
+
+        return Ok(new
+        {
+            total,
+            page,
+            pageSize,
+            data = result
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/Orders/payment-requests/{id}
+    // Admin: fetch ONE full order (includes screenshot — fine for single-order view)
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpGet("payment-requests/{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetPaymentRequestById(int id)
+    {
+        var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
+        if (order == null)
+            return NotFound(new { message = "Payment order not found." });
+
+        var userName = await _db.Users
+          .Where(u => u.UserId == order.UserId)
+          .Select(u => u.Name)
+          .FirstOrDefaultAsync() ?? order.UserId;
+
+        var result = new PaymentOrderDto
+        {
+            Id = order.Id,
+            UserId = order.UserId,
+            UserName = userName,
+            UtrNumber = order.UtrNumber,
+            PlanType = order.PlanType,
+            ScreenshotUrl = order.ScreenshotUrl,   // included here — single order, not a list
+            TotalAmount = order.TotalAmount,
+            TotalBv = order.TotalBv,
+            CartItemsJson = order.CartItemsJson,
+            Status = order.Status.ToString(),
+            RequestedAt = order.RequestedAt,
+            ProcessedAt = order.ProcessedAt,
+            AdminRemarks = order.AdminRemarks,
+            ReceiptAvailable = order.ReceiptFinalized,
+            ReceiptDraftReady = order.ReceiptPdf != null
+        };
 
         return Ok(result);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/my-orders
-    // User: view their own payment history
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("my-orders")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/Orders/payment-requests/{id}/screenshot
+    // Admin: load the Base64 screenshot for a single order on demand
+    // (kept separate so the list never carries heavy image data)
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpGet("payment-requests/{id}/screenshot")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetScreenshot(int id)
+    {
+        var screenshot = await _db.PaymentOrders
+          .Where(o => o.Id == id)
+          .Select(o => o.ScreenshotUrl)
+          .FirstOrDefaultAsync();
+
+        if (screenshot == null)
+            return NotFound(new { message = "Screenshot not found for this order." });
+
+        return Ok(new { screenshotUrl = screenshot });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/Orders/my-orders
+    // User: view their own payment history
+    // OPTIMIZED: excludes ScreenshotUrl and ReceiptPdf from list query
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpGet("my-orders")]
     [Authorize]
     public async Task<IActionResult> GetMyOrders()
     {
         var userId = CurrentUserId;
 
         var orders = await _db.PaymentOrders
-            .Where(o => o.UserId == userId)
-            .OrderByDescending(o => o.RequestedAt)
-            .ToListAsync();
+          .Where(o => o.UserId == userId)
+          .OrderByDescending(o => o.RequestedAt)
+          .Select(o => new
+          {
+              o.Id,
+              o.UserId,
+              o.UtrNumber,
+              o.PlanType,
+              o.TotalAmount,
+              o.TotalBv,
+              o.CartItemsJson,
+              o.Status,
+              o.RequestedAt,
+              o.ProcessedAt,
+              o.AdminRemarks,
+              o.ReceiptFinalized
+          })
+          .ToListAsync();
 
         var result = orders.Select(o => new PaymentOrderDto
         {
@@ -220,8 +361,9 @@ public class OrdersController : ControllerBase
             UserId = o.UserId,
             UserName = string.Empty,
             UtrNumber = o.UtrNumber,
-            ScreenshotUrl = o.ScreenshotUrl,
-            TotalAmount = o.TotalAmount,
+            PlanType = o.PlanType,
+            ScreenshotUrl = null,          // loaded on-demand if the user needs to view it
+            TotalAmount = o.TotalAmount,
             TotalBv = o.TotalBv,
             CartItemsJson = o.CartItemsJson,
             Status = o.Status.ToString(),
@@ -234,12 +376,12 @@ public class OrdersController : ControllerBase
         return Ok(result);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // POST /api/Orders/payment-requests/{id}/approve
-    // Admin: approve a pending payment
-    // Body: { "adminRemarks": "Verified UTR" }
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpPost("payment-requests/{id}/approve")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/Orders/payment-requests/{id}/approve
+    // Admin: approve a pending payment
+    // Body: { "adminRemarks": "Verified UTR" }
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpPost("payment-requests/{id}/approve")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> ApprovePayment(int id, [FromBody] ProcessPaymentOrderDto dto)
     {
@@ -257,33 +399,74 @@ public class OrdersController : ControllerBase
         order.ProcessedByAdminId = adminId;
         order.AdminRemarks = dto.AdminRemarks;
 
-        // ── Pay BV-based commission (self bonus + up to 12 levels upline) ──
-        // This is the ONLY place a shop order actually pays anyone — safe to run
-        // exactly once since Status was just flipped from Pending above, and
-        // re-approving an already-processed order is blocked by the check up top.
-        // "order-{id}" (vs a bare Plan.Id) lets the commission history reader
-        // tell shop-order commissions apart from Plan-purchase commissions.
-        bool commissionDistributed = false;
-        try
+        // --- Look up the buyer once ---
+        var buyer = await _db.Users.FirstOrDefaultAsync(u => u.UserId == order.UserId);
+        if (buyer == null)
         {
-            await _commissionService.DistributeProductPurchaseCommissionAsync(
-                order.UserId, order.TotalBv, $"order-{order.Id}");
-            commissionDistributed = true;
-        }
-        catch (Exception ex)
-        {
-            // Don't block the approval on a commission bug — but this needs a human to
-            // notice and fix, since real money/BV is on the line. Surfaced in the response below.
-            Console.WriteLine($"[Commission Error] Failed to distribute commission for order {order.Id}: {ex.Message}");
+            Console.WriteLine($"[BV Error] Could not find user {order.UserId} to credit BV for order {order.Id}.");
         }
 
-        // ── Auto-build a receipt DRAFT for admin to review/edit ──
-        // This does NOT make the receipt visible to the user — that only happens
-        // once the admin explicitly finalizes it via POST .../receipt/finalize.
-        var customerName = await _db.Users
-            .Where(u => u.UserId == order.UserId)
-            .Select(u => u.Name)
-            .FirstOrDefaultAsync() ?? order.UserId;
+        bool commissionDistributed = false;
+
+        if (order.PlanType == "Binary Plan")
+        {
+            // --- BINARY PLAN: one-time activation only. BV is tracked purely on
+            // the BinaryNode tree -- never touches user.BusinessVolume (that's the
+            // Dream Plan's counter). No commission of any kind is paid here. ---
+            var binaryNode = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == order.UserId);
+            if (binaryNode == null)
+            {
+                Console.WriteLine($"[Binary Error] {order.UserId} has no BinaryNode -- cannot activate for order {order.Id}.");
+            }
+            else if (binaryNode.IsActive)
+            {
+                Console.WriteLine($"[Binary Error] {order.UserId} is already Binary-active -- skipping re-activation for order {order.Id}.");
+            }
+            else
+            {
+                await _binaryService.ActivateBinaryNodeAsync(order.UserId, order.TotalBv, awardPairs: false);
+
+                if (buyer != null)
+                {
+                    buyer.IsActive = true;
+                    buyer.SelectedPlan = "Binary Plan";
+                    buyer.IdStatus = "active";
+                }
+            }
+        }
+        else
+        {
+            // --- DREAM PLAN: BV accumulates on user.BusinessVolume every time,
+            // and full self + 12-level upline commission is paid every time. ---
+            if (buyer != null)
+            {
+                buyer.BusinessVolume += (int)order.TotalBv;
+
+                if (!buyer.IsActive)
+                {
+                    buyer.IsActive = true;
+                    buyer.SelectedPlan = "Dream Plan";
+                    buyer.IdStatus = "active";
+                }
+            }
+
+            try
+            {
+                await _commissionService.DistributeProductPurchaseCommissionAsync(
+                  order.UserId, order.TotalBv, $"order-{order.Id}");
+                commissionDistributed = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Commission Error] Failed to distribute commission for order {order.Id}: {ex.Message}");
+            }
+        }
+
+        // ── Auto-build a receipt DRAFT for admin to review/edit ──
+        var customerName = await _db.Users
+      .Where(u => u.UserId == order.UserId)
+      .Select(u => u.Name)
+      .FirstOrDefaultAsync() ?? order.UserId;
 
         try
         {
@@ -299,8 +482,6 @@ public class OrdersController : ControllerBase
         }
         catch (Exception ex)
         {
-            // Don't let a receipt-rendering bug block the approval itself —
-            // the order is still approved; admin can retry from the receipt draft screen.
             Console.WriteLine($"[Receipt Error] Failed to generate receipt draft for order {order.Id}: {ex.Message}");
         }
 
@@ -315,12 +496,12 @@ public class OrdersController : ControllerBase
         });
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // POST /api/Orders/payment-requests/{id}/reject
-    // Admin: reject a pending payment
-    // Body: { "adminRemarks": "Invalid UTR number" }
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpPost("payment-requests/{id}/reject")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/Orders/payment-requests/{id}/reject
+    // Admin: reject a pending payment
+    // Body: { "adminRemarks": "Invalid UTR number" }
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpPost("payment-requests/{id}/reject")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> RejectPayment(int id, [FromBody] ProcessPaymentOrderDto dto)
     {
@@ -343,12 +524,12 @@ public class OrdersController : ControllerBase
         return Ok(new { success = true, message = "Payment rejected." });
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/{id}/receipt
-    // User: download their own FINALIZED receipt PDF
-    // Admin: download any order's latest receipt PDF (draft or final)
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("{id}/receipt")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/Orders/{id}/receipt
+    // User: download their own FINALIZED receipt PDF
+    // Admin: download any order's latest receipt PDF (draft or final)
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpGet("{id}/receipt")]
     [Authorize]
     public async Task<IActionResult> DownloadReceipt(int id)
     {
@@ -367,11 +548,11 @@ public class OrdersController : ControllerBase
         return File(order.ReceiptPdf, "application/pdf", $"Receipt-ORD-{order.Id:D6}.pdf");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/payment-requests/{id}/receipt/draft
-    // Admin: fetch the editable receipt draft (items, totals, notes) for review
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("payment-requests/{id}/receipt/draft")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/Orders/payment-requests/{id}/receipt/draft
+    // Admin: fetch the editable receipt draft (items, totals, notes) for review
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpGet("payment-requests/{id}/receipt/draft")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetReceiptDraft(int id)
     {
@@ -383,12 +564,12 @@ public class OrdersController : ControllerBase
             return BadRequest(new { message = "Approve the payment before reviewing its receipt." });
 
         var customerName = await _db.Users
-            .Where(u => u.UserId == order.UserId)
-            .Select(u => u.Name)
-            .FirstOrDefaultAsync() ?? order.UserId;
+          .Where(u => u.UserId == order.UserId)
+          .Select(u => u.Name)
+          .FirstOrDefaultAsync() ?? order.UserId;
 
         var items = CartItemParser.Parse(
-            string.IsNullOrWhiteSpace(order.ReceiptItemsJson) ? order.CartItemsJson : order.ReceiptItemsJson);
+          string.IsNullOrWhiteSpace(order.ReceiptItemsJson) ? order.CartItemsJson : order.ReceiptItemsJson);
 
         return Ok(new ReceiptDraftDto
         {
@@ -403,13 +584,12 @@ public class OrdersController : ControllerBase
         });
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // PUT /api/Orders/payment-requests/{id}/receipt/draft
-    // Admin: edit the receipt's items / totals / notes and regenerate the PDF preview.
-    // Editing an already-finalized receipt un-finalizes it — admin must re-finalize
-    // before the user sees the updated version.
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpPut("payment-requests/{id}/receipt/draft")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // PUT /api/Orders/payment-requests/{id}/receipt/draft
+    // Admin: edit the receipt's items / totals / notes and regenerate the PDF preview.
+    // Editing an already-finalized receipt un-finalizes it.
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpPut("payment-requests/{id}/receipt/draft")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateReceiptDraft(int id, [FromBody] UpdateReceiptDraftDto dto)
     {
@@ -424,23 +604,21 @@ public class OrdersController : ControllerBase
             return BadRequest(new { message = "Receipt must have at least one item." });
 
         var items = dto.Items
-            .Select(i => new ReceiptItemData(string.IsNullOrWhiteSpace(i.Name) ? "Item" : i.Name.Trim(), i.Quantity, i.UnitPrice))
-            .ToList();
+          .Select(i => new ReceiptItemData(string.IsNullOrWhiteSpace(i.Name) ? "Item" : i.Name.Trim(), i.Quantity, i.UnitPrice))
+          .ToList();
 
         order.ReceiptItemsJson = JsonSerializer.Serialize(items);
         order.ReceiptTotalAmount = dto.TotalAmount;
         order.ReceiptTotalBv = dto.TotalBv;
         order.ReceiptNotes = dto.Notes;
 
-        // Require an explicit re-finalize after any edit so a sent receipt never
-        // silently changes underneath the user.
         order.ReceiptFinalized = false;
         order.ReceiptFinalizedAt = null;
 
         var customerName = await _db.Users
-            .Where(u => u.UserId == order.UserId)
-            .Select(u => u.Name)
-            .FirstOrDefaultAsync() ?? order.UserId;
+          .Where(u => u.UserId == order.UserId)
+          .Select(u => u.Name)
+          .FirstOrDefaultAsync() ?? order.UserId;
 
         try
         {
@@ -458,12 +636,11 @@ public class OrdersController : ControllerBase
         return Ok(new { success = true, message = "Receipt draft updated. Preview it, then finalize to send it to the user." });
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/payment-requests/{id}/receipt/preview
-    // Admin: download the current draft/latest PDF to check it before sending —
-    // works regardless of finalize state.
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("payment-requests/{id}/receipt/preview")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/Orders/payment-requests/{id}/receipt/preview
+    // Admin: download the current draft/latest PDF to check it before sending
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpGet("payment-requests/{id}/receipt/preview")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> PreviewReceipt(int id)
     {
@@ -477,12 +654,11 @@ public class OrdersController : ControllerBase
         return File(order.ReceiptPdf, "application/pdf", $"Receipt-Preview-ORD-{order.Id:D6}.pdf");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // POST /api/Orders/payment-requests/{id}/receipt/finalize
-    // Admin: publish the current receipt draft — only after this does it become
-    // visible/downloadable to the user in their order history.
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpPost("payment-requests/{id}/receipt/finalize")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/Orders/payment-requests/{id}/receipt/finalize
+    // Admin: publish the current receipt draft — makes it visible to the user
+    // ─────────────────────────────────────────────────────────────────────────
+    [HttpPost("payment-requests/{id}/receipt/finalize")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> FinalizeReceipt(int id)
     {
@@ -505,15 +681,15 @@ public class OrdersController : ControllerBase
     }
 
     private static ReceiptData BuildReceiptData(PaymentOrder order, List<ReceiptItemData> items, string customerName) =>
-        new ReceiptData(
-            OrderId: order.Id,
-            UserId: order.UserId,
-            CustomerName: customerName,
-            UtrNumber: order.UtrNumber,
-            ReceiptDate: order.ProcessedAt ?? order.RequestedAt,
-            Items: items,
-            TotalAmount: order.ReceiptTotalAmount ?? order.TotalAmount,
-            TotalBv: order.ReceiptTotalBv ?? order.TotalBv,
-            Notes: order.ReceiptNotes
-        );
+      new ReceiptData(
+        OrderId: order.Id,
+        UserId: order.UserId,
+        CustomerName: customerName,
+        UtrNumber: order.UtrNumber,
+        ReceiptDate: order.ProcessedAt ?? order.RequestedAt,
+        Items: items,
+        TotalAmount: order.ReceiptTotalAmount ?? order.TotalAmount,
+        TotalBv: order.ReceiptTotalBv ?? order.TotalBv,
+        Notes: order.ReceiptNotes
+      );
 }

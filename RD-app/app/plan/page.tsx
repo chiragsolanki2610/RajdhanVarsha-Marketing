@@ -8,28 +8,19 @@ import { Check, Network, ChevronDown, ChevronUp, CircleDot, FileText, BadgeCheck
 export default function PlanPage() {
   const router = useRouter();
 
-  const [activePlanType, setActivePlanType] = useState<string | null>(null);
+  // ── Separate active state for each plan ──
+  const [isDreamActive, setIsDreamActive] = useState(false);
+  const [isBinaryActive, setIsBinaryActive] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState(true);
 
   // Collapse toggles — Both set to false initially to display "Show Less" view on load
   const [showDreamDetails, setShowDreamDetails] = useState(false);
   const [showBinaryDetails, setShowBinaryDetails] = useState(false);
 
-  // Fetch active plan on mount
+  // Fetch active plan on mount — always fetch fresh from API
   useEffect(() => {
     const fetchPlan = async () => {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-
-        // ── Try localStorage cache first (set by dashboard's Promise.allSettled call) ──
-        const cached = localStorage.getItem('userPlanType');
-        if (cached) {
-          setActivePlanType(cached.toLowerCase());
-          setLoadingPlan(false);
-          // still fetch fresh in background to keep in sync
-        }
-
-        // ── Grab JWT token — same key your other pages use ──
         const token =
           localStorage.getItem('token') ||
           localStorage.getItem('authToken') ||
@@ -41,25 +32,38 @@ export default function PlanPage() {
           return;
         }
 
-        const res = await fetch(`https://rd-api-j7zj.onrender.com/api/Plans/my-plan`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        };
 
-        if (res.ok) {
-          const data = await res.json();
-          // Normalize to lowercase — covers both camelCase and PascalCase responses
-          const planType = (data?.planType || data?.PlanType || '').toLowerCase();
-          if (planType) {
-            setActivePlanType(planType);
-            // Cache it so next load is instant
-            localStorage.setItem('userPlanType', planType);
-          }
+        // ── Fetch both endpoints in parallel ──
+        const [planRes, binaryRes] = await Promise.all([
+          fetch(`https://localhost:56187/api/Plans/my-plan`, { headers, cache: 'no-store' }),
+          fetch(`https://localhost:56187/api/Binary/status`, { headers, cache: 'no-store' }),
+        ]);
+
+        if (planRes.ok) {
+          const data = await planRes.json();
+          const dreamActive: boolean = data?.dreamIsActive ?? data?.DreamIsActive ?? false;
+          setIsDreamActive(dreamActive);
+        } else {
+          setIsDreamActive(false);
         }
-      } catch {
-        // silently fail — treat as no active plan
+
+        if (binaryRes.ok) {
+          const data = await binaryRes.json();
+          // API returns "isInBinaryPlan": true
+          const binaryActive: boolean = data?.isInBinaryPlan ?? data?.IsInBinaryPlan ?? false;
+          setIsBinaryActive(binaryActive);
+        } else {
+          setIsBinaryActive(false);
+        }
+
+      } catch (err) {
+        console.error(err);
+        setIsDreamActive(false);
+        setIsBinaryActive(false);
       } finally {
         setLoadingPlan(false);
       }
@@ -69,33 +73,29 @@ export default function PlanPage() {
 
   // Level Matrix Data extracted directly from your Dream Plan blueprint screenshot
   const matrixData = [
-    { level: 1, distributor: '3', bv: '1,800', pct: '10%', income: '₹180' },
-    { level: 2, distributor: '9', bv: '5,400', pct: '7%', income: '₹378' },
-    { level: 3, distributor: '27', bv: '16,200', pct: '5%', income: '₹810' },
-    { level: 4, distributor: '81', bv: '48,620', pct: '4%', income: '₹1,945' },
-    { level: 5, distributor: '243', bv: '145,800', pct: '4%', income: '₹5,832' },
-    { level: 6, distributor: '729', bv: '437,400', pct: '3%', income: '₹13,122' },
-    { level: 7, distributor: '2,187', bv: '1,312,200', pct: '3%', income: '₹39,366' },
-    { level: 8, distributor: '6,561', bv: '3,936,600', pct: '2%', income: '₹78,732' },
-    { level: 9, distributor: '19,683', bv: '11,809,800', pct: '2%', income: '₹236,196' },
-    { level: 10, distributor: '59,049', bv: '35,429,400', pct: '2%', income: '₹708,588' },
-    { level: 11, distributor: '177,147', bv: '106,288,200', pct: '1%', income: '₹1,062,882' },
-    { level: 12, distributor: '531,441', bv: '318,864,600', pct: '1%', income: '₹3,188,646' },
+    { level: 1,  distributor: '3',       bv: '1,800',       pct: '10%', income: '₹180' },
+    { level: 2,  distributor: '9',       bv: '5,400',       pct: '7%',  income: '₹378' },
+    { level: 3,  distributor: '27',      bv: '16,200',      pct: '5%',  income: '₹810' },
+    { level: 4,  distributor: '81',      bv: '48,620',      pct: '4%',  income: '₹1,945' },
+    { level: 5,  distributor: '243',     bv: '145,800',     pct: '4%',  income: '₹5,832' },
+    { level: 6,  distributor: '729',     bv: '437,400',     pct: '3%',  income: '₹13,122' },
+    { level: 7,  distributor: '2,187',   bv: '1,312,200',   pct: '3%',  income: '₹39,366' },
+    { level: 8,  distributor: '6,561',   bv: '3,936,600',   pct: '2%',  income: '₹78,732' },
+    { level: 9,  distributor: '19,683',  bv: '11,809,800',  pct: '2%',  income: '₹236,196' },
+    { level: 10, distributor: '59,049',  bv: '35,429,400',  pct: '2%',  income: '₹708,588' },
+    { level: 11, distributor: '177,147', bv: '106,288,200', pct: '1%',  income: '₹1,062,882' },
+    { level: 12, distributor: '531,441', bv: '318,864,600', pct: '1%',  income: '₹3,188,646' },
   ];
 
-  // ── UPDATED: now routes to the correct shop pages ──
+  // ── Routes to the correct purchase page per plan ──
   const handleActivation = (planId: string) => {
     localStorage.setItem('pendingActivationPlan', planId);
     if (planId === 'dream-plan') {
-      window.location.href = '/shop/dream-plan';
-    } else {
-      window.location.href = '/shop/dream-plan';
+      window.location.href = '/dream-purchase';
+    } else if (planId === 'binary-plan') {
+      window.location.href = '/binary-purchase';
     }
   };
-
-  // Helper: is a given plan currently active?
-  const isDreamActive = activePlanType === 'dream' || activePlanType === 'dream plan' || activePlanType === 'dream-plan';
-  const isBinaryActive = activePlanType === 'binary' || activePlanType === 'binary plan' || activePlanType === 'binary-plan';
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] overflow-hidden font-sans antialiased">
@@ -321,7 +321,6 @@ export default function PlanPage() {
               {/* ── CONDITIONAL FOOTER: Active badge OR Get Started button ── */}
               <div className="p-4 bg-white flex justify-end">
                 {loadingPlan ? (
-                  // Skeleton while loading
                   <div className="w-full h-12 bg-slate-100 animate-pulse rounded-xl" />
                 ) : isDreamActive ? (
                   // ── ACTIVE STATE ──
@@ -369,7 +368,7 @@ export default function PlanPage() {
               </div>
 
               <div className="mt-4 flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
-                <span className="text-4xl font-extrabold text-[#3B5998] tracking-tight">Free Entry</span>
+                <span className="text-4xl font-extrabold text-[#3B5998] tracking-tight">600 B.V.</span>
                 <span className="text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded-md uppercase tracking-wide">
                   Standard Ratio Conversion: 1 S.P. = 600 B.V.
                 </span>
@@ -475,7 +474,6 @@ export default function PlanPage() {
               {/* ── CONDITIONAL FOOTER: Active badge OR Activate button ── */}
               <div className="p-4 bg-white flex justify-end">
                 {loadingPlan ? (
-                  // Skeleton while loading
                   <div className="w-full h-12 bg-slate-100 animate-pulse rounded-xl" />
                 ) : isBinaryActive ? (
                   // ── ACTIVE STATE ──
