@@ -309,7 +309,7 @@ public class BinaryPlanController : ControllerBase
             return BadRequest(new { message = $"User '{userId}' Binary Plan ID is already active." });
 
         // Activate the binary node (0 BV since no purchase)
-        await _binaryService.ActivateBinaryNodeAsync(userId, 0);
+        await _binaryService.ActivateBinaryNodeAsync(userId, 0, awardPairs: true);
 
         // Also update the User record for consistency
         var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);

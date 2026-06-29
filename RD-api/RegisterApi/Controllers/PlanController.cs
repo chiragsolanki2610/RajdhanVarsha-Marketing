@@ -15,6 +15,7 @@ namespace RegisterApi.Controllers
     {
         private readonly AppDbContext _db;
         private readonly ICommissionService _commissionService;
+        private readonly IBinaryPlanService _binaryPlanService;
 
         // Move this to a DB-backed PlanTypes table later if you want it admin-editable
         private static readonly Dictionary<string, int> PlanBvRequirement = new()
@@ -23,10 +24,11 @@ namespace RegisterApi.Controllers
             { "Binary Plan", 600 }
         };
 
-        public PlanController(AppDbContext db, ICommissionService commissionService)
+        public PlanController(AppDbContext db, ICommissionService commissionService, IBinaryPlanService binaryPlanService)
         {
             _db = db;
             _commissionService = commissionService;
+            _binaryPlanService = binaryPlanService;
         }
 
         // ---------------------------------------------------------------
@@ -154,6 +156,22 @@ namespace RegisterApi.Controllers
             }
 
             await _db.SaveChangesAsync();
+
+            // ✅ If this is a Binary Plan purchase, activate the binary node
+            //    and trigger pair commission check for the parent.
+            //    This fires awardPairs: true so ₹150 is credited to the parent
+            //    the moment both LEFT and RIGHT children are active.
+            if (plan.Status == PlanStatus.Paid && totalBv >= requiredBv && dto.PlanType == "Binary Plan")
+            {
+                var binaryNode = await _db.BinaryNodes
+                    .FirstOrDefaultAsync(n => n.UserId == user.UserId);
+
+                if (binaryNode != null && !binaryNode.IsActive)
+                {
+                    await _binaryPlanService.ActivateBinaryNodeAsync(
+                        user.UserId, totalBv, awardPairs: true);
+                }
+            }
 
             // ✅ Pay out level commissions: 10% self bonus to the buyer,
             //    then 12 levels up the SponsorId chain, into each person's

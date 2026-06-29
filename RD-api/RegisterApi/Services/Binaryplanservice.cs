@@ -161,11 +161,15 @@ public class BinaryPlanService : IBinaryPlanService
 
         await _db.SaveChangesAsync();
 
-        // Check if parent now has BOTH children active → award pair commission.
+        // Propagate this node's "active" status up every ancestor's leg count,
+        // and award pair commission to any ancestor whose left/right ACTIVE
+        // counts newly form a pair (min(leftActive, rightActive) increases).
         // This can be skipped when `awardPairs` is false.
         if (awardPairs && !string.IsNullOrEmpty(node.ParentId))
         {
-            await CheckAndAwardPairCommissionAsync(node.ParentId);
+            var parentNode = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == node.ParentId);
+            if (parentNode != null)
+                await IncrementActiveLegCountsUpAndAwardAsync(parentNode, node.Position);
         }
     }
 
@@ -271,7 +275,7 @@ public class BinaryPlanService : IBinaryPlanService
         if (amount > wallet.Balance)
             return (false, $"Insufficient balance. Available: ₹{wallet.Balance:F2}");
 
-        const decimal minWithdrawal = 250m;
+        const decimal minWithdrawal = 0m;
         if (amount < minWithdrawal)
             return (false, $"Minimum withdrawal amount is ₹{minWithdrawal}.");
 
@@ -438,78 +442,116 @@ public class BinaryPlanService : IBinaryPlanService
     }
 
     /// <summary>
-    /// Checks if parentId now has both left AND right children ACTIVE.
-    /// If so, awards ₹150 pair commission once per pair event.
+    /// Walks up the tree from `startNode` and increments ACTIVE leg counts
+    /// (mirrors IncrementLegCountsUpAsync, but only counts active members).
+    /// After incrementing each ancestor, checks whether new pairs have formed
+    /// for that ancestor and awards commission for them.
     /// </summary>
-    private async Task CheckAndAwardPairCommissionAsync(string parentUserId)
+    private async Task IncrementActiveLegCountsUpAndAwardAsync(BinaryNode startNode, string childPosition)
     {
-        var parent = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == parentUserId);
-        if (parent == null) return;
+        var current = startNode;
+        var comingFromPosition = childPosition;
 
-        if (string.IsNullOrEmpty(parent.LeftChildId) || string.IsNullOrEmpty(parent.RightChildId))
-            return; // both slots must be filled
-
-        var leftNode = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == parent.LeftChildId);
-        var rightNode = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == parent.RightChildId);
-
-        if (leftNode == null || rightNode == null) return;
-        if (!leftNode.IsActive || !rightNode.IsActive) return;
-
-        // Prevent double-crediting the same pair
-        var alreadyPaid = await _db.BinaryPairs.AnyAsync(p =>
-            p.UserId == parentUserId &&
-            p.LeftChildId == parent.LeftChildId &&
-            p.RightChildId == parent.RightChildId);
-
-        if (alreadyPaid) return;
-
-        // Record the pair
-        var pair = new BinaryPair
+        while (current != null)
         {
-            UserId = parentUserId,
-            LeftChildId = parent.LeftChildId!,
-            RightChildId = parent.RightChildId!,
-            CommissionAmt = PairCommission,
-            CreditedAt = DateTime.UtcNow
-        };
-        _db.BinaryPairs.Add(pair);
+            if (comingFromPosition == "LEFT")
+                current.LeftActiveCount++;
+            else
+                current.RightActiveCount++;
 
-        // Credit the parent's binary wallet
-        var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == parentUserId);
+            current.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            // Award any newly-formed pairs for this ancestor based on the
+            // updated active counts. Cumulative: min(left,right) - MatchedPairs.
+            await AwardNewPairsAsync(current);
+
+            if (string.IsNullOrEmpty(current.ParentId)) break;
+
+            var parent = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == current.ParentId);
+            comingFromPosition = current.Position;
+            current = parent;
+        }
+    }
+
+    /// <summary>
+    /// Awards ₹150 for every newly-completed pair on `node`.
+    ///
+    /// Pairing rule:
+    ///   - If LeftActiveCount == RightActiveCount == n, total pairs = (n - 1).
+    ///     A plain 1-1 split pays ₹0. A 2-2 split pays for 1 pair (₹150).
+    ///     A 3-3 split pays for 2 pairs (₹300), etc.
+    ///   - If LeftActiveCount != RightActiveCount, total pairs = min(left, right).
+    ///     E.g. 2L/1R → 1 pair (₹150). 3L/2R → 2 pairs (₹300). 5L/4R → 4 pairs
+    ///     (₹600). 8L/9R → 8 pairs (₹1200).
+    ///
+    /// Pays only the delta beyond `node.MatchedPairs`, so it correctly pays
+    /// multiple times as both legs keep growing, instead of paying only once
+    /// like the old direct-children-slot check did.
+    /// </summary>
+    private async Task AwardNewPairsAsync(BinaryNode node)
+    {
+        // Pair-counting rule:
+        //   - If Left == Right == n, pairs = (n - 1).
+        //     (so 1-1 => 0 pairs/₹0, 2-2 => 1 pair/₹150, 3-3 => 2 pairs/₹300, etc.)
+        //   - If Left != Right, pairs = min(Left, Right) as usual.
+        //     (so 2-1 => 1 pair/₹150, 3-2 => 2 pairs/₹300, 5-4 => 4 pairs/₹600,
+        //      8-9 => 8 pairs/₹1200, etc.)
+        // This naturally means a plain 1-1 split pays nothing, and growing an
+        // already-equal pair of legs by one more on either side doesn't pay
+        // again until the imbalance/min count actually increases.
+        int totalEligiblePairs = node.LeftActiveCount == node.RightActiveCount
+            ? Math.Max(node.LeftActiveCount - 1, 0)
+            : Math.Min(node.LeftActiveCount, node.RightActiveCount);
+
+        int newPairs = totalEligiblePairs - node.MatchedPairs;
+        if (newPairs <= 0) return;
+
+        var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == node.UserId);
         if (wallet == null)
         {
-            wallet = new BinaryWallet { UserId = parentUserId, CreatedAt = DateTime.UtcNow };
+            wallet = new BinaryWallet { UserId = node.UserId, CreatedAt = DateTime.UtcNow };
             _db.BinaryWallets.Add(wallet);
         }
 
-        wallet.Balance += PairCommission;
-        wallet.TotalEarned += PairCommission;
-        wallet.PairsCount += 1;
-        wallet.UpdatedAt = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync(); // save pair + wallet first so we have pair.Id
-
-        var txn = new BinaryWalletTransaction
+        for (int i = 0; i < newPairs; i++)
         {
-            UserId = parentUserId,
-            Type = BinaryTxnType.Credit,
-            Amount = PairCommission,
-            BalanceAfter = wallet.Balance,
-            Source = "Pair Commission",
-            Description = $"₹150 pair commission: {pair.LeftChildId} (L) + {pair.RightChildId} (R)",
-            ReferenceId = pair.Id.ToString(),
-            CreatedAt = DateTime.UtcNow
-        };
-        _db.BinaryWalletTransactions.Add(txn);
+            var pair = new BinaryPair
+            {
+                UserId = node.UserId,
+                LeftChildId = node.LeftChildId ?? "",
+                RightChildId = node.RightChildId ?? "",
+                CommissionAmt = PairCommission,
+                CreditedAt = DateTime.UtcNow
+            };
+            _db.BinaryPairs.Add(pair);
+
+            wallet.Balance += PairCommission;
+            wallet.TotalEarned += PairCommission;
+            wallet.PairsCount += 1;
+            wallet.UpdatedAt = DateTime.UtcNow;
+            node.MatchedPairs += 1;
+
+            await _db.SaveChangesAsync(); // save now so we have pair.Id for the transaction reference
+
+            var txn = new BinaryWalletTransaction
+            {
+                UserId = node.UserId,
+                Type = BinaryTxnType.Credit,
+                Amount = PairCommission,
+                BalanceAfter = wallet.Balance,
+                Source = "Pair Commission",
+                Description = $"₹150 pair commission (matched pair #{node.MatchedPairs})",
+                ReferenceId = pair.Id.ToString(),
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.BinaryWalletTransactions.Add(txn);
+        }
 
         // Check withdrawal unlock after crediting
-        await UpdateWithdrawalUnlockAsync(parentUserId);
+        await UpdateWithdrawalUnlockAsync(node.UserId);
 
         await _db.SaveChangesAsync();
-
-        // Cascade up: the parent's parent also gets a pair check
-        if (!string.IsNullOrEmpty(parent.ParentId))
-            await CheckAndAwardPairCommissionAsync(parent.ParentId);
     }
 
     /// <summary>

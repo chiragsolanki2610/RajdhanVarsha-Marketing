@@ -424,7 +424,7 @@ public class OrdersController : ControllerBase
             }
             else
             {
-                await _binaryService.ActivateBinaryNodeAsync(order.UserId, order.TotalBv, awardPairs: false);
+                await _binaryService.ActivateBinaryNodeAsync(order.UserId, order.TotalBv, awardPairs: true);
 
                 if (buyer != null)
                 {

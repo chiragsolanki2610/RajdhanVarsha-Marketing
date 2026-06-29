@@ -42,6 +42,19 @@ public class BinaryNode
     /// <summary>Total members in the entire right subtree</summary>
     public int RightLegCount { get; set; } = 0;
 
+    /// <summary>Total ACTIVE members in the entire left subtree (used for pair matching)</summary>
+    public int LeftActiveCount { get; set; } = 0;
+
+    /// <summary>Total ACTIVE members in the entire right subtree (used for pair matching)</summary>
+    public int RightActiveCount { get; set; } = 0;
+
+    /// <summary>
+    /// How many pairs have already been matched & paid for this node, out of
+    /// min(LeftActiveCount, RightActiveCount). Prevents re-paying the same pair
+    /// and lets new pairs be detected as min(left,right) grows.
+    /// </summary>
+    public int MatchedPairs { get; set; } = 0;
+
     public decimal LeftLegBv { get; set; } = 0;
     public decimal RightLegBv { get; set; } = 0;
     public decimal TotalBv { get; set; } = 0;

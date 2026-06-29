@@ -14,6 +14,8 @@ import {
   AlertCircle,
   ShieldAlert,
   ShieldCheck,
+  CheckCircle2,
+  Circle,
 } from 'lucide-react';
 
 import { useRouter } from 'next/navigation';
@@ -25,7 +27,7 @@ import LoginTopbar from '@/components/loginTopbar';
 // ==========================================
 
 // UPDATED: Corrected port to 56187 as shown in your Swagger UI
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:56188';
 
 export const PLAN_TYPES = {
   DREAM: 'Dream Plan',
@@ -64,6 +66,23 @@ export type WithdrawalRequestDto = {
   requestedAt: string;
   processedAt: string | null;
   adminRemarks: string | null;
+};
+
+// NEW: matches BinaryNodeStatusDto from GET /api/binary/status
+export type BinaryStatusDto = {
+  isInBinaryPlan: boolean;
+  isActive: boolean;
+  position: string;
+  parentId: string | null;
+  leftChildId: string | null;
+  rightChildId: string | null;
+  treeLevel: number;
+  leftLegCount: number;
+  rightLegCount: number;
+  totalDownlineCount: number;
+  withdrawalUnlocked: boolean;
+  pairsCompleted: number;
+  walletBalance: number;
 };
 
 function getToken(): string | null {
@@ -108,11 +127,26 @@ function getTransactionHistory(planType?: string): Promise<WalletTransactionDto[
   return apiFetch<WalletTransactionDto[]>(`/api/wallet/transactions${query}`);
 }
 
-// Swagger lists this as POST /api/wallet/withdraw
+// Swagger lists this as POST /api/wallet/withdraw (used for Dream Plan only — see requestBinaryWithdrawal below)
 function requestWithdrawal(planType: string, amount: number): Promise<WithdrawalRequestDto> {
   return apiFetch<WithdrawalRequestDto>('/api/wallet/withdraw', {
     method: 'POST',
     body: JSON.stringify({ planType, amount }),
+  });
+}
+
+// NEW: binary-tree eligibility status (left child + right child + grandchild rule)
+function getBinaryStatus(): Promise<BinaryStatusDto> {
+  return apiFetch<BinaryStatusDto>('/api/binary/status');
+}
+
+// NEW: Binary Plan withdrawals go through the binary controller, which enforces
+// the 3-node unlock rule server-side (the generic /api/wallet/withdraw has no
+// idea this rule exists, so Binary Plan must use this endpoint instead).
+function requestBinaryWithdrawal(amount: number): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>('/api/binary/withdraw', {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
   });
 }
 
@@ -181,6 +215,11 @@ export default function WalletPage() {
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
 
+  // NEW: Binary Plan team-eligibility state (left child + right child + grandchild)
+  const [binaryStatus, setBinaryStatus] = useState<BinaryStatusDto | null>(null);
+  const [binaryStatusLoading, setBinaryStatusLoading] = useState(false);
+  const [binaryStatusError, setBinaryStatusError] = useState<string | null>(null);
+
   // ── KYC Guard ────────────────────────────────────────────────────────────
   const router = useRouter();
   const [kycStatus, setKycStatus]     = useState<'LOADING' | 'VERIFIED' | 'PENDING' | 'REJECTED' | 'NOT_SUBMITTED'>('LOADING');
@@ -232,6 +271,28 @@ export default function WalletPage() {
     loadWallets();
   }, [loadWallets]);
 
+  // NEW: only relevant for the Binary Plan wallet — fetches left/right child +
+  // grandchild eligibility so we can lock/unlock the withdrawal form correctly.
+  const loadBinaryStatus = useCallback(async () => {
+    setBinaryStatusLoading(true);
+    setBinaryStatusError(null);
+    try {
+      const data = await getBinaryStatus();
+      setBinaryStatus(data);
+    } catch (err) {
+      setBinaryStatus(null);
+      setBinaryStatusError(err instanceof Error ? err.message : 'Could not load team status.');
+    } finally {
+      setBinaryStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedWallet === 'BINARY') {
+      loadBinaryStatus();
+    }
+  }, [selectedWallet, loadBinaryStatus]);
+
   const loadHistory = useCallback(async (key: PlanKey) => {
     setHistoryLoading(true);
     setHistoryError(null);
@@ -254,6 +315,10 @@ export default function WalletPage() {
   const currentWallet = selectedWallet ? wallets[selectedWallet] : null;
   const currentMeta = selectedWallet ? WALLET_META[selectedWallet] : null;
 
+  // For Binary Plan, withdrawal is additionally gated by the 3-node tree rule.
+  const isBinary = selectedWallet === 'BINARY';
+  const binaryUnlocked = !isBinary || !!binaryStatus?.withdrawalUnlocked;
+
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedWallet || !currentWallet) return;
@@ -274,13 +339,24 @@ export default function WalletPage() {
       setWithdrawError('Amount is more than your available balance.');
       return;
     }
+    if (isBinary && !binaryUnlocked) {
+      setWithdrawError(
+        'Withdrawal is locked. You need an active LEFT child, an active RIGHT child, and at least 1 active grandchild first.'
+      );
+      return;
+    }
 
     setWithdrawSubmitting(true);
     try {
-      await requestWithdrawal(currentWallet.planType, amount);
+      if (isBinary) {
+        await requestBinaryWithdrawal(amount);
+      } else {
+        await requestWithdrawal(currentWallet.planType, amount);
+      }
       setWithdrawSuccess(`Withdrawal request of ${formatINR(amount)} sent for admin approval.`);
       setWithdrawAmount('');
       await loadWallets();
+      if (isBinary) await loadBinaryStatus();
     } catch (err) {
       setWithdrawError(err instanceof Error ? err.message : 'Could not submit withdrawal request.');
     } finally {
@@ -309,6 +385,7 @@ export default function WalletPage() {
                   setSelectedWallet(null);
                   setWithdrawError(null);
                   setWithdrawSuccess(null);
+                  setBinaryStatus(null);
                 }}
                 className="flex items-center gap-2 text-sm font-medium text-[#3b82f6] bg-white border border-gray-200 px-4 py-2 rounded-xl shadow-sm hover:bg-gray-50 transition-all"
               >
@@ -339,6 +416,7 @@ export default function WalletPage() {
                     onClick={() => {
                       setSelectedWallet(key);
                       setActivePanel('accounts');
+                      setBinaryStatus(null);
                     }}
                     className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group overflow-hidden flex flex-col"
                   >
@@ -435,6 +513,31 @@ export default function WalletPage() {
                         <InfoBox label="Lifetime Earned" value={formatINR(currentWallet.totalEarned)} />
                         <InfoBox label="Lifetime Withdrawn" value={formatINR(currentWallet.totalWithdrawn)} />
                       </div>
+
+                      {/* NEW: Binary tree eligibility snapshot, visible even outside the withdrawal tab */}
+                      {isBinary && (
+                        <div className="pt-2">
+                          <h5 className="text-xs font-bold text-gray-500 uppercase mb-2">Team Eligibility</h5>
+                          {binaryStatusLoading && (
+                            <p className="text-sm text-gray-400 flex items-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin" /> Checking your binary team…
+                            </p>
+                          )}
+                          {!binaryStatusLoading && binaryStatus && (
+                            <div className="space-y-2">
+                              <EligibilityRow done={!!binaryStatus.leftChildId} label="Left child joined" />
+                              <EligibilityRow done={!!binaryStatus.rightChildId} label="Right child joined" />
+                              <EligibilityRow
+                                done={binaryStatus.withdrawalUnlocked}
+                                label="At least 1 active grandchild (under left or right)"
+                              />
+                            </div>
+                          )}
+                          {!binaryStatusLoading && binaryStatusError && (
+                            <p className="text-sm text-red-500">{binaryStatusError}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -481,51 +584,92 @@ export default function WalletPage() {
                         </div>
                       )}
 
-                      {/* ── KYC VERIFIED — show withdrawal form ── */}
+                      {/* ── KYC VERIFIED ── */}
                       {kycStatus === 'VERIFIED' && (
                         <>
                           <div className="flex items-center gap-2 mb-4 bg-green-50 border border-green-100 rounded-xl px-4 py-2">
                             <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" />
                             <span className="text-xs font-semibold text-green-700">KYC Verified — Withdrawals Unlocked</span>
                           </div>
-                          <h4 className="text-base font-bold text-gray-800 mb-1">Request Fund Settlement</h4>
-                          <p className="text-xs text-gray-400 mb-4">
-                            Minimum withdrawal: {formatINR(currentWallet.minWithdrawalAmount)}. Requests are reviewed by
-                            an admin before payout.
-                          </p>
-                          <form onSubmit={handleWithdrawSubmit} className="space-y-4">
-                            <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
-                                Enter Amount (₹)
-                              </label>
-                              <input
-                                type="number"
-                                value={withdrawAmount}
-                                onChange={(e) => setWithdrawAmount(e.target.value)}
-                                placeholder="₹0.00"
-                                min={currentWallet.minWithdrawalAmount}
-                                step="0.01"
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 font-medium focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                                required
-                              />
+
+                          {/* NEW: Binary Plan team check — still loading */}
+                          {isBinary && binaryStatusLoading && (
+                            <div className="flex items-center gap-2 text-gray-400 py-6">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span className="text-sm">Checking your binary team eligibility…</span>
                             </div>
+                          )}
 
-                            {withdrawError && (
-                              <p className="text-sm text-red-600 flex items-center gap-1">
-                                <AlertCircle className="w-4 h-4" /> {withdrawError}
+                          {/* NEW: Binary Plan locked — team requirement not met */}
+                          {isBinary && !binaryStatusLoading && !binaryUnlocked && (
+                            <div className="flex flex-col items-center text-center gap-5 py-6">
+                              <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                                <ShieldAlert className="w-8 h-8 text-amber-500" />
+                              </div>
+                              <div>
+                                <h4 className="text-base font-bold text-gray-800">Build Your Team to Unlock Withdrawals</h4>
+                                <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                                  You need an active LEFT child, an active RIGHT child, and at least one active
+                                  grandchild under either of them before your first Binary Wallet withdrawal.
+                                </p>
+                              </div>
+                              <div className="w-full space-y-2 text-left">
+                                <EligibilityRow done={!!binaryStatus?.leftChildId} label="Left child joined" />
+                                <EligibilityRow done={!!binaryStatus?.rightChildId} label="Right child joined" />
+                                <EligibilityRow
+                                  done={!!binaryStatus?.withdrawalUnlocked}
+                                  label="1 active grandchild under left/right"
+                                />
+                              </div>
+                              {binaryStatusError && (
+                                <p className="text-xs text-red-500">{binaryStatusError}</p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ── Withdrawal form (Dream Plan always; Binary Plan only once unlocked) ── */}
+                          {!isBinary || (!binaryStatusLoading && binaryUnlocked) ? (
+                            <>
+                              <h4 className="text-base font-bold text-gray-800 mb-1">Request Fund Settlement</h4>
+                              <p className="text-xs text-gray-400 mb-4">
+                                Minimum withdrawal: {formatINR(currentWallet.minWithdrawalAmount)}. Requests are reviewed by
+                                an admin before payout.
                               </p>
-                            )}
-                            {withdrawSuccess && <p className="text-sm text-green-600">{withdrawSuccess}</p>}
+                              <form onSubmit={handleWithdrawSubmit} className="space-y-4">
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
+                                    Enter Amount (₹)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={withdrawAmount}
+                                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                                    placeholder="₹0.00"
+                                    min={currentWallet.minWithdrawalAmount}
+                                    step="0.01"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 font-medium focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
+                                    required
+                                  />
+                                </div>
 
-                            <button
-                              type="submit"
-                              disabled={withdrawSubmitting}
-                              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
-                            >
-                              {withdrawSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                              {withdrawSubmitting ? 'Submitting…' : 'Submit Payout Request'}
-                            </button>
-                          </form>
+                                {withdrawError && (
+                                  <p className="text-sm text-red-600 flex items-center gap-1">
+                                    <AlertCircle className="w-4 h-4" /> {withdrawError}
+                                  </p>
+                                )}
+                                {withdrawSuccess && <p className="text-sm text-green-600">{withdrawSuccess}</p>}
+
+                                <button
+                                  type="submit"
+                                  disabled={withdrawSubmitting}
+                                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+                                >
+                                  {withdrawSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                                  {withdrawSubmitting ? 'Submitting…' : 'Submit Payout Request'}
+                                </button>
+                              </form>
+                            </>
+                          ) : null}
                         </>
                       )}
                     </div>
@@ -673,6 +817,20 @@ function InfoBox({ label, value }: { label: string; value: string }) {
     <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
       <span className="text-xs text-gray-400 font-medium block mb-1">{label}</span>
       <span className="text-sm font-bold text-gray-700">{value}</span>
+    </div>
+  );
+}
+
+// NEW: small checklist row used for the binary-tree eligibility rule
+function EligibilityRow({ done, label }: { done: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      {done ? (
+        <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+      ) : (
+        <Circle className="w-4 h-4 text-gray-300 shrink-0" />
+      )}
+      <span className={done ? 'text-gray-700' : 'text-gray-400'}>{label}</span>
     </div>
   );
 }

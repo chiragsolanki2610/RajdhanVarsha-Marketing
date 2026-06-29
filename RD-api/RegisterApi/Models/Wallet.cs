@@ -12,7 +12,7 @@ public static class WalletRules
     private static readonly Dictionary<string, decimal> MinWithdrawalByPlan = new()
     {
         { "Dream Plan", 250m },
-        { "Binary Plan", 250m },
+        { "Binary Plan", 0m },
     };
 
     public static decimal GetMinWithdrawal(string planType)

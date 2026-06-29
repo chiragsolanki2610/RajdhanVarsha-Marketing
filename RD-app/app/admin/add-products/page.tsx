@@ -213,7 +213,7 @@ export default function AddProductsPage() {
     const fetchCategories = async () => {
       setIsLoadingCategories(true);
       try {
-        const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
+        const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:56188';
         const savedToken = localStorage.getItem('token');
         const res = await fetch(`${BASE_URL}/api/Products`, {
           headers: savedToken ? { 'Authorization': `Bearer ${savedToken}` } : {},
@@ -339,7 +339,7 @@ export default function AddProductsPage() {
 
     setIsSubmitting(true);
     try {
-      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
+      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:56188';
       const savedToken = localStorage.getItem('token');
 
       if (!savedToken) {

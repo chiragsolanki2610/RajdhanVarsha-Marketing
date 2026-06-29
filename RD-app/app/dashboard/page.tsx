@@ -65,7 +65,7 @@ interface MyPlanResponse {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:56188';
 
 function money(value: number | null | undefined) {
   return (value ?? 0).toLocaleString('en-IN', {

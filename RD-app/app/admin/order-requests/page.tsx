@@ -32,7 +32,7 @@ import {
 import Sidebar from '@/components/Sidebar';
 import LoginTopbar from '@/components/loginTopbar';
 
-const BASE_URL = 'https://rd-api-j7zj.onrender.com'; // Updated to match your Swagger UI port
+const BASE_URL = 'http://localhost:56188'; // Updated to match your Swagger UI port
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

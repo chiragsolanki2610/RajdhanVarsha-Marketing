@@ -11,7 +11,7 @@ import {
   ArrowLeft, Package, CheckCheck, Copy, IndianRupee, AlertTriangle,
 } from 'lucide-react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://rd-api-j7zj.onrender.com';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:56188';
 const ROOT_USER_ID = 'RD0001';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ export default function BinaryPlanPage() {
   const [showRules,  setShowRules]  = useState(false);
   const [showWallet, setShowWallet] = useState(false);
 
-  // ── NEW: tracks latest payment order status ──
+  // ── NEW: tracks latest payment order status (Binary Plan orders only) ──
   const [pendingOrderStatus, setPendingOrderStatus] = useState<'Pending' | 'Rejected' | null>(null);
 
   // join
@@ -219,17 +219,23 @@ export default function BinaryPlanPage() {
     } catch {}
   }, [token]);
 
-  // ── NEW: fetch latest order status to determine if payment is pending/rejected ──
+  // ── FIXED: fetch latest BINARY PLAN order status (filter by PlanType) ──
   const fetchMyOrders = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/Orders/my-orders`, {
         headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
       });
       if (res.ok) {
-        const orders: { status: string; requestedAt: string }[] = await res.json();
-        const latest = orders.sort(
+        const orders: { status: string; planType: string; requestedAt: string }[] = await res.json();
+        
+        // Filter for Binary Plan orders only
+        const binaryOrders = orders.filter(o => o.planType === 'Binary Plan');
+        
+        // Get the latest Binary Plan order
+        const latest = binaryOrders.sort(
           (a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()
         )[0];
+        
         if (latest?.status === 'Pending')        setPendingOrderStatus('Pending');
         else if (latest?.status === 'Rejected')  setPendingOrderStatus('Rejected');
         else                                     setPendingOrderStatus(null);
@@ -290,7 +296,7 @@ export default function BinaryPlanPage() {
 
   const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.id !== id));
 
-  // ── NEW: call /api/binary/preview-placement before joining ──
+  // ── Call /api/binary/preview-placement to check placement ──
   const getPlacementPreview = async (
     sponsorId: string,
     preferredPosition: 'LEFT' | 'RIGHT'
@@ -336,7 +342,7 @@ export default function BinaryPlanPage() {
     finally { setJoining(false); }
   };
 
-  // ── NEW: handles the Join button click — previews placement first for non-root users ──
+  // ── Handles Join button click — previews placement first for non-root users ──
   const handleJoinClick = async () => {
     setJoinError(''); setJoinMsg(''); setPreviewError('');
 
@@ -352,10 +358,10 @@ export default function BinaryPlanPage() {
     if (!preview) return; // previewError is already set
 
     if (preview.isDirectPlacement) {
-      // no conflict — place directly under the chosen sponsor/position, no need to interrupt the user
+      // Direct placement - no conflict, join immediately
       await doJoin();
     } else {
-      // slot taken — show confirmation with where they'll actually land before joining
+      // Slot taken - show confirmation with actual placement before joining
       setPlacementPreview(preview);
       setShowPlacementConfirm(true);
     }
@@ -392,8 +398,6 @@ export default function BinaryPlanPage() {
   };
 
   // ── payment submit ──
-  // FIX: CartItems now includes productName, price (dp), bv, and gst so the
-  // admin receipt PDF can render product name, rate, BV, and tax correctly.
   const handlePaymentSubmit = async () => {
     setSubmitError('');
     if (!utrNumber.trim()) { setSubmitError('Please enter the UTR / Transaction ID.'); return; }
@@ -407,15 +411,15 @@ export default function BinaryPlanPage() {
           productName: i.name,
           quantity:    i.qty,
           price:       i.price,   // dp / distributor price
-          bv:          i.bv,      // business volume — needed for receipt PDF
-          gst:         i.gst,     // GST % — used to split CGST/SGST on receipt
+          bv:          i.bv,      // business volume
+          gst:         i.gst,     // GST %
         }))
       );
 
       const formData = new FormData();
       formData.append('Utr',         utrNumber.trim());
       formData.append('Screenshot',  screenshot);
-      formData.append('PlanType',    'Binary Plan');   // ← ADD THIS LINE
+      formData.append('PlanType',    'Binary Plan');
       formData.append('TotalAmount', cartTotal.toString());
       formData.append('TotalBv',     cartTotalBV.toString());
       formData.append('CartItems',   cartItemsJson);
@@ -431,7 +435,7 @@ export default function BinaryPlanPage() {
         setOrderSuccess(true);
         setOrderMsg(data.message || 'Order submitted! Admin will verify and activate your Binary ID.');
         setCart([]);
-        // ── NEW: after successful submit, mark as pending immediately ──
+        // Mark as pending immediately after successful submission
         setPendingOrderStatus('Pending');
       } else {
         setSubmitError(data.message || 'Submission failed. Please try again.');
@@ -447,7 +451,6 @@ export default function BinaryPlanPage() {
       <div className="flex min-h-screen bg-gray-50">
         <Sidebar />
         <main className="flex-1 flex items-center justify-center">
-          
           <Loader2 size={28} className="animate-spin text-gray-400" />
         </main>
       </div>
@@ -1008,22 +1011,26 @@ export default function BinaryPlanPage() {
           </div>
         )}
 
-        {/* Join: regular */}
+        {/* Join: regular user with BFS placement */}
         {!isEnrolled && !isRootUser && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
             <h2 className="font-semibold text-sm text-gray-700 mb-3">Join Binary Plan</h2>
+            
             <label className="block text-xs font-medium text-gray-500 mb-1">Sponsor ID</label>
             <input
-              type="text" value={sponsorInput}
+              type="text" 
+              value={sponsorInput}
               onChange={e => setSponsorInput(e.target.value.trim().toUpperCase())}
               placeholder="e.g. RD0001"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-purple-300"
             />
+            
             <label className="block text-xs font-medium text-gray-500 mb-1">Your Position Under Sponsor</label>
             <div className="flex gap-3 mb-4">
               {(['LEFT', 'RIGHT'] as const).map(pos => (
                 <button
-                  key={`pos-btn-${pos}`} onClick={() => setPositionInput(pos)}
+                  key={`pos-btn-${pos}`} 
+                  onClick={() => setPositionInput(pos)}
                   className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors
                     ${positionInput === pos
                       ? pos === 'LEFT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-purple-600 text-white border-purple-600'
@@ -1033,10 +1040,19 @@ export default function BinaryPlanPage() {
                 </button>
               ))}
             </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-xs text-blue-700">
+              <p className="font-semibold mb-1">ℹ️ How BFS Placement Works:</p>
+              <p>If you choose <strong>LEFT</strong>, you'll be placed at the leftmost empty position under your sponsor.</p>
+              <p>If you choose <strong>RIGHT</strong>, you'll be placed at the rightmost empty position under your sponsor.</p>
+            </div>
+
             {(joinError || previewError) && <p className="text-xs text-red-500 mb-2">{joinError || previewError}</p>}
             {joinMsg   && <p className="text-xs text-emerald-600 mb-2">{joinMsg}</p>}
+            
             <button
-              onClick={handleJoinClick} disabled={joining || previewLoading}
+              onClick={handleJoinClick} 
+              disabled={joining || previewLoading}
               className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
             >
               {(joining || previewLoading) ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
@@ -1045,7 +1061,7 @@ export default function BinaryPlanPage() {
           </div>
         )}
 
-        {/* ── Activate section: 3 states based on pendingOrderStatus ── */}
+        {/* Activate section: 3 states based on pendingOrderStatus */}
         {isEnrolled && !isActive && (
           <>
             {/* PENDING: payment submitted, waiting for admin */}
@@ -1126,12 +1142,15 @@ export default function BinaryPlanPage() {
                     <label className="block text-xs font-medium text-gray-500 mb-1">Withdrawal Amount (min ₹250)</label>
                     <div className="flex gap-2">
                       <input
-                        type="number" value={withdrawAmt} onChange={e => setWithdrawAmt(e.target.value)}
+                        type="number" 
+                        value={withdrawAmt} 
+                        onChange={e => setWithdrawAmt(e.target.value)}
                         placeholder="Enter amount"
                         className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
                       />
                       <button
-                        onClick={handleWithdraw} disabled={withdrawing}
+                        onClick={handleWithdraw} 
+                        disabled={withdrawing}
                         className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1 transition-colors"
                       >
                         {withdrawing && <Loader2 size={12} className="animate-spin" />} Withdraw
@@ -1174,7 +1193,7 @@ export default function BinaryPlanPage() {
         )}
       </main>
 
-      {/* ── NEW: Placement confirmation modal (shown when the requested slot is taken) ── */}
+      {/* Placement confirmation modal - shown when the requested slot is taken and user will be auto-placed */}
       {showPlacementConfirm && placementPreview && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5">

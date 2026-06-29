@@ -23,891 +23,900 @@ namespace RegisterApi.Migrations
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("RegisterApi.Models.BinaryNode", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTime?>("ActivatedAt")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("CreatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsActive")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("LeftChildId")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("LeftChildId")
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.Property<decimal>("LeftLegBv")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<int>("LeftActiveCount")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("LeftLegCount")
-                        .HasColumnType("integer");
+                b.Property<decimal>("LeftLegBv")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("ParentId")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<int>("LeftLegCount")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("Position")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<int>("MatchedPairs")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("RightChildId")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("ParentId")
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.Property<decimal>("RightLegBv")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<string>("Position")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.Property<int>("RightLegCount")
-                        .HasColumnType("integer");
+                b.Property<string>("RightChildId")
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.Property<string>("SponsorId")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<int>("RightActiveCount")
+                    .HasColumnType("integer");
 
-                    b.Property<decimal>("TotalBv")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("RightLegBv")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("TreeLevel")
-                        .HasColumnType("integer");
+                b.Property<int>("RightLegCount")
+                    .HasColumnType("integer");
 
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<string>("SponsorId")
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<decimal>("TotalBv")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.HasKey("Id");
+                b.Property<int>("TreeLevel")
+                    .HasColumnType("integer");
 
-                    b.HasIndex("ParentId");
+                b.Property<DateTime>("UpdatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.HasIndex("SponsorId");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.HasIndex("UserId")
-                        .IsUnique();
+                b.HasKey("Id");
 
-                    b.ToTable("BinaryNodes");
-                });
+                b.HasIndex("ParentId");
+
+                b.HasIndex("SponsorId");
+
+                b.HasIndex("UserId")
+                    .IsUnique();
+
+                b.ToTable("BinaryNodes");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.BinaryPair", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("CommissionAmt")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("CommissionAmt")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("CreditedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("CreditedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("LeftChildId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("LeftChildId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.Property<string>("RightChildId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("RightChildId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.HasIndex("UserId", "LeftChildId", "RightChildId")
-                        .IsUnique();
+                b.HasIndex("UserId", "LeftChildId", "RightChildId")
+                    .IsUnique();
 
-                    b.ToTable("BinaryPairs");
-                });
+                b.ToTable("BinaryPairs");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.BinaryWallet", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Balance")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Balance")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("CreatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<int>("PairsCount")
-                        .HasColumnType("integer");
+                b.Property<int>("PairsCount")
+                    .HasColumnType("integer");
 
-                    b.Property<decimal>("TotalEarned")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalEarned")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("TotalWithdrawn")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalWithdrawn")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("UpdatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.Property<bool>("WithdrawalUnlocked")
-                        .HasColumnType("boolean");
+                b.Property<bool>("WithdrawalUnlocked")
+                    .HasColumnType("boolean");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("UserId")
-                        .IsUnique();
+                b.HasIndex("UserId")
+                    .IsUnique();
 
-                    b.ToTable("BinaryWallets");
-                });
+                b.ToTable("BinaryWallets");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.BinaryWalletTransaction", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Amount")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("BalanceAfter")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("BalanceAfter")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("CreatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+                b.Property<string>("Description")
+                    .HasColumnType("text");
 
-                    b.Property<string>("ReferenceId")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                b.Property<string>("ReferenceId")
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                b.Property<string>("Source")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                b.Property<string>("Type")
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("CreatedAt");
+                b.HasIndex("CreatedAt");
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("BinaryWalletTransactions");
-                });
+                b.ToTable("BinaryWalletTransactions");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.BinaryWithdrawalRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AdminNote")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                b.Property<string>("AdminNote")
+                    .HasMaxLength(500)
+                    .HasColumnType("character varying(500)");
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Amount")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime?>("ProcessedAt")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTime?>("ProcessedAt")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("RequestedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("RequestedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Status");
+                b.HasIndex("Status");
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("BinaryWithdrawalRequests");
-                });
+                b.ToTable("BinaryWithdrawalRequests");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.KycRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AadharBackImageUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("AadharBackImageUrl")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("AadharFrontImageUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("AadharFrontImageUrl")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("AadharNo")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("AadharNo")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("AccountHolderName")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("AccountHolderName")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("AccountNo")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("AccountNo")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("Address")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<int>("Age")
-                        .HasColumnType("integer");
+                b.Property<int>("Age")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("BankName")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("BankName")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("BankProofImageUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("BankProofImageUrl")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("Dob")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("Dob")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("FullName")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("IfscCode")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("IfscCode")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("MobileNo")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("MobileNo")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("PanCardImageUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("PanCardImageUrl")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("PanNo")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("PanNo")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("RejectionReason")
-                        .HasColumnType("text");
+                b.Property<string>("RejectionReason")
+                    .HasColumnType("text");
 
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTime?>("ReviewedAt")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ReviewedBy")
-                        .HasColumnType("text");
+                b.Property<string>("ReviewedBy")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("Pending");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("text")
+                    .HasDefaultValue("Pending");
 
-                    b.Property<DateTime>("SubmittedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("SubmittedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Status");
+                b.HasIndex("Status");
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("KycRequests");
-                });
+                b.ToTable("KycRequests");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.PaymentOrder", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AdminRemarks")
-                        .HasColumnType("text");
+                b.Property<string>("AdminRemarks")
+                    .HasColumnType("text");
 
-                    b.Property<string>("CartItemsJson")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("CartItemsJson")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<DateTime?>("ProcessedAt")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTime?>("ProcessedAt")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ProcessedByAdminId")
-                        .HasColumnType("text");
+                b.Property<string>("ProcessedByAdminId")
+                    .HasColumnType("text");
 
-                    b.Property<bool>("ReceiptFinalized")
-                        .HasColumnType("boolean");
+                b.Property<bool>("ReceiptFinalized")
+                    .HasColumnType("boolean");
 
-                    b.Property<DateTime?>("ReceiptFinalizedAt")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTime?>("ReceiptFinalizedAt")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("ReceiptGeneratedAt")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTime?>("ReceiptGeneratedAt")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ReceiptItemsJson")
-                        .HasColumnType("text");
+                b.Property<string>("ReceiptItemsJson")
+                    .HasColumnType("text");
 
-                    b.Property<string>("ReceiptNotes")
-                        .HasColumnType("text");
+                b.Property<string>("ReceiptNotes")
+                    .HasColumnType("text");
 
-                    b.Property<byte[]>("ReceiptPdf")
-                        .HasColumnType("bytea");
+                b.Property<byte[]>("ReceiptPdf")
+                    .HasColumnType("bytea");
 
-                    b.Property<decimal?>("ReceiptTotalAmount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal?>("ReceiptTotalAmount")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal?>("ReceiptTotalBv")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal?>("ReceiptTotalBv")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("RequestedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("RequestedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("ScreenshotUrl")
-                        .HasColumnType("text");
+                b.Property<string>("ScreenshotUrl")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.Property<decimal>("TotalAmount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalAmount")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("TotalBv")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalBv")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.Property<string>("UtrNumber")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
+                b.Property<string>("UtrNumber")
+                    .IsRequired()
+                    .HasMaxLength(30)
+                    .HasColumnType("character varying(30)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Status");
+                b.HasIndex("Status");
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("PaymentOrders");
-                });
+                b.ToTable("PaymentOrders");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.Plan", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("CreatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("PlanType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                b.Property<string>("PlanType")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.Property<decimal>("TotalAmount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalAmount")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("TotalBv")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalBv")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("Plans");
-                });
+                b.ToTable("Plans");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.PlanItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Bv")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Bv")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("Mrp")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Mrp")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("PlanId")
-                        .HasColumnType("integer");
+                b.Property<int>("PlanId")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("ProductId")
-                        .HasColumnType("integer");
+                b.Property<int>("ProductId")
+                    .HasColumnType("integer");
 
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
+                b.Property<int>("Quantity")
+                    .HasColumnType("integer");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("PlanId");
+                b.HasIndex("PlanId");
 
-                    b.HasIndex("ProductId");
+                b.HasIndex("ProductId");
 
-                    b.ToTable("PlanItems");
-                });
+                b.ToTable("PlanItems");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.Product", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("Id");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer")
+                    .HasColumnName("Id");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AddedBy")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("AddedBy");
+                b.Property<string>("AddedBy")
+                    .IsRequired()
+                    .HasColumnType("text")
+                    .HasColumnName("AddedBy");
 
-                    b.Property<decimal>("Bv")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("Bv");
+                b.Property<decimal>("Bv")
+                    .HasColumnType("decimal(18,2)")
+                    .HasColumnName("Bv");
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("Category");
+                b.Property<string>("Category")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)")
+                    .HasColumnName("Category");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreatedAt")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("CreatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasColumnName("CreatedAt")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("Description");
+                b.Property<string>("Description")
+                    .IsRequired()
+                    .HasColumnType("text")
+                    .HasColumnName("Description");
 
-                    b.Property<decimal>("Dp")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("Dp");
+                b.Property<decimal>("Dp")
+                    .HasColumnType("decimal(18,2)")
+                    .HasColumnName("Dp");
 
-                    b.Property<decimal>("Gst")
-                        .HasColumnType("decimal(5,2)")
-                        .HasColumnName("Gst");
+                b.Property<decimal>("Gst")
+                    .HasColumnType("decimal(5,2)")
+                    .HasColumnName("Gst");
 
-                    b.Property<string>("ImageUrl")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ImageUrl");
+                b.Property<string>("ImageUrl")
+                    .IsRequired()
+                    .HasColumnType("text")
+                    .HasColumnName("ImageUrl");
 
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("IsActive");
+                b.Property<bool>("IsActive")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("boolean")
+                    .HasDefaultValue(true)
+                    .HasColumnName("IsActive");
 
-                    b.Property<decimal>("Mrp")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("Mrp");
+                b.Property<decimal>("Mrp")
+                    .HasColumnType("decimal(18,2)")
+                    .HasColumnName("Mrp");
 
-                    b.Property<string>("ProductName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("ProductName");
+                b.Property<string>("ProductName")
+                    .IsRequired()
+                    .HasMaxLength(200)
+                    .HasColumnType("character varying(200)")
+                    .HasColumnName("ProductName");
 
-                    b.Property<string>("ProductNo")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("ProductNo");
+                b.Property<string>("ProductNo")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)")
+                    .HasColumnName("ProductNo");
 
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("UpdatedAt")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("UpdatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasColumnName("UpdatedAt")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ProductNo")
-                        .IsUnique();
+                b.HasIndex("ProductNo")
+                    .IsUnique();
 
-                    b.ToTable("Products", (string)null);
-                });
+                b.ToTable("Products", (string)null);
+            });
 
             modelBuilder.Entity("RegisterApi.Models.User", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AadharNo")
-                        .IsRequired()
-                        .HasMaxLength(12)
-                        .HasColumnType("character varying(12)");
+                b.Property<string>("AadharNo")
+                    .IsRequired()
+                    .HasMaxLength(12)
+                    .HasColumnType("character varying(12)");
 
-                    b.Property<string>("AccountNo")
-                        .HasColumnType("text");
+                b.Property<string>("AccountNo")
+                    .HasColumnType("text");
 
-                    b.Property<string>("AccountType")
-                        .HasColumnType("text");
+                b.Property<string>("AccountType")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("Address")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("BankName")
-                        .HasColumnType("text");
+                b.Property<string>("BankName")
+                    .HasColumnType("text");
 
-                    b.Property<int>("BusinessVolume")
-                        .HasColumnType("integer");
+                b.Property<int>("BusinessVolume")
+                    .HasColumnType("integer");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTime>("CreatedAt")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("IdStatus")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("IdStatus")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("IfscCode")
-                        .HasColumnType("text");
+                b.Property<string>("IfscCode")
+                    .HasColumnType("text");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsActive")
+                    .HasColumnType("boolean");
 
-                    b.Property<bool>("IsKycCompleted")
-                        .HasColumnType("boolean");
+                b.Property<bool>("IsKycCompleted")
+                    .HasColumnType("boolean");
 
-                    b.Property<string>("LeftLineage")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("LeftLineage")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("MobileNo")
-                        .IsRequired()
-                        .HasMaxLength(15)
-                        .HasColumnType("character varying(15)");
+                b.Property<string>("MobileNo")
+                    .IsRequired()
+                    .HasMaxLength(15)
+                    .HasColumnType("character varying(15)");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.Property<string>("ParentId")
-                        .HasColumnType("text");
+                b.Property<string>("ParentId")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Password")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("Password")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("PasswordHash")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("Position")
-                        .HasColumnType("text");
+                b.Property<string>("Position")
+                    .HasColumnType("text");
 
-                    b.Property<string>("RightLineage")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("RightLineage")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                b.Property<string>("Role")
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.Property<string>("SelectedPlan")
-                        .HasColumnType("text");
+                b.Property<string>("SelectedPlan")
+                    .HasColumnType("text");
 
-                    b.Property<string>("SponsorId")
-                        .HasColumnType("text");
+                b.Property<string>("SponsorId")
+                    .HasColumnType("text");
 
-                    b.Property<string>("SponsorIdName")
-                        .IsRequired()
-                        .HasColumnType("text");
+                b.Property<string>("SponsorIdName")
+                    .IsRequired()
+                    .HasColumnType("text");
 
-                    b.Property<int>("TreeLevel")
-                        .HasColumnType("integer");
+                b.Property<int>("TreeLevel")
+                    .HasColumnType("integer");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("AadharNo")
-                        .IsUnique();
+                b.HasIndex("AadharNo")
+                    .IsUnique();
 
-                    b.HasIndex("MobileNo")
-                        .IsUnique();
+                b.HasIndex("MobileNo")
+                    .IsUnique();
 
-                    b.HasIndex("UserId")
-                        .IsUnique();
+                b.HasIndex("UserId")
+                    .IsUnique();
 
-                    b.ToTable("Users");
-                });
+                b.ToTable("Users");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.Wallet", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Balance")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Balance")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("CreatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("PlanType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                b.Property<string>("PlanType")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<decimal>("TotalEarned")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalEarned")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("TotalWithdrawn")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("TotalWithdrawn")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("UpdatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("UserId", "PlanType")
-                        .IsUnique();
+                b.HasIndex("UserId", "PlanType")
+                    .IsUnique();
 
-                    b.ToTable("Wallets");
-                });
+                b.ToTable("Wallets");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.WalletTransaction", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Amount")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("BalanceAfter")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("BalanceAfter")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("CreatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+                b.Property<string>("Description")
+                    .HasColumnType("text");
 
-                    b.Property<string>("PlanType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                b.Property<string>("PlanType")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<string>("ReferenceId")
-                        .HasColumnType("text");
+                b.Property<string>("ReferenceId")
+                    .HasColumnType("text");
 
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                b.Property<string>("Source")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                b.Property<string>("Type")
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("CreatedAt");
+                b.HasIndex("CreatedAt");
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.HasIndex("UserId", "PlanType");
+                b.HasIndex("UserId", "PlanType");
 
-                    b.ToTable("WalletTransactions");
-                });
+                b.ToTable("WalletTransactions");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.WithdrawalRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("integer");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AdminRemarks")
-                        .HasColumnType("text");
+                b.Property<string>("AdminRemarks")
+                    .HasColumnType("text");
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                b.Property<decimal>("Amount")
+                    .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("PlanType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                b.Property<string>("PlanType")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("character varying(50)");
 
-                    b.Property<DateTime?>("ProcessedAt")
-                        .HasColumnType("timestamp with time zone");
+                b.Property<DateTime?>("ProcessedAt")
+                    .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ProcessedByAdminId")
-                        .HasColumnType("text");
+                b.Property<string>("ProcessedByAdminId")
+                    .HasColumnType("text");
 
-                    b.Property<DateTime>("RequestedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                b.Property<DateTime>("RequestedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("timestamp with time zone")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasColumnType("character varying(20)");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                b.Property<string>("UserId")
+                    .IsRequired()
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("Status");
+                b.HasIndex("Status");
 
-                    b.HasIndex("UserId");
+                b.HasIndex("UserId");
 
-                    b.ToTable("WithdrawalRequests");
-                });
+                b.ToTable("WithdrawalRequests");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.PlanItem", b =>
-                {
-                    b.HasOne("RegisterApi.Models.Plan", "Plan")
-                        .WithMany("Items")
-                        .HasForeignKey("PlanId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("RegisterApi.Models.Plan", "Plan")
+                    .WithMany("Items")
+                    .HasForeignKey("PlanId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.HasOne("RegisterApi.Models.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                b.HasOne("RegisterApi.Models.Product", "Product")
+                    .WithMany()
+                    .HasForeignKey("ProductId")
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .IsRequired();
 
-                    b.Navigation("Plan");
+                b.Navigation("Plan");
 
-                    b.Navigation("Product");
-                });
+                b.Navigation("Product");
+            });
 
             modelBuilder.Entity("RegisterApi.Models.Plan", b =>
-                {
-                    b.Navigation("Items");
-                });
+            {
+                b.Navigation("Items");
+            });
 #pragma warning restore 612, 618
         }
     }
