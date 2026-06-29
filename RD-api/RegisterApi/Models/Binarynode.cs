@@ -55,6 +55,20 @@ public class BinaryNode
     /// </summary>
     public int MatchedPairs { get; set; } = 0;
 
+    /// <summary>
+    /// Snapshot of LeftActiveCount at the moment the FIRST commission was awarded.
+    /// Used to calculate post-first-commission growth correctly.
+    /// Remains 0 until the first commission fires.
+    /// </summary>
+    public int FirstCommissionLeftCount { get; set; } = 0;
+
+    /// <summary>
+    /// Snapshot of RightActiveCount at the moment the FIRST commission was awarded.
+    /// Used to calculate post-first-commission growth correctly.
+    /// Remains 0 until the first commission fires.
+    /// </summary>
+    public int FirstCommissionRightCount { get; set; } = 0;
+
     public decimal LeftLegBv { get; set; } = 0;
     public decimal RightLegBv { get; set; } = 0;
     public decimal TotalBv { get; set; } = 0;
