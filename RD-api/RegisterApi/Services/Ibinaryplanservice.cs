@@ -46,4 +46,15 @@ public interface IBinaryPlanService
 
     //new----------------------------------------------------------------------------------
     Task<PlacementPreviewDto> PreviewPlacementAsync(string sponsorId, string preferredPosition);
+
+    /// <summary>
+    /// ONE-TIME ADMIN CORRECTION: Recomputes the correct number of matched pairs
+    /// for every node under the current pairing rule (equal-sides => n-1,
+    /// unequal => min(left,right)), and reverses any commission that was
+    /// overpaid under the old rule (e.g. a 2-2 node that was wrongly paid for
+    /// 2 pairs instead of 1). Safe to run multiple times — it only ever debits
+    /// the exact excess, never touches correctly-paid pairs, and does nothing
+    /// if a node's MatchedPairs is already correct or under-paid.
+    /// </summary>
+    Task<List<string>> CorrectOverpaidPairsAsync();
 }

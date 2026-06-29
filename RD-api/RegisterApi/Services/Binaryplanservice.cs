@@ -635,4 +635,107 @@ public class BinaryPlanService : IBinaryPlanService
 
     private static BinaryPlacementResultDto Fail(string msg) =>
         new() { Success = false, Message = msg };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 8. ONE-TIME ADMIN CORRECTION FOR PAIRS PAID UNDER THE OLD RULE
+    // ─────────────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Walks every BinaryNode, recomputes the correct MatchedPairs count under
+    /// the current rule, and if a node was overpaid (MatchedPairs higher than
+    /// what it should be), reverses exactly that excess: debits the wallet,
+    /// reduces TotalEarned/PairsCount, deletes the excess BinaryPair rows
+    /// (the most recent ones, since they were the incorrectly-awarded ones),
+    /// and logs a Debit transaction explaining the correction.
+    ///
+    /// Does NOT touch nodes that are correctly paid or under-paid — it only
+    /// ever pulls back the exact overpaid amount. Safe to re-run; running it
+    /// twice in a row is a no-op the second time.
+    /// </summary>
+    public async Task<List<string>> CorrectOverpaidPairsAsync()
+    {
+        var log = new List<string>();
+        var nodes = await _db.BinaryNodes.ToListAsync();
+
+        foreach (var node in nodes)
+        {
+            int correctPairs = node.LeftActiveCount == node.RightActiveCount
+                ? Math.Max(node.LeftActiveCount - 1, 0)
+                : Math.Min(node.LeftActiveCount, node.RightActiveCount);
+
+            int excess = node.MatchedPairs - correctPairs;
+            if (excess <= 0)
+                continue; // correctly paid or under-paid — nothing to claw back
+
+            decimal reverseAmount = excess * PairCommission;
+
+            var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == node.UserId);
+            if (wallet == null)
+            {
+                // Shouldn't normally happen if MatchedPairs > 0, but guard anyway.
+                log.Add($"{node.UserId}: had MatchedPairs={node.MatchedPairs} but no wallet found — skipped.");
+                continue;
+            }
+
+            // Remove the most recently credited excess pair rows for this user.
+            var pairsToRemove = await _db.BinaryPairs
+                .Where(p => p.UserId == node.UserId)
+                .OrderByDescending(p => p.CreditedAt)
+                .Take(excess)
+                .ToListAsync();
+            _db.BinaryPairs.RemoveRange(pairsToRemove);
+
+            wallet.Balance -= reverseAmount;
+            wallet.TotalEarned -= reverseAmount;
+            wallet.PairsCount = Math.Max(wallet.PairsCount - excess, 0);
+            wallet.UpdatedAt = DateTime.UtcNow;
+
+            bool wentNegative = wallet.Balance < 0;
+            if (wentNegative)
+            {
+                // Balance can't go negative if some of it was already withdrawn.
+                // Flag this so an admin can decide how to recover the shortfall
+                // (e.g. deduct from a future payout) instead of silently clamping.
+                log.Add($"{node.UserId}: WARNING — correction of -₹{reverseAmount} would make balance negative " +
+                        $"(was ₹{wallet.Balance + reverseAmount}, already withdrawn ₹{wallet.TotalWithdrawn}). " +
+                        $"Balance clamped to ₹0; manual follow-up needed for the shortfall.");
+                wallet.Balance = 0;
+            }
+
+            node.MatchedPairs = correctPairs;
+            node.UpdatedAt = DateTime.UtcNow;
+
+            var txn = new BinaryWalletTransaction
+            {
+                UserId = node.UserId,
+                Type = BinaryTxnType.Debit,
+                Amount = reverseAmount,
+                BalanceAfter = wallet.Balance,
+                Source = "Pair Commission Correction",
+                Description = $"System correction: reversed {excess} overpaid pair(s) " +
+                              $"under old commission rule (L={node.LeftActiveCount}, R={node.RightActiveCount}). " +
+                              $"MatchedPairs corrected from {node.MatchedPairs + excess} to {correctPairs}.",
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.BinaryWalletTransactions.Add(txn);
+
+            log.Add($"{node.UserId}: corrected MatchedPairs {node.MatchedPairs + excess} → {correctPairs}, " +
+                    $"reversed ₹{reverseAmount} (L={node.LeftActiveCount}, R={node.RightActiveCount}).");
+        }
+
+        await _db.SaveChangesAsync();
+
+        // Re-check withdrawal unlock status for every corrected user, in case
+        // the correction affects eligibility.
+        foreach (var entry in log)
+        {
+            var userId = entry.Split(':')[0];
+            await UpdateWithdrawalUnlockAsync(userId);
+        }
+        await _db.SaveChangesAsync();
+
+        if (log.Count == 0)
+            log.Add("No overpaid nodes found — all MatchedPairs counts are already correct.");
+
+        return log;
+    }
 }
