@@ -10,7 +10,7 @@ import {
 import Sidebar from '@/components/Sidebar';
 import TopBar from '@/components/loginTopbar';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:56188';
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

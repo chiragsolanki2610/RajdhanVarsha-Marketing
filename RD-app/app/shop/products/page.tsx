@@ -6,7 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import LoginTopbar from "@/components/loginTopbar";
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:56188";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
 
 // ─── Exact backend shape from GET /api/Products ───────────────────────────────
 interface ApiProduct {

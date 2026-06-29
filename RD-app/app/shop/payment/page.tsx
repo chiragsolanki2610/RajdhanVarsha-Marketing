@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import LoginTopbar from "@/components/loginTopbar";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:56188";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
 
 interface CartItem {
   id:        number;

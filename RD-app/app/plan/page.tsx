@@ -45,8 +45,8 @@ export default function PlanPage() {
         };
 
         const [planRes, binaryRes] = await Promise.all([
-          fetch(`http://localhost:56188/api/Plans/my-plan`,  { headers, cache: 'no-store' }),
-          fetch(`http://localhost:56188/api/Binary/status`,  { headers, cache: 'no-store' }),
+          fetch(`https://rd-api-j7zj.onrender.com/api/Plans/my-plan`,  { headers, cache: 'no-store' }),
+          fetch(`https://rd-api-j7zj.onrender.com/api/Binary/status`,  { headers, cache: 'no-store' }),
         ]);
 
         // ── Dream Plan ──────────────────────────────────────────────────────

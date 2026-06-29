@@ -27,7 +27,7 @@ export default function AdminWithdrawalPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<WithdrawalRequest | null>(null);
 
-  const API = "http://localhost:56188";
+  const API = "https://rd-api-j7zj.onrender.com";
 
   const getAuthHeaders = () => {
     if (typeof window !== "undefined") {

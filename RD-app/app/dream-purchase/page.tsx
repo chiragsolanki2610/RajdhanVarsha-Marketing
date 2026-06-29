@@ -24,7 +24,7 @@ interface CartItem extends Product {
 type PaymentStep = "cart" | "checkout" | "processing" | "success";
 
 // ─── API URL ──────────────────────────────────────────────────────────────────
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:56188";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
 
 const DREAM_PLAN_BV_TARGET = 600;
 

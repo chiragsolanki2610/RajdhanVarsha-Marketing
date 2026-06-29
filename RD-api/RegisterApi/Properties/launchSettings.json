@@ -6,7 +6,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "http://localhost:56188"
+      "applicationUrl": "https://rd-api-j7zj.onrender.com"
     }
   }
 }

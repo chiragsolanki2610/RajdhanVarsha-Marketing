@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { ChevronRight, ChevronDown, User, AlertCircle, Loader2, RefreshCw, GitBranch } from 'lucide-react';
 
-const API_BASE = 'http://localhost:56188';
+const API_BASE = 'https://rd-api-j7zj.onrender.com';
 
 interface BinaryTreeNode {
   userId: string;

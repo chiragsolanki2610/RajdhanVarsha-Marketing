@@ -11,7 +11,7 @@ import {
   ArrowLeft, Package, CheckCheck, Copy, IndianRupee, AlertTriangle,
 } from 'lucide-react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:56188';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://rd-api-j7zj.onrender.com';
 const ROOT_USER_ID = 'RD0001';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

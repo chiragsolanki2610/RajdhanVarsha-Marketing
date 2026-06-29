@@ -47,7 +47,7 @@ export default function LoginPage() {
         setSuccessMessage("");
 
         try {
-            const API_URL = "http://localhost:56188/api/Auth/login"; 
+            const API_URL = "https://rd-api-j7zj.onrender.com/api/Auth/login"; 
 
             const response = await fetch(API_URL, {
                 method: "POST",

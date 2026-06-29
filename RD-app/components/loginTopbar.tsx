@@ -24,7 +24,7 @@ export default function LoginTopbar({
         if (token) {
           const res = await fetch(
             `${
-              process.env.NEXT_PUBLIC_API_URL || "http://localhost:56188"
+              process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com"
             }/api/auth/profile`,
             { headers: { Authorization: `Bearer ${token}` } }
           );

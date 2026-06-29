@@ -27,7 +27,7 @@ import LoginTopbar from '@/components/loginTopbar';
 // ==========================================
 
 // UPDATED: Corrected port to 56187 as shown in your Swagger UI
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:56188';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
 
 export const PLAN_TYPES = {
   DREAM: 'Dream Plan',

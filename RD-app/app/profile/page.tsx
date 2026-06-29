@@ -56,7 +56,7 @@ export default function ProfilePage() {
           return;
         }
 
-        const response = await fetch('http://localhost:56188/api/Auth/profile', {
+        const response = await fetch('https://rd-api-j7zj.onrender.com/api/Auth/profile', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
