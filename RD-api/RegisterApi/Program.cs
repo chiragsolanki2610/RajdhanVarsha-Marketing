@@ -19,11 +19,7 @@ try
         options.AddPolicy("NextFrontendPolicy", policy =>
         {
             policy.WithOrigins(
-                    "http://localhost:3000",
-                    "https://localhost:3000",
-                    "http://localhost:3001",
-                    "https://localhost:3001",
-                    "https://rd-app.onrender.com"
+                    "https://rd-app-piwd.onrender.com"
                   )
                   .AllowAnyHeader()
                   .AllowAnyMethod();
