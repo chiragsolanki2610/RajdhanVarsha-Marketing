@@ -468,7 +468,7 @@ export default function DreamTreeView() {
     <div className="flex h-screen w-screen bg-slate-50 overflow-hidden">
       <Sidebar />
       <div className="flex flex-col flex-1 h-full overflow-hidden relative">
-        <LoginTopbar />
+        <LoginTopbar pageTitle="Dream Tree View" />
         <ReactFlowProvider>
           <TreeCanvas />
         </ReactFlowProvider>

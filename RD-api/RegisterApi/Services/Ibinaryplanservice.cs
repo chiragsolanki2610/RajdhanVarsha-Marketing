@@ -57,4 +57,11 @@ public interface IBinaryPlanService
     /// if a node's MatchedPairs is already correct or under-paid.
     /// </summary>
     Task<List<string>> CorrectOverpaidPairsAsync();
+
+    /// <summary>
+    /// Walks the current user's entire binary downline (both legs) and returns
+    /// the IDs that got their Binary Plan ID activated today, split by which
+    /// side (LEFT/RIGHT) of the current user they fall under.
+    /// </summary>
+    Task<TodayActivationsDto> GetTodayActivationsAsync(string userId);
 }

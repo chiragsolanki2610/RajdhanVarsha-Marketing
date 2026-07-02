@@ -369,15 +369,15 @@ export default function WalletPage() {
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <LoginTopbar />
+        <LoginTopbar pageTitle='My Wallets'/>
 
         <div className="p-6 text-[#1e293b] font-sans max-w-7xl w-full mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
-            <div>
+            {/* <div>
               <h1 className="text-2xl font-bold text-[#0f172a]">My Wallets</h1>
               <p className="text-sm text-gray-500 mt-1">Manage your dream funds and binary matching commissions.</p>
-            </div>
+            </div> */}
 
             {selectedWallet && (
               <button

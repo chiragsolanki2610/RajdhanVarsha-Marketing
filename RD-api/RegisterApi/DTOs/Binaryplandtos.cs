@@ -98,6 +98,41 @@ public class BinaryNodeStatusDto
     public bool WithdrawalUnlocked { get; set; }
     public int PairsCompleted { get; set; }
     public decimal WalletBalance { get; set; }
+
+    public DateTime? JoiningDate { get; set; }
+    public int TotalSponsor { get; set; }
+    public string LeftSponsor { get; set; } = "--";
+    public string RightSponsor { get; set; } = "--";
+
+    // NEW: how many of MY direct referrals ended up on my left vs right side
+    // (accounts for spillover — a referral isn't always my direct child)
+    public int LeftSponsoredCount { get; set; }
+    public int RightSponsoredCount { get; set; }
+
+    // NEW: total ACTIVE members in the entire left / right subtree
+    // (used for "Total Active Team" style cards on the dashboard)
+    public int LeftActiveCount { get; set; }
+    public int RightActiveCount { get; set; }
+    public int TotalActiveDownlineCount { get; set; }
+}
+
+// ── Today's activations (LEFT / RIGHT split) ───────────────────────────────
+
+public class TodayActivationEntryDto
+{
+    public string UserId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Side { get; set; } = string.Empty; // "LEFT" or "RIGHT"
+    public DateTime ActivatedAt { get; set; }
+}
+
+public class TodayActivationsDto
+{
+    public List<TodayActivationEntryDto> Left { get; set; } = new();
+    public List<TodayActivationEntryDto> Right { get; set; } = new();
+    public int LeftCount => Left.Count;
+    public int RightCount => Right.Count;
+    public int TotalCount => Left.Count + Right.Count;
 }
 
 public class PlacementPreviewDto

@@ -657,6 +657,84 @@ public class BinaryPlanService : IBinaryPlanService
         new() { Success = false, Message = msg };
 
     // ─────────────────────────────────────────────────────────────────────────
+    // 9. TODAY'S ACTIVATIONS (LEFT / RIGHT split)
+    // ─────────────────────────────────────────────────────────────────────────
+    public async Task<TodayActivationsDto> GetTodayActivationsAsync(string userId)
+    {
+        var result = new TodayActivationsDto();
+
+        var node = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == userId);
+        if (node == null) return result;
+
+        // Pull the whole tree once — cheap columns only — then walk it in memory
+        // instead of round-tripping the DB once per descendant.
+        var allNodes = await _db.BinaryNodes
+            .Select(n => new
+            {
+                n.UserId,
+                n.LeftChildId,
+                n.RightChildId,
+                n.IsActive,
+                n.ActivatedAt
+            })
+            .ToListAsync();
+
+        var byId = allNodes.ToDictionary(n => n.UserId, n => n);
+
+        // NOTE: "today" is taken in UTC (server time). Switch to IST here if
+        // the business day should align with India Standard Time instead.
+        var today = DateTime.UtcNow.Date;
+
+        void Walk(string? startId, string side, List<TodayActivationEntryDto> bucket)
+        {
+            if (string.IsNullOrEmpty(startId)) return;
+
+            var queue = new Queue<string>();
+            queue.Enqueue(startId);
+
+            while (queue.Count > 0)
+            {
+                var currentId = queue.Dequeue();
+                if (!byId.TryGetValue(currentId, out var current)) continue;
+
+                if (current.IsActive && current.ActivatedAt.HasValue &&
+                    current.ActivatedAt.Value.Date == today)
+                {
+                    bucket.Add(new TodayActivationEntryDto
+                    {
+                        UserId = current.UserId,
+                        Side = side,
+                        ActivatedAt = current.ActivatedAt.Value
+                    });
+                }
+
+                if (!string.IsNullOrEmpty(current.LeftChildId)) queue.Enqueue(current.LeftChildId);
+                if (!string.IsNullOrEmpty(current.RightChildId)) queue.Enqueue(current.RightChildId);
+            }
+        }
+
+        Walk(node.LeftChildId, "LEFT", result.Left);
+        Walk(node.RightChildId, "RIGHT", result.Right);
+
+        // Attach display names in one batched query
+        var allIds = result.Left.Select(e => e.UserId).Concat(result.Right.Select(e => e.UserId)).ToList();
+        if (allIds.Count > 0)
+        {
+            var names = await _db.Users
+                .Where(u => allIds.Contains(u.UserId))
+                .ToDictionaryAsync(u => u.UserId, u => u.Name);
+
+            foreach (var entry in result.Left.Concat(result.Right))
+                entry.Name = names.TryGetValue(entry.UserId, out var n) ? n ?? entry.UserId : entry.UserId;
+        }
+
+        result.Left = result.Left.OrderByDescending(e => e.ActivatedAt).ToList();
+        result.Right = result.Right.OrderByDescending(e => e.ActivatedAt).ToList();
+
+        return result;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // 8. ONE-TIME ADMIN CORRECTION FOR PAIRS PAID UNDER THE OLD RULE
     // ─────────────────────────────────────────────────────────────────────────
     /// <summary>

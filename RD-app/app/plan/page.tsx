@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
+// 1. Import your LoginTopbar component here
+import LoginTopbar from '@/components/loginTopbar'; 
 import { useRouter } from "next/navigation";
 import { Check, Network, ChevronDown, ChevronUp, CircleDot, FileText, BadgeCheck, Clock } from 'lucide-react';
 
@@ -53,16 +55,13 @@ export default function PlanPage() {
         if (planRes.ok) {
           const data = await planRes.json();
 
-          // "isActive" should only be true when a product purchase confirms it
-          // Check both possible field names your API might return
           const dreamActive: boolean =
-            data?.dreamIsActive       ??   // product purchased & confirmed
+            data?.dreamIsActive       ??   
             data?.DreamIsActive       ??
             data?.isActive            ??
             data?.IsActive            ??
             false;
 
-          // "isEnrolled" = joined plan but product not yet purchased
           const dreamEnrolled: boolean =
             data?.dreamIsEnrolled     ??
             data?.DreamIsEnrolled     ??
@@ -73,7 +72,6 @@ export default function PlanPage() {
             false;
 
           setIsDreamActive(dreamActive);
-          // Only mark enrolled if NOT already fully active
           setIsDreamEnrolled(!dreamActive && dreamEnrolled);
         } else {
           setIsDreamActive(false);
@@ -84,8 +82,6 @@ export default function PlanPage() {
         if (binaryRes.ok) {
           const data = await binaryRes.json();
 
-          // "isInBinaryPlan: true" from your API means ENROLLED, not active.
-          // A separate field (e.g. isBinaryActive) should confirm true activity.
           const binaryActive: boolean =
             data?.isBinaryActive      ??
             data?.IsBinaryActive      ??
@@ -93,14 +89,12 @@ export default function PlanPage() {
             data?.IsActive            ??
             false;
 
-          // isInBinaryPlan = enrolled (joined) but may not have purchased yet
           const binaryEnrolled: boolean =
             data?.isInBinaryPlan      ??
             data?.IsInBinaryPlan      ??
             false;
 
           setIsBinaryActive(binaryActive);
-          // Only show enrolled state if NOT already fully active
           setIsBinaryEnrolled(!binaryActive && binaryEnrolled);
         } else {
           setIsBinaryActive(false);
@@ -140,8 +134,6 @@ export default function PlanPage() {
     if (planId === 'binary-plan') window.location.href = '/binary-purchase';
   };
 
-  // ── Reusable footer renderer ──────────────────────────────────────────────
-  // State priority: loading → active → enrolled (pending) → not enrolled
   const renderPlanFooter = (
     isActive: boolean,
     isEnrolled: boolean,
@@ -154,7 +146,6 @@ export default function PlanPage() {
       return <div className="w-full h-12 bg-slate-100 animate-pulse rounded-xl" />;
     }
     if (isActive) {
-      // ── Fully active: product purchased ──
       return (
         <div className="w-full flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-6 rounded-xl">
           <BadgeCheck size={16} className="text-emerald-500 shrink-0" />
@@ -163,7 +154,6 @@ export default function PlanPage() {
       );
     }
     if (isEnrolled) {
-      // ── Enrolled but NOT active (no product purchased yet) ──
       return (
         <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 py-3 px-5 rounded-xl flex-1">
@@ -179,7 +169,6 @@ export default function PlanPage() {
         </div>
       );
     }
-    // ── Not enrolled ──
     return (
       <button
         onClick={onActivate}
@@ -195,17 +184,20 @@ export default function PlanPage() {
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <header className="bg-white border-b border-slate-200 h-16 shrink-0 px-6 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+        {/* 2. Added LoginTopbar here at the top of your main dashboard view */}
+        <LoginTopbar  pageTitle="Plan Management"/>
+
+        {/* If LoginTopbar doesn't include the page title, you can keep this clean sub-header row right underneath it */}
+        {/* <header className="bg-white border-b border-slate-200 h-12 shrink-0 px-6 flex items-center justify-between sticky top-[64px] z-20 shadow-sm">
           <div className="flex flex-col">
-            <h1 className="text-sm font-black text-slate-800 tracking-tight uppercase">Plan Management</h1>
+            <h1 className="text-xs font-black text-slate-800 tracking-tight uppercase">Plan Management</h1>
           </div>
-        </header>
+        </header> */}
 
         <main className="p-4 md:p-6 max-w-[1600px] w-full mx-auto space-y-8">
 
           {/* ── DREAM PLAN ───────────────────────────────────────────────── */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden relative transition-all duration-300">
-
             <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-10">
               <span className="bg-[#1E40AF] text-white text-[9px] font-black px-6 py-1 rounded-b-xl uppercase tracking-widest shadow-md border-x border-b border-blue-400/20">
                 MOST POPULAR
@@ -215,15 +207,11 @@ export default function PlanPage() {
             <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-br from-white via-white to-blue-50/20">
               <div className="flex items-center gap-3">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">Dream Plan</h2>
-
-                {/* Active badge */}
                 {isDreamActive && (
                   <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                     <BadgeCheck size={12} className="text-emerald-500" /> Active
                   </span>
                 )}
-
-                {/* Enrolled-but-pending badge */}
                 {!isDreamActive && isDreamEnrolled && (
                   <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                     <Clock size={11} className="text-amber-500" /> Enrolled — Purchase Pending
@@ -300,26 +288,10 @@ export default function PlanPage() {
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-4">Network Tree Matrix Previews</h4>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col items-center justify-center min-h-[140px]">
-                        <img
-                          src="/photos/Plan slide-1.png"
-                          alt="Direct Matrix Architecture"
-                          className="max-h-[110px] w-auto object-contain mix-blend-multiply"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.parentElement!.innerHTML = '<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">Direct Horizon Structure</span>';
-                          }}
-                        />
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">Direct Horizon Structure</div>
                       </div>
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col items-center justify-center min-h-[140px]">
-                        <img
-                          src="/photos/Plan slide-2.png"
-                          alt="Compulsory Downline Layer Architecture"
-                          className="max-h-[110px] w-auto object-contain mix-blend-multiply"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.parentElement!.innerHTML = '<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">3-Leg Compulsory Hierarchy</span>';
-                          }}
-                        />
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">3-Leg Compulsory Hierarchy</div>
                       </div>
                     </div>
                   </div>
@@ -370,15 +342,7 @@ export default function PlanPage() {
                       <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">Next time entry targets respond adaptively based upon individual structural product selection parameters.</p>
                     </div>
                     <div className="w-24 h-16 shrink-0 bg-white border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center p-1 shadow-sm">
-                      <img
-                        src="/photos/marketing_chart.jpg"
-                        alt="Dream Purchase Plan Table Flyer"
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          e.currentTarget.parentElement!.innerHTML = '<span class="text-[9px] font-black text-red-600 uppercase text-center leading-none">DREAM TIER CHART</span>';
-                        }}
-                      />
+                      <span className="text-[9px] font-black text-red-600 uppercase text-center leading-none">DREAM TIER CHART</span>
                     </div>
                   </div>
                 </div>
@@ -412,19 +376,16 @@ export default function PlanPage() {
 
           {/* ── BINARY PLAN ──────────────────────────────────────────────── */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden relative transition-all duration-300">
-
             <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-br from-white via-white to-indigo-50/20">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-black text-slate-900 tracking-tight">Binary Plan</h2>
-
                     {isBinaryActive && (
                       <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                         <BadgeCheck size={12} className="text-emerald-500" /> Active
                       </span>
                     )}
-
                     {!isBinaryActive && isBinaryEnrolled && (
                       <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                         <Clock size={11} className="text-amber-500" /> Enrolled — Purchase Pending

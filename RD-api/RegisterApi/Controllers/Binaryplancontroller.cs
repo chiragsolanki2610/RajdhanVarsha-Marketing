@@ -42,6 +42,35 @@ public class BinaryPlanController : ControllerBase
         if (node == null)
             return Ok(new BinaryNodeStatusDto { IsInBinaryPlan = false });
 
+        var totalSponsor = await _db.BinaryNodes.CountAsync(n => n.SponsorId == userId);
+
+        // ── Work out which side (left/right) each of MY referrals landed on ──
+        // A referral isn't necessarily my direct child (spillover can place
+        // them several levels down), so for each person I sponsored we walk
+        // UP their parent chain until we reach one of my two direct children.
+        var mySponsored = await _db.BinaryNodes
+            .Where(n => n.SponsorId == userId)
+            .ToListAsync();
+
+        int leftSponsoredCount = 0;
+        int rightSponsoredCount = 0;
+
+        if (mySponsored.Count > 0 && (node.LeftChildId != null || node.RightChildId != null))
+        {
+            // Pull every node's parent pointer once so the chain walk doesn't
+            // hit the DB once per referral.
+            var allNodes = await _db.BinaryNodes
+                .Select(n => new { n.UserId, n.ParentId })
+                .ToDictionaryAsync(n => n.UserId, n => n.ParentId);
+
+            foreach (var sponsored in mySponsored)
+            {
+                var side = DetermineSide(sponsored.UserId, node.LeftChildId, node.RightChildId, allNodes);
+                if (side == "LEFT") leftSponsoredCount++;
+                else if (side == "RIGHT") rightSponsoredCount++;
+            }
+        }
+
         return Ok(new BinaryNodeStatusDto
         {
             IsInBinaryPlan = true,
@@ -56,8 +85,49 @@ public class BinaryPlanController : ControllerBase
             TotalDownlineCount = node.LeftLegCount + node.RightLegCount,
             WithdrawalUnlocked = wallet?.WithdrawalUnlocked ?? false,
             PairsCompleted = wallet?.PairsCount ?? 0,
-            WalletBalance = wallet?.Balance ?? 0
+            WalletBalance = wallet?.Balance ?? 0,
+
+            JoiningDate = node.CreatedAt,
+            TotalSponsor = totalSponsor,
+            LeftSponsor = node.LeftChildId ?? "--",
+            RightSponsor = node.RightChildId ?? "--",
+
+            LeftSponsoredCount = leftSponsoredCount,
+            RightSponsoredCount = rightSponsoredCount,
+
+            LeftActiveCount = node.LeftActiveCount,
+            RightActiveCount = node.RightActiveCount,
+            TotalActiveDownlineCount = node.LeftActiveCount + node.RightActiveCount
         });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Walks a node's ParentId chain upward until it reaches `myLeftChildId`
+    // or `myRightChildId`, returning which side it belongs to. Returns null
+    // if the chain runs out before reaching either (shouldn't normally
+    // happen for a real downline member, but guards against bad data).
+    // ─────────────────────────────────────────────────────────────────────
+    private static string? DetermineSide(
+        string startUserId,
+        string? myLeftChildId,
+        string? myRightChildId,
+        Dictionary<string, string?> parentById)
+    {
+        var current = startUserId;
+        var visited = new HashSet<string>();
+
+        while (current != null && visited.Add(current))
+        {
+            if (current == myLeftChildId) return "LEFT";
+            if (current == myRightChildId) return "RIGHT";
+
+            if (!parentById.TryGetValue(current, out var parent) || parent == null)
+                return null;
+
+            current = parent;
+        }
+
+        return null;
     }
 
 
@@ -227,6 +297,21 @@ public class BinaryPlanController : ControllerBase
             return NotFound(new { message = "You are not enrolled in the Binary Plan." });
 
         return Ok(tree);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/today-activations
+    // Returns the IDs (LEFT / RIGHT split) in the current user's entire
+    // downline that got their Binary Plan ID activated today.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("today-activations")]
+    public async Task<IActionResult> GetTodayActivations()
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var result = await _binaryService.GetTodayActivationsAsync(userId);
+        return Ok(result);
     }
 
     // ─────────────────────────────────────────────────────────────────────
