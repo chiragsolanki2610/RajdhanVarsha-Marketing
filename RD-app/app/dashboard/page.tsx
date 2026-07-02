@@ -69,6 +69,8 @@ interface MyPlanResponse {
 }
 
 interface BinaryPlanData {
+  isInBinaryPlan: boolean;
+  isActive: boolean;
   joiningDate: string | null;
   totalSponsor: number;
   leftSponsoredCount: number;
@@ -278,6 +280,43 @@ function PlanBanner({ onActivate }: { onActivate: () => void }) {
         className="shrink-0 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
       >
         Activate Plan
+      </button>
+    </div>
+  );
+}
+
+// ─── Binary Plan Inactive Banner ───────────────────────────────────────────────
+// Shown instead of the stat cards / team overview / today's activations
+// whenever the current user hasn't joined the Binary Plan yet, or has joined
+// but hasn't purchased ≥600 BV to activate their Binary Plan ID.
+
+function BinaryPlanInactiveBanner({
+  joined,
+  onActivate,
+}: {
+  joined: boolean;
+  onActivate: () => void;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 flex flex-col items-center text-center gap-3">
+      <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center">
+        <Network className="text-blue-500" size={26} />
+      </div>
+      <div>
+        <p className="text-sm font-bold text-gray-700">
+          {joined ? 'Binary Plan ID Not Activated' : 'Binary Plan Not Activated'}
+        </p>
+        <p className="text-xs text-gray-400 mt-1 max-w-sm">
+          {joined
+            ? 'Purchase at least 600 BV worth of products to activate your Binary Plan ID and start earning pair commissions.'
+            : 'Join the Binary Plan to start building your left & right team and earn pair commissions.'}
+        </p>
+      </div>
+      <button
+        onClick={onActivate}
+        className="mt-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2 rounded-xl transition-colors"
+      >
+        {joined ? 'Activate Binary Plan ID' : 'Join Binary Plan'}
       </button>
     </div>
   );
@@ -865,6 +904,9 @@ function parseBinaryPlan(statusRaw: any, walletRaw: any): BinaryPlanData {
     leftActiveTeam + rightActiveTeam;
 
   return {
+    isInBinaryPlan:
+      s?.isInBinaryPlan ?? s?.IsInBinaryPlan ?? s?.is_in_binary_plan ?? false,
+    isActive: s?.isActive ?? s?.IsActive ?? s?.is_active ?? false,
     joiningDate:
       s?.joiningDate ??
       s?.JoiningDate ??
@@ -1166,12 +1208,14 @@ export default function DashboardPage() {
       fetchDashboard().then(() => fetchTree());
       if (activeTab === 'binary') {
         fetchBinaryPlan();
-        fetchTodayActivations();
+        if (binaryData?.isInBinaryPlan && binaryData?.isActive) {
+          fetchTodayActivations();
+        }
       }
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [fetchDashboard, fetchTree, fetchBinaryPlan, fetchTodayActivations, activeTab]);
+  }, [fetchDashboard, fetchTree, fetchBinaryPlan, fetchTodayActivations, activeTab, binaryData]);
 
   // ── Lazy-load binary plan data the first time the tab is opened ────────────
   useEffect(() => {
@@ -1181,11 +1225,19 @@ export default function DashboardPage() {
   }, [activeTab, binaryData, binaryLoading, fetchBinaryPlan]);
 
   // ── Lazy-load today's activations the first time the tab is opened ────────
+  // Only fetch once the user has actually joined AND activated the Binary
+  // Plan — otherwise there's no subtree to walk and it's just a wasted call.
   useEffect(() => {
-    if (activeTab === 'binary' && todayActivations === null && !todayLoading) {
+    if (
+      activeTab === 'binary' &&
+      binaryData?.isInBinaryPlan &&
+      binaryData?.isActive &&
+      todayActivations === null &&
+      !todayLoading
+    ) {
       fetchTodayActivations();
     }
-  }, [activeTab, todayActivations, todayLoading, fetchTodayActivations]);
+  }, [activeTab, binaryData, todayActivations, todayLoading, fetchTodayActivations]);
 
   // ── Full-page loading skeleton ────────────────────────────────────────────
   if (profileLoading) {
@@ -1388,27 +1440,48 @@ export default function DashboardPage() {
             {/* ── Binary Plan Tab ── */}
             {activeTab === 'binary' && (
               <div className="space-y-5">
-                <BinaryPlanPanel
-                  data={binaryData}
-                  loading={binaryLoading}
-                  error={binaryError}
-                  onRetry={fetchBinaryPlan}
-                />
+                {binaryLoading ? (
+                  <>
+                    <BinaryPlanSkeleton />
+                    <BinaryTeamOverviewSkeleton />
+                    <TodayActivationsSkeleton />
+                  </>
+                ) : binaryError || binaryData === null ? (
+                  <BinaryPlanPanel
+                    data={null}
+                    loading={false}
+                    error={binaryError}
+                    onRetry={fetchBinaryPlan}
+                  />
+                ) : !binaryData.isInBinaryPlan || !binaryData.isActive ? (
+                  // ── Not joined, or joined but ID not yet activated ──
+                  // Show a single "activate first" prompt instead of a wall
+                  // of zeroed-out stat cards.
+                  <BinaryPlanInactiveBanner
+                    joined={binaryData.isInBinaryPlan}
+                    onActivate={() => router.push('/plan')}
+                  />
+                ) : (
+                  <>
+                    <BinaryPlanPanel
+                      data={binaryData}
+                      loading={false}
+                      error={null}
+                      onRetry={fetchBinaryPlan}
+                    />
 
-                {/* ── Total / Active Team + Left / Right split ── */}
-                {binaryLoading || binaryData === null ? (
-                  <BinaryTeamOverviewSkeleton />
-                ) : !binaryError ? (
-                  <BinaryTeamOverview data={binaryData} />
-                ) : null}
+                    {/* ── Total / Active Team + Left / Right split ── */}
+                    <BinaryTeamOverview data={binaryData} />
 
-                {/* ── IDs activated today (left / right) ── */}
-                <TodayActivationsPanel
-                  data={todayActivations}
-                  loading={todayLoading}
-                  error={todayError}
-                  onRetry={fetchTodayActivations}
-                />
+                    {/* ── IDs activated today (left / right) ── */}
+                    <TodayActivationsPanel
+                      data={todayActivations}
+                      loading={todayLoading}
+                      error={todayError}
+                      onRetry={fetchTodayActivations}
+                    />
+                  </>
+                )}
               </div>
             )}
 

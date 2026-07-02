@@ -406,6 +406,45 @@ public class OrdersController : ControllerBase
             Console.WriteLine($"[BV Error] Could not find user {order.UserId} to credit BV for order {order.Id}.");
         }
 
+        // --- Reduce stock for every product in the order. Uses the ORIGINAL
+        // trusted CartItemsJson (ProductId + Quantity, validated server-side at
+        // submission time) rather than the admin-editable ReceiptItemsJson.
+        // Stock is allowed to go negative -- treat that as a "restock now" signal
+        // rather than blocking an already-verified payment. ---
+        try
+        {
+            var purchasedItems = JsonSerializer.Deserialize<List<CartItemSubmissionDto>>(
+                order.CartItemsJson ?? "[]",
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+
+            var purchasedProductIds = purchasedItems.Select(i => i.ProductId).Distinct().ToList();
+            var purchasedProducts = await _db.Products
+                .Where(p => purchasedProductIds.Contains(p.Id))
+                .ToListAsync();
+
+            foreach (var item in purchasedItems)
+            {
+                var product = purchasedProducts.FirstOrDefault(p => p.Id == item.ProductId);
+                if (product == null)
+                {
+                    Console.WriteLine($"[Stock Warning] Product {item.ProductId} on order {order.Id} no longer exists -- skipping stock update.");
+                    continue;
+                }
+
+                product.Quantity -= item.Quantity;
+                product.UpdatedAt = DateTime.UtcNow;
+
+                if (product.Quantity < 0)
+                {
+                    Console.WriteLine($"[Stock Alert] Product '{product.ProductName}' (Id={product.Id}) went negative ({product.Quantity}) after approving order {order.Id}. Restock needed.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Stock Error] Failed to update stock for order {order.Id}: {ex.Message}");
+        }
+
         bool commissionDistributed = false;
 
         if (order.PlanType == "Binary Plan")

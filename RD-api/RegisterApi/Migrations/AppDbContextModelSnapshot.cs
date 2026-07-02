@@ -38,6 +38,12 @@ namespace RegisterApi.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<int>("FirstCommissionLeftCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FirstCommissionRightCount")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 

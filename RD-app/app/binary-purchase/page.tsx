@@ -40,7 +40,6 @@ interface WalletData {
   }[];
 }
 
-// ── Matches exactly what GET /api/Products returns (camelCase) ──
 interface ApiProduct {
   id: number;
   productNo: string;
@@ -55,7 +54,6 @@ interface ApiProduct {
   createdAt: string;
 }
 
-// ── Normalised shape used inside the component ──
 interface Product {
   id: number;
   productNo: string;
@@ -75,7 +73,6 @@ interface CartItem extends Product {
 
 type View = 'plan' | 'shop' | 'payment';
 
-// ── NEW: shape returned by GET /api/binary/preview-placement ──
 interface PlacementPreviewDto {
   success: boolean;
   message: string;
@@ -140,7 +137,6 @@ export default function BinaryPlanPage() {
   const [showRules,  setShowRules]  = useState(false);
   const [showWallet, setShowWallet] = useState(false);
 
-  // ── NEW: tracks latest payment order status (Binary Plan orders only) ──
   const [pendingOrderStatus, setPendingOrderStatus] = useState<'Pending' | 'Rejected' | null>(null);
 
   // join
@@ -150,7 +146,12 @@ export default function BinaryPlanPage() {
   const [joinMsg,   setJoinMsg]   = useState('');
   const [joinError, setJoinError] = useState('');
 
-  // ── NEW: placement preview (auto-placement warning) state ──
+  // sponsor lookup
+  const [sponsorName,        setSponsorName]        = useState('');
+  const [sponsorNameLoading, setSponsorNameLoading] = useState(false);
+  const [sponsorNameError,   setSponsorNameError]   = useState('');
+
+  // placement preview
   const [previewLoading,        setPreviewLoading]        = useState(false);
   const [previewError,          setPreviewError]          = useState('');
   const [placementPreview,      setPlacementPreview]      = useState<PlacementPreviewDto | null>(null);
@@ -177,7 +178,7 @@ export default function BinaryPlanPage() {
   const [orderSuccess,   setOrderSuccess]   = useState(false);
   const [orderMsg,       setOrderMsg]       = useState('');
 
-  // ── auth ──
+  // auth
   const token = useMemo(() => {
     if (typeof window === 'undefined') return '';
     return localStorage.getItem('authToken') || localStorage.getItem('token') || '';
@@ -199,7 +200,7 @@ export default function BinaryPlanPage() {
 
   const isRootUser = currentUserId === ROOT_USER_ID;
 
-  // ── fetchers ──
+  // fetchers
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/binary/status`, {
@@ -219,7 +220,6 @@ export default function BinaryPlanPage() {
     } catch {}
   }, [token]);
 
-  // ── FIXED: fetch latest BINARY PLAN order status (filter by PlanType) ──
   const fetchMyOrders = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/Orders/my-orders`, {
@@ -227,15 +227,11 @@ export default function BinaryPlanPage() {
       });
       if (res.ok) {
         const orders: { status: string; planType: string; requestedAt: string }[] = await res.json();
-        
-        // Filter for Binary Plan orders only
         const binaryOrders = orders.filter(o => o.planType === 'Binary Plan');
-        
-        // Get the latest Binary Plan order
         const latest = binaryOrders.sort(
           (a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()
         )[0];
-        
+
         if (latest?.status === 'Pending')        setPendingOrderStatus('Pending');
         else if (latest?.status === 'Rejected')  setPendingOrderStatus('Rejected');
         else                                     setPendingOrderStatus(null);
@@ -263,6 +259,37 @@ export default function BinaryPlanPage() {
     finally { setProductsLoad(false); }
   }, [token]);
 
+  const fetchSponsorName = useCallback(async (sponsorId: string) => {
+    setSponsorNameLoading(true);
+    setSponsorNameError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/Auth/sponsor-lookup/${encodeURIComponent(sponsorId)}`, {
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const name = data.name || data.sponsorIdName || '';
+        if (name) {
+          setSponsorName(name);
+        } else {
+          setSponsorName('');
+          setSponsorNameError('Sponsor not found.');
+        }
+      } else if (res.status === 404) {
+        setSponsorName('');
+        setSponsorNameError('Sponsor ID not found.');
+      } else {
+        setSponsorName('');
+        setSponsorNameError('Failed to look up sponsor.');
+      }
+    } catch {
+      setSponsorName('');
+      setSponsorNameError('Network error while looking up sponsor.');
+    } finally {
+      setSponsorNameLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!token) { router.push('/login'); return; }
     (async () => {
@@ -276,7 +303,22 @@ export default function BinaryPlanPage() {
     if (view === 'shop' && products.length === 0) fetchProducts();
   }, [view, products.length, fetchProducts]);
 
-  // ── cart helpers ──
+  useEffect(() => {
+    const trimmed = sponsorInput.trim();
+    if (!trimmed) {
+      setSponsorName('');
+      setSponsorNameError('');
+      setSponsorNameLoading(false);
+      return;
+    }
+    setSponsorNameLoading(true);
+    const timer = setTimeout(() => {
+      fetchSponsorName(trimmed);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [sponsorInput, fetchSponsorName]);
+
+  // cart helpers
   const cartTotal   = useMemo(() => cart.reduce((s, i) => s + i.price * i.qty, 0), [cart]);
   const cartTotalBV = useMemo(() => cart.reduce((s, i) => s + i.bv   * i.qty, 0), [cart]);
   const cartCount   = useMemo(() => cart.reduce((s, i) => s + i.qty,           0), [cart]);
@@ -296,7 +338,6 @@ export default function BinaryPlanPage() {
 
   const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.id !== id));
 
-  // ── Call /api/binary/preview-placement to check placement ──
   const getPlacementPreview = async (
     sponsorId: string,
     preferredPosition: 'LEFT' | 'RIGHT'
@@ -322,7 +363,6 @@ export default function BinaryPlanPage() {
     }
   };
 
-  // ── join: actually submits to /api/binary/join ──
   const doJoin = async () => {
     setJoinError(''); setJoinMsg('');
     setJoining(true);
@@ -342,32 +382,29 @@ export default function BinaryPlanPage() {
     finally { setJoining(false); }
   };
 
-  // ── Handles Join button click — previews placement first for non-root users ──
   const handleJoinClick = async () => {
     setJoinError(''); setJoinMsg(''); setPreviewError('');
 
-    // root user has no sponsor/position to preview — join straight away
     if (isRootUser) {
       await doJoin();
       return;
     }
 
     if (!sponsorInput.trim()) { setJoinError('Please enter a Sponsor ID.'); return; }
+    if (sponsorNameLoading) { setJoinError('Please wait — verifying sponsor…'); return; }
+    if (!sponsorName || sponsorNameError) { setJoinError('Please enter a valid Sponsor ID.'); return; }
 
     const preview = await getPlacementPreview(sponsorInput.trim().toUpperCase(), positionInput);
-    if (!preview) return; // previewError is already set
+    if (!preview) return;
 
     if (preview.isDirectPlacement) {
-      // Direct placement - no conflict, join immediately
       await doJoin();
     } else {
-      // Slot taken - show confirmation with actual placement before joining
       setPlacementPreview(preview);
       setShowPlacementConfirm(true);
     }
   };
 
-  // ── withdraw ──
   const handleWithdraw = async () => {
     setWithdrawError(''); setWithdrawMsg('');
     const amt = parseFloat(withdrawAmt);
@@ -387,7 +424,6 @@ export default function BinaryPlanPage() {
     finally { setWithdrawing(false); }
   };
 
-  // ── screenshot pick ──
   const handleScreenshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -397,7 +433,6 @@ export default function BinaryPlanPage() {
     reader.readAsDataURL(file);
   };
 
-  // ── payment submit ──
   const handlePaymentSubmit = async () => {
     setSubmitError('');
     if (!utrNumber.trim()) { setSubmitError('Please enter the UTR / Transaction ID.'); return; }
@@ -410,9 +445,9 @@ export default function BinaryPlanPage() {
           productId:   i.id,
           productName: i.name,
           quantity:    i.qty,
-          price:       i.price,   // dp / distributor price
-          bv:          i.bv,      // business volume
-          gst:         i.gst,     // GST %
+          price:       i.price,
+          bv:          i.bv,
+          gst:         i.gst,
         }))
       );
 
@@ -435,7 +470,6 @@ export default function BinaryPlanPage() {
         setOrderSuccess(true);
         setOrderMsg(data.message || 'Order submitted! Admin will verify and activate your Binary ID.');
         setCart([]);
-        // Mark as pending immediately after successful submission
         setPendingOrderStatus('Pending');
       } else {
         setSubmitError(data.message || 'Submission failed. Please try again.');
@@ -444,15 +478,16 @@ export default function BinaryPlanPage() {
     finally { setSubmitting(false); }
   };
 
-  // ─── Loading ──────────────────────────────────────────────────────────────
-
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gray-50">
         <Sidebar />
-        <main className="flex-1 flex items-center justify-center">
-          <Loader2 size={28} className="animate-spin text-gray-400" />
-        </main>
+        <div className="flex-1 flex flex-col">
+          <LoginTopBar />
+          <main className="flex-1 flex items-center justify-center">
+            <Loader2 size={28} className="animate-spin text-gray-400" />
+          </main>
+        </div>
       </div>
     );
   }
@@ -468,220 +503,218 @@ export default function BinaryPlanPage() {
     return (
       <div className="flex min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-indigo-50">
         <Sidebar />
-        <main className="flex-1 p-6 md:p-8 pb-12 overflow-auto flex flex-col items-center">
+        <div className="flex-1 flex flex-col overflow-auto">
+          <LoginTopBar />
+          <main className="p-6 md:p-8 pb-12 flex flex-col items-center">
 
-          <div className="w-full max-w-5xl"><div className="flex items-center gap-3 mb-8">
-            <button
-              onClick={() => { setView('shop'); setSubmitError(''); setOrderSuccess(false); }}
-              className="p-2.5 rounded-2xl bg-white border border-gray-200 hover:bg-gray-50 shadow-sm transition-colors"
-            >
-              <ArrowLeft size={18} className="text-gray-600" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Complete Payment</h1>
-              <p className="text-sm text-gray-400 mt-0.5">Step 3 of 3 — Scan · Pay · Confirm</p>
-            </div>
-          </div>
-
-          {/* ── Success state ── */}
-          {orderSuccess ? (
-            <div className="max-w-lg mx-auto">
-              <div className="bg-white rounded-3xl shadow-xl p-10 text-center border border-emerald-100">
-                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                  <CheckCheck size={40} className="text-emerald-500" />
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Submitted!</h2>
-                <p className="text-gray-500 mb-2">{orderMsg}</p>
-                <p className="text-sm text-gray-400 mb-8">
-                  Admin will verify your payment within <span className="font-semibold text-gray-600">24 hours</span> and activate your Binary ID automatically.
-                </p>
-                <div className="bg-emerald-50 rounded-2xl p-4 mb-6 text-left">
-                  <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">What happens next?</p>
-                  <div className="space-y-1.5 text-xs text-emerald-600">
-                    <p>✓ Admin reviews your screenshot & UTR</p>
-                    <p>✓ Payment marked as verified</p>
-                    <p>✓ Binary ID activated instantly</p>
-                    <p>✓ You start earning pair commissions</p>
-                  </div>
-                </div>
+            <div className="w-full max-w-5xl">
+              <div className="flex items-center gap-3 mb-8">
                 <button
-                  onClick={() => { setView('plan'); setOrderSuccess(false); fetchStatus(); }}
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-8 py-3 rounded-2xl transition-colors w-full"
+                  onClick={() => { setView('shop'); setSubmitError(''); setOrderSuccess(false); }}
+                  className="p-2.5 rounded-2xl bg-white border border-gray-200 hover:bg-gray-50 shadow-sm transition-colors"
                 >
-                  Go to Binary Plan →
+                  <ArrowLeft size={18} className="text-gray-600" />
                 </button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl mx-auto w-full">
-
-              {/* ── LEFT COLUMN: QR + Order Summary ── */}
-              <div className="space-y-5">
-
-                {/* Order Summary */}
-                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                  <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-4">
-                    <h2 className="text-white font-bold text-base flex items-center gap-2">
-                      <Package size={16} /> Order Summary
-                    </h2>
-                  </div>
-                  <div className="p-5">
-                    <div className="space-y-3 mb-4">
-                      {cart.map(item => (
-                        <div key={`payment-summary-${item.id}`} className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl overflow-hidden bg-purple-50 flex-shrink-0 flex items-center justify-center">
-                            {item.imageUrl
-                              ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-                              : <Package size={16} className="text-purple-300" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
-                            <p className="text-xs text-gray-400">Qty: {item.qty} · {item.bv * item.qty} BV</p>
-                          </div>
-                          <span className="text-sm font-bold text-gray-800">₹{(item.price * item.qty).toLocaleString('en-IN')}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="border-t border-dashed border-gray-200 pt-3 space-y-1.5">
-                      <div className="flex justify-between text-sm text-gray-500">
-                        <span>Business Volume</span>
-                        <span className="font-semibold text-emerald-600">{cartTotalBV} BV</span>
-                      </div>
-                      <div className="flex justify-between text-base font-bold text-gray-900">
-                        <span>Total Amount</span>
-                        <span className="text-purple-600">₹{cartTotal.toLocaleString('en-IN')}</span>
-                      </div>
-                    </div>
-                  </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Complete Payment</h1>
+                  <p className="text-sm text-gray-400 mt-0.5">Step 3 of 3 — Scan · Pay · Confirm</p>
                 </div>
+              </div>
 
-                {/* QR Card */}
-                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 text-center">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Scan & Pay via UPI</p>
-                  <p className="text-2xl font-bold text-purple-700 mb-5">₹{cartTotal.toLocaleString('en-IN')}</p>
-
-                  <div className="inline-flex flex-col items-center justify-center w-52 h-52 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-dashed border-purple-200 rounded-2xl mx-auto mb-5">
-                    <QrCode size={72} className="text-purple-300 mb-2" />
-                    <p className="text-[10px] text-gray-400 text-center px-4 leading-relaxed">
-                      Replace with your<br />company UPI QR image
+              {orderSuccess ? (
+                <div className="max-w-lg mx-auto">
+                  <div className="bg-white rounded-3xl shadow-xl p-10 text-center border border-emerald-100">
+                    <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                      <CheckCheck size={40} className="text-emerald-500" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Submitted!</h2>
+                    <p className="text-gray-500 mb-2">{orderMsg}</p>
+                    <p className="text-sm text-gray-400 mb-8">
+                      Admin will verify your payment within <span className="font-semibold text-gray-600">24 hours</span> and activate your Binary ID automatically.
                     </p>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-2 bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3 mb-3">
-                    <IndianRupee size={15} className="text-purple-500 flex-shrink-0" />
-                    <span className="font-mono text-purple-800 font-semibold text-sm">rajdhanvarsha@upi</span>
+                    <div className="bg-emerald-50 rounded-2xl p-4 mb-6 text-left">
+                      <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">What happens next?</p>
+                      <div className="space-y-1.5 text-xs text-emerald-600">
+                        <p>✓ Admin reviews your screenshot & UTR</p>
+                        <p>✓ Payment marked as verified</p>
+                        <p>✓ Binary ID activated instantly</p>
+                        <p>✓ You start earning pair commissions</p>
+                      </div>
+                    </div>
                     <button
-                      onClick={() => navigator.clipboard?.writeText('rajdhanvarsha@upi')}
-                      className="ml-1 text-purple-400 hover:text-purple-700 transition-colors p-1 hover:bg-purple-100 rounded-lg"
-                      title="Copy UPI ID"
+                      onClick={() => { setView('plan'); setOrderSuccess(false); fetchStatus(); }}
+                      className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-8 py-3 rounded-2xl transition-colors w-full"
                     >
-                      <Copy size={14} />
+                      Go to Binary Plan →
                     </button>
                   </div>
-
-                  <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-left">
-                    <span className="text-amber-500 flex-shrink-0 text-base">⚠️</span>
-                    <p className="text-[11px] text-amber-700 leading-relaxed">
-                      Pay the exact amount shown. Do not close this page after payment.
-                    </p>
-                  </div>
                 </div>
-              </div>
-
-              {/* ── RIGHT COLUMN: Transaction Details ── */}
-              <div className="space-y-5">
-
-                {/* Steps indicator */}
-                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">How to pay</p>
-                  <div className="space-y-3">
-                    {[
-                      { n: '1', text: 'Scan the QR code or copy the UPI ID' },
-                      { n: '2', text: 'Pay exactly ₹' + cartTotal.toLocaleString('en-IN') + ' from any UPI app' },
-                      { n: '3', text: 'Note the UTR / Transaction ID from your app' },
-                      { n: '4', text: 'Upload screenshot & enter UTR below' },
-                    ].map(step => (
-                      <div key={step.n} className="flex items-start gap-3">
-                        <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.n}</div>
-                        <p className="text-sm text-gray-600">{step.text}</p>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl mx-auto w-full">
+                  <div className="space-y-5">
+                    {/* Order Summary */}
+                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-4">
+                        <h2 className="text-white font-bold text-base flex items-center gap-2">
+                          <Package size={16} /> Order Summary
+                        </h2>
                       </div>
-                    ))}
+                      <div className="p-5">
+                        <div className="space-y-3 mb-4">
+                          {cart.map(item => (
+                            <div key={`payment-summary-${item.id}`} className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl overflow-hidden bg-purple-50 flex-shrink-0 flex items-center justify-center">
+                                {item.imageUrl
+                                  ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                  : <Package size={16} className="text-purple-300" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
+                                <p className="text-xs text-gray-400">Qty: {item.qty} · {item.bv * item.qty} BV</p>
+                              </div>
+                              <span className="text-sm font-bold text-gray-800">₹{(item.price * item.qty).toLocaleString('en-IN')}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="border-t border-dashed border-gray-200 pt-3 space-y-1.5">
+                          <div className="flex justify-between text-sm text-gray-500">
+                            <span>Business Volume</span>
+                            <span className="font-semibold text-emerald-600">{cartTotalBV} BV</span>
+                          </div>
+                          <div className="flex justify-between text-base font-bold text-gray-900">
+                            <span>Total Amount</span>
+                            <span className="text-purple-600">₹{cartTotal.toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* QR Card */}
+                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 text-center">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Scan & Pay via UPI</p>
+                      <p className="text-2xl font-bold text-purple-700 mb-5">₹{cartTotal.toLocaleString('en-IN')}</p>
+
+                      <div className="inline-flex flex-col items-center justify-center w-52 h-52 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-dashed border-purple-200 rounded-2xl mx-auto mb-5">
+                        <QrCode size={72} className="text-purple-300 mb-2" />
+                        <p className="text-[10px] text-gray-400 text-center px-4 leading-relaxed">
+                          Replace with your<br />company UPI QR image
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-center gap-2 bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3 mb-3">
+                        <IndianRupee size={15} className="text-purple-500 flex-shrink-0" />
+                        <span className="font-mono text-purple-800 font-semibold text-sm">rajdhanvarsha@upi</span>
+                        <button
+                          onClick={() => navigator.clipboard?.writeText('rajdhanvarsha@upi')}
+                          className="ml-1 text-purple-400 hover:text-purple-700 transition-colors p-1 hover:bg-purple-100 rounded-lg"
+                          title="Copy UPI ID"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-left">
+                        <span className="text-amber-500 flex-shrink-0 text-base">⚠️</span>
+                        <p className="text-[11px] text-amber-700 leading-relaxed">
+                          Pay the exact amount shown. Do not close this page after payment.
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                {/* Transaction form */}
-                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-                  <h2 className="font-bold text-gray-900 text-base mb-5">Confirm Your Payment</h2>
+                  <div className="space-y-5">
+                    {/* Steps indicator */}
+                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">How to pay</p>
+                      <div className="space-y-3">
+                        {[
+                          { n: '1', text: 'Scan the QR code or copy the UPI ID' },
+                          { n: '2', text: 'Pay exactly ₹' + cartTotal.toLocaleString('en-IN') + ' from any UPI app' },
+                          { n: '3', text: 'Note the UTR / Transaction ID from your app' },
+                          { n: '4', text: 'Upload screenshot & enter UTR below' },
+                        ].map(step => (
+                          <div key={step.n} className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{step.n}</div>
+                            <p className="text-sm text-gray-600">{step.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
 
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                    UTR / Transaction ID <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={utrNumber}
-                    onChange={e => setUtrNumber(e.target.value)}
-                    placeholder="e.g. 426891234567"
-                    className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm mb-5 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all"
-                  />
+                    {/* Transaction form */}
+                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+                      <h2 className="font-bold text-gray-900 text-base mb-5">Confirm Your Payment</h2>
 
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                    Payment Screenshot <span className="text-red-400">*</span>
-                  </label>
-
-                  {screenshotPrev ? (
-                    <div className="relative mb-5">
-                      <img
-                        src={screenshotPrev}
-                        alt="Payment screenshot"
-                        className="w-full max-h-60 object-contain rounded-2xl border-2 border-purple-100"
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        UTR / Transaction ID <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={utrNumber}
+                        onChange={e => setUtrNumber(e.target.value)}
+                        placeholder="e.g. 426891234567"
+                        className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm mb-5 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all"
                       />
+
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        Payment Screenshot <span className="text-red-400">*</span>
+                      </label>
+
+                      {screenshotPrev ? (
+                        <div className="relative mb-5">
+                          <img
+                            src={screenshotPrev}
+                            alt="Payment screenshot"
+                            className="w-full max-h-60 object-contain rounded-2xl border-2 border-purple-100"
+                          />
+                          <button
+                            onClick={() => { setScreenshot(null); setScreenshotPrev(''); }}
+                            className="absolute top-2.5 right-2.5 bg-white border border-gray-200 rounded-full p-1.5 shadow-md hover:bg-red-50 transition-colors"
+                          >
+                            <X size={14} className="text-gray-500" />
+                          </button>
+                          <div className="absolute bottom-2.5 left-2.5 bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
+                            <CheckCircle2 size={10} /> Screenshot added
+                          </div>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all mb-5 group">
+                          <div className="w-10 h-10 bg-gray-100 group-hover:bg-purple-100 rounded-xl flex items-center justify-center mb-2 transition-colors">
+                            <Upload size={20} className="text-gray-400 group-hover:text-purple-500 transition-colors" />
+                          </div>
+                          <span className="text-sm font-medium text-gray-500 group-hover:text-purple-600 transition-colors">Click to upload screenshot</span>
+                          <span className="text-xs text-gray-400 mt-0.5">PNG, JPG, WEBP — max 5 MB</span>
+                          <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" className="hidden" onChange={handleScreenshotChange} />
+                        </label>
+                      )}
+
+                      {submitError && (
+                        <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl px-4 py-3 mb-4 flex items-start gap-2">
+                          <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                          {submitError}
+                        </div>
+                      )}
+
                       <button
-                        onClick={() => { setScreenshot(null); setScreenshotPrev(''); }}
-                        className="absolute top-2.5 right-2.5 bg-white border border-gray-200 rounded-full p-1.5 shadow-md hover:bg-red-50 transition-colors"
+                        onClick={handlePaymentSubmit}
+                        disabled={submitting}
+                        className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:from-purple-300 disabled:to-indigo-300 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-200 text-sm"
                       >
-                        <X size={14} className="text-gray-500" />
+                        {submitting
+                          ? <><Loader2 size={16} className="animate-spin" /> Verifying your payment…</>
+                          : <><CheckCheck size={16} /> Submit Payment for Verification</>}
                       </button>
-                      <div className="absolute bottom-2.5 left-2.5 bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
-                        <CheckCircle2 size={10} /> Screenshot added
-                      </div>
+
+                      <p className="text-xs text-gray-400 text-center mt-3">
+                        🔒 Secure · Admin verifies within 24 hours · Binary ID activates automatically
+                      </p>
                     </div>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all mb-5 group">
-                      <div className="w-10 h-10 bg-gray-100 group-hover:bg-purple-100 rounded-xl flex items-center justify-center mb-2 transition-colors">
-                        <Upload size={20} className="text-gray-400 group-hover:text-purple-500 transition-colors" />
-                      </div>
-                      <span className="text-sm font-medium text-gray-500 group-hover:text-purple-600 transition-colors">Click to upload screenshot</span>
-                      <span className="text-xs text-gray-400 mt-0.5">PNG, JPG, WEBP — max 5 MB</span>
-                      <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" className="hidden" onChange={handleScreenshotChange} />
-                    </label>
-                  )}
-
-                  {submitError && (
-                    <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl px-4 py-3 mb-4 flex items-start gap-2">
-                      <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                      {submitError}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handlePaymentSubmit}
-                    disabled={submitting}
-                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:from-purple-300 disabled:to-indigo-300 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-200 text-sm"
-                  >
-                    {submitting
-                      ? <><Loader2 size={16} className="animate-spin" /> Verifying your payment…</>
-                      : <><CheckCheck size={16} /> Submit Payment for Verification</>}
-                  </button>
-
-                  <p className="text-xs text-gray-400 text-center mt-3">
-                    🔒 Secure · Admin verifies within 24 hours · Binary ID activates automatically
-                  </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-          )}
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     );
   }
@@ -696,504 +729,524 @@ export default function BinaryPlanPage() {
     return (
       <div className="flex min-h-screen bg-gray-50">
         <Sidebar />
-        <main className="flex-1 p-4 md:p-6 pb-52">
-
-          <div className="flex items-center gap-3 mb-5">
-            <button onClick={() => setView('plan')} className="p-2 rounded-xl hover:bg-gray-200 transition-colors">
-              <ArrowLeft size={18} className="text-gray-600" />
-            </button>
-            <div className="flex-1">
-              <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <ShoppingCart size={20} className="text-purple-600" /> Select Products
-              </h1>
-              <p className="text-xs text-gray-400 mt-0.5">Add products worth ≥600 BV to activate Binary ID</p>
-            </div>
-            {cartCount > 0 && (
-              <div className="relative">
-                <ShoppingCart size={22} className="text-purple-600" />
-                <span className="absolute -top-1.5 -right-1.5 bg-purple-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {cartCount}
-                </span>
+        <div className="flex-1 flex flex-col">
+          <LoginTopBar />
+          <main className="p-4 md:p-6 pb-52 flex-1">
+            <div className="flex items-center gap-3 mb-5">
+              <button onClick={() => setView('plan')} className="p-2 rounded-xl hover:bg-gray-200 transition-colors">
+                <ArrowLeft size={18} className="text-gray-600" />
+              </button>
+              <div className="flex-1">
+                <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <ShoppingCart size={20} className="text-purple-600" /> Select Products
+                </h1>
+                <p className="text-xs text-gray-400 mt-0.5">Add products worth ≥600 BV to activate Binary ID</p>
               </div>
-            )}
-          </div>
-
-          {/* BV progress */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-            <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-              <span>Business Volume</span>
-              <span className={`font-bold ${bvMet ? 'text-emerald-600' : 'text-purple-600'}`}>
-                {cartTotalBV} / 600 BV
-              </span>
-            </div>
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${bvMet ? 'bg-emerald-500' : 'bg-purple-500'}`}
-                style={{ width: `${Math.min((cartTotalBV / 600) * 100, 100)}%` }}
-              />
-            </div>
-            {bvMet
-              ? <p className="text-xs text-emerald-600 font-medium mt-1.5 flex items-center gap-1"><CheckCircle2 size={12} /> 600 BV requirement met!</p>
-              : cartTotalBV > 0
-                ? <p className="text-xs text-gray-400 mt-1.5">{600 - cartTotalBV} more BV needed</p>
-                : null}
-          </div>
-
-          {/* Products */}
-          {productsLoad ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 size={24} className="animate-spin text-gray-300" />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
-              {displayProducts.map(product => {
-                const cartItem = cart.find(i => i.id === product.id);
-                return (
-                  <div key={`product-${product.id}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                    <div className="w-full h-48 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
-                      {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover rounded-xl" />
-                      ) : (
-                        <Package size={32} className="text-purple-200" />
-                      )}
-                    </div>
-
-                    <h3 className="font-semibold text-sm text-gray-800 mb-0.5 leading-tight">{product.name}</h3>
-                    {product.description && (
-                      <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">{product.description}</p>
-                    )}
-
-                    <div className="flex items-end justify-between mb-3">
-                      <div>
-                        <p className="text-base font-bold text-gray-800">₹{product.price.toLocaleString('en-IN')}</p>
-                        <p className="text-[11px] text-gray-400 line-through">MRP ₹{product.mrp.toLocaleString('en-IN')}</p>
-                        <p className="text-[11px] text-purple-500 font-medium">{product.bv} BV</p>
-                      </div>
-                    </div>
-
-                    {cartItem ? (
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden flex-1">
-                          <button onClick={() => changeQty(product.id, -1)} className="px-3 py-2 hover:bg-gray-50 transition-colors">
-                            <Minus size={13} />
-                          </button>
-                          <span className="flex-1 text-center text-sm font-semibold">{cartItem.qty}</span>
-                          <button onClick={() => changeQty(product.id, 1)} className="px-3 py-2 hover:bg-gray-50 transition-colors">
-                            <Plus size={13} />
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => removeFromCart(product.id)}
-                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => addToCart(product)}
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
-                      >
-                        <Plus size={13} /> Add to Cart
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Floating cart pill */}
-          {cart.length > 0 && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-              <button
-                onClick={() => setCartOpen(true)}
-                className="flex items-center gap-3 bg-purple-700 hover:bg-purple-800 text-white px-5 py-3 rounded-full shadow-2xl transition-all"
-              >
+              {cartCount > 0 && (
                 <div className="relative">
-                  <ShoppingCart size={18} />
-                  <span className="absolute -top-2 -right-2 bg-white text-purple-700 text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  <ShoppingCart size={22} className="text-purple-600" />
+                  <span className="absolute -top-1.5 -right-1.5 bg-purple-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                     {cartCount}
                   </span>
                 </div>
-                <span className="text-sm font-semibold">{cartCount} item{cartCount > 1 ? 's' : ''} in cart</span>
-                <span className="text-sm font-bold">₹{cartTotal.toLocaleString('en-IN')}</span>
-                <ArrowRight size={15} />
-              </button>
+              )}
             </div>
-          )}
 
-          {/* Cart side drawer */}
-          {cartOpen && (
-            <>
-              <div
-                className="fixed inset-0 bg-black/30 z-40"
-                onClick={() => setCartOpen(false)}
-              />
-              <div className="fixed top-0 right-0 h-full w-80 bg-white z-50 shadow-2xl flex flex-col">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-purple-700">
-                  <h2 className="text-white font-bold text-base flex items-center gap-2">
-                    <ShoppingCart size={18} /> Cart ({cartCount})
-                  </h2>
-                  <button onClick={() => setCartOpen(false)} className="text-white hover:text-purple-200 transition-colors">
-                    <X size={20} />
-                  </button>
-                </div>
+            {/* BV progress */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+              <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                <span>Business Volume</span>
+                <span className={`font-bold ${bvMet ? 'text-emerald-600' : 'text-purple-600'}`}>
+                  {cartTotalBV} / 600 BV
+                </span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${bvMet ? 'bg-emerald-500' : 'bg-purple-500'}`}
+                  style={{ width: `${Math.min((cartTotalBV / 600) * 100, 100)}%` }}
+                />
+              </div>
+              {bvMet
+                ? <p className="text-xs text-emerald-600 font-medium mt-1.5 flex items-center gap-1"><CheckCircle2 size={12} /> 600 BV requirement met!</p>
+                : cartTotalBV > 0
+                  ? <p className="text-xs text-gray-400 mt-1.5">{600 - cartTotalBV} more BV needed</p>
+                  : null}
+            </div>
 
-                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-                  {cart.map(item => (
-                    <div key={`drawer-${item.id}`} className="flex gap-3 bg-gray-50 rounded-xl p-3">
-                      <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-100">
-                        {item.imageUrl
-                          ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover rounded-lg" />
-                          : <Package size={18} className="text-purple-200" />}
+            {/* Products */}
+            {productsLoad ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 size={24} className="animate-spin text-gray-300" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
+                {displayProducts.map(product => {
+                  const cartItem = cart.find(i => i.id === product.id);
+                  return (
+                    <div key={`product-${product.id}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                      <div className="w-full h-48 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
+                        {product.imageUrl ? (
+                          <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover rounded-xl" />
+                        ) : (
+                          <Package size={32} className="text-purple-200" />
+                        )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-gray-800 truncate">{item.name}</p>
-                        <p className="text-[11px] text-purple-500 font-medium">BV {item.bv}</p>
-                        <div className="flex items-center justify-between mt-1.5">
-                          <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
-                            <button onClick={() => changeQty(item.id, -1)} className="px-2 py-1 hover:bg-gray-50 transition-colors"><Minus size={10} /></button>
-                            <span className="px-2 text-xs font-bold">{item.qty}</span>
-                            <button onClick={() => changeQty(item.id, 1)} className="px-2 py-1 hover:bg-gray-50 transition-colors"><Plus size={10} /></button>
+
+                      <h3 className="font-semibold text-sm text-gray-800 mb-0.5 leading-tight">{product.name}</h3>
+                      {product.description && (
+                        <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">{product.description}</p>
+                      )}
+
+                      <div className="flex items-end justify-between mb-3">
+                        <div>
+                          <p className="text-base font-bold text-gray-800">₹{product.price.toLocaleString('en-IN')}</p>
+                          <p className="text-[11px] text-gray-400 line-through">MRP ₹{product.mrp.toLocaleString('en-IN')}</p>
+                          <p className="text-[11px] text-purple-500 font-medium">{product.bv} BV</p>
+                        </div>
+                      </div>
+
+                      {cartItem ? (
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden flex-1">
+                            <button onClick={() => changeQty(product.id, -1)} className="px-3 py-2 hover:bg-gray-50 transition-colors">
+                              <Minus size={13} />
+                            </button>
+                            <span className="flex-1 text-center text-sm font-semibold">{cartItem.qty}</span>
+                            <button onClick={() => changeQty(product.id, 1)} className="px-3 py-2 hover:bg-gray-50 transition-colors">
+                              <Plus size={13} />
+                            </button>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-gray-800">₹{(item.price * item.qty).toLocaleString('en-IN')}</span>
-                            <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-600 transition-colors"><Trash2 size={13} /></button>
+                          <button
+                            onClick={() => removeFromCart(product.id)}
+                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => addToCart(product)}
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <Plus size={13} /> Add to Cart
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Floating cart pill */}
+            {cart.length > 0 && (
+              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+                <button
+                  onClick={() => setCartOpen(true)}
+                  className="flex items-center gap-3 bg-purple-700 hover:bg-purple-800 text-white px-5 py-3 rounded-full shadow-2xl transition-all"
+                >
+                  <div className="relative">
+                    <ShoppingCart size={18} />
+                    <span className="absolute -top-2 -right-2 bg-white text-purple-700 text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                      {cartCount}
+                    </span>
+                  </div>
+                  <span className="text-sm font-semibold">{cartCount} item{cartCount > 1 ? 's' : ''} in cart</span>
+                  <span className="text-sm font-bold">₹{cartTotal.toLocaleString('en-IN')}</span>
+                  <ArrowRight size={15} />
+                </button>
+              </div>
+            )}
+
+            {/* Cart side drawer */}
+            {cartOpen && (
+              <>
+                <div
+                  className="fixed inset-0 bg-black/30 z-40"
+                  onClick={() => setCartOpen(false)}
+                />
+                <div className="fixed top-0 right-0 h-full w-80 bg-white z-50 shadow-2xl flex flex-col">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-purple-700">
+                    <h2 className="text-white font-bold text-base flex items-center gap-2">
+                      <ShoppingCart size={18} /> Cart ({cartCount})
+                    </h2>
+                    <button onClick={() => setCartOpen(false)} className="text-white hover:text-purple-200 transition-colors">
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                    {cart.map(item => (
+                      <div key={`drawer-${item.id}`} className="flex gap-3 bg-gray-50 rounded-xl p-3">
+                        <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-100">
+                          {item.imageUrl
+                            ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover rounded-lg" />
+                            : <Package size={18} className="text-purple-200" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-800 truncate">{item.name}</p>
+                          <p className="text-[11px] text-purple-500 font-medium">BV {item.bv}</p>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
+                              <button onClick={() => changeQty(item.id, -1)} className="px-2 py-1 hover:bg-gray-50 transition-colors"><Minus size={10} /></button>
+                              <span className="px-2 text-xs font-bold">{item.qty}</span>
+                              <button onClick={() => changeQty(item.id, 1)} className="px-2 py-1 hover:bg-gray-50 transition-colors"><Plus size={10} /></button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-gray-800">₹{(item.price * item.qty).toLocaleString('en-IN')}</span>
+                              <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-600 transition-colors"><Trash2 size={13} /></button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                <div className="border-t border-gray-100 px-5 py-4 bg-white">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-500">Total BV</span>
-                    <span className={`font-bold ${bvMet ? 'text-emerald-600' : 'text-purple-600'}`}>{cartTotalBV} BV</span>
+                  <div className="border-t border-gray-100 px-5 py-4 bg-white">
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-500">Total BV</span>
+                      <span className={`font-bold ${bvMet ? 'text-emerald-600' : 'text-purple-600'}`}>{cartTotalBV} BV</span>
+                    </div>
+                    <div className="flex justify-between text-base font-bold text-gray-800 mb-3">
+                      <span>Total Amount</span>
+                      <span className="text-purple-700">₹{cartTotal.toLocaleString('en-IN')}</span>
+                    </div>
+                    {!bvMet && (
+                      <p className="text-[11px] text-amber-500 text-center mb-2">
+                        Add {600 - cartTotalBV} more BV to unlock payment
+                      </p>
+                    )}
+                    <button
+                      onClick={() => { setCartOpen(false); setView('payment'); }}
+                      disabled={!bvMet}
+                      className={`w-full flex items-center justify-center gap-2 text-sm font-bold py-3 rounded-xl transition-colors
+                        ${bvMet ? 'bg-purple-700 hover:bg-purple-800 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                    >
+                      {!bvMet ? <Lock size={14} /> : <ArrowRight size={14} />}
+                      Proceed to Payment →
+                    </button>
                   </div>
-                  <div className="flex justify-between text-base font-bold text-gray-800 mb-3">
-                    <span>Total Amount</span>
-                    <span className="text-purple-700">₹{cartTotal.toLocaleString('en-IN')}</span>
-                  </div>
-                  {!bvMet && (
-                    <p className="text-[11px] text-amber-500 text-center mb-2">
-                      Add {600 - cartTotalBV} more BV to unlock payment
-                    </p>
-                  )}
-                  <button
-                    onClick={() => { setCartOpen(false); setView('payment'); }}
-                    disabled={!bvMet}
-                    className={`w-full flex items-center justify-center gap-2 text-sm font-bold py-3 rounded-xl transition-colors
-                      ${bvMet ? 'bg-purple-700 hover:bg-purple-800 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-                  >
-                    {!bvMet ? <Lock size={14} /> : <ArrowRight size={14} />}
-                    Proceed to Payment →
-                  </button>
                 </div>
-              </div>
-            </>
-          )}
-        </main>
+              </>
+            )}
+          </main>
+        </div>
       </div>
     );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // VIEW: PLAN (binary plan overview)
+  // VIEW: PLAN (default)
   // ═══════════════════════════════════════════════════════════════════════════
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar />
-      <main className="flex-1 p-4 md:p-6 pb-24 max-w-2xl">
-
-        <div className="mb-5">
-          <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <GitBranch size={20} className="text-purple-600" /> Binary Plan
-          </h1>
-          <p className="text-xs text-gray-400 mt-0.5">Earn ₹150 for every pair in your downline</p>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3 mb-4">{error}</div>
-        )}
-
-        {/* Status banner */}
-        {isEnrolled && (
-          <div className={`rounded-2xl p-4 mb-4 flex items-start gap-3 ${isActive ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
-            {isActive
-              ? <CheckCircle2 size={20} className="text-emerald-600 flex-shrink-0 mt-0.5" />
-              : <AlertCircle  size={20} className="text-amber-500 flex-shrink-0 mt-0.5" />}
-            <div>
-              <p className={`font-semibold text-sm ${isActive ? 'text-emerald-700' : 'text-amber-700'}`}>
-                {isActive ? 'Binary ID Active' : 'Placed — Activation Pending'}
-              </p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {isActive
-                  ? status?.position === 'ROOT'
-                    ? `Root of the binary tree · ${status?.totalDownlineCount} downline member(s)`
-                    : `Level ${status?.treeLevel} · ${status?.position} side · ${status?.totalDownlineCount} downline member(s)`
-                  : 'Your payment is under admin review. Binary ID will activate once approved.'}
-              </p>
-            </div>
+      <div className="flex-1 flex flex-col">
+        <LoginTopBar />
+        <main className="p-4 md:p-6 pb-24 max-w-2xl flex-1">
+          <div className="mb-5">
+            <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <GitBranch size={20} className="text-purple-600" /> Binary Plan
+            </h1>
+            <p className="text-xs text-gray-400 mt-0.5">Earn ₹150 for every pair in your downline</p>
           </div>
-        )}
 
-        {/* Stats */}
-        {isEnrolled && (
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <StatCard label="Left Leg"   value={status?.leftLegCount ?? 0}   color="text-blue-600" />
-            <StatCard label="Right Leg"  value={status?.rightLegCount ?? 0}  color="text-purple-600" />
-            <StatCard label="Pairs Done" value={status?.pairsCompleted ?? 0} color="text-amber-600" />
-          </div>
-        )}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3 mb-4">{error}</div>
+          )}
 
-        {/* Rules */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4">
-          <button
-            onClick={() => setShowRules(r => !r)}
-            className="w-full flex items-center justify-between p-4 text-sm font-semibold text-gray-700"
-          >
-            <span>Binary Plan Rules & Commission</span>
-            {showRules ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </button>
-          {showRules && (
-            <div className="px-4 pb-4 space-y-3">
-              <RuleItem icon="🌳" text="Each user can sponsor exactly 2 people — one LEFT and one RIGHT." />
-              <RuleItem icon="💰" text="Every matched pair (1 LEFT + 1 RIGHT) earns you ₹150 instantly." />
-              <RuleItem icon="🛍️" text="To activate your Binary ID, purchase products worth at least 600 BV." />
-              <RuleItem icon="🔒" text="First withdrawal requires ≥3 downline members (at least 2 on one side, 1 on the other)." />
-              <RuleItem icon="📊" text="Pairs cascade — as your downline grows, commissions keep flowing." />
-              <RuleItem icon="💳" text="Minimum withdrawal amount is ₹250." />
-              <div className="mt-3">
-                <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Pair Earnings Example</p>
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="text-left p-2 font-medium text-gray-500">Pairs</th>
-                      <th className="text-right p-2 font-medium text-gray-500">Total Earned</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pairCommissionInfo.map(row => (
-                      <tr key={`pair-row-${row.pairs}`} className="border-t border-gray-100">
-                        <td className="p-2">{row.pairs}</td>
-                        <td className="p-2 text-right font-semibold text-emerald-600">{row.earn}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {/* Status banner */}
+          {isEnrolled && (
+            <div className={`rounded-2xl p-4 mb-4 flex items-start gap-3 ${isActive ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
+              {isActive
+                ? <CheckCircle2 size={20} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                : <AlertCircle  size={20} className="text-amber-500 flex-shrink-0 mt-0.5" />}
+              <div>
+                <p className={`font-semibold text-sm ${isActive ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {isActive ? 'Binary ID Active' : 'Placed — Activation Pending'}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {isActive
+                    ? status?.position === 'ROOT'
+                      ? `Root of the binary tree · ${status?.totalDownlineCount} downline member(s)`
+                      : `Level ${status?.treeLevel} · ${status?.position} side · ${status?.totalDownlineCount} downline member(s)`
+                    : 'Your payment is under admin review. Binary ID will activate once approved.'}
+                </p>
               </div>
             </div>
           )}
-        </div>
 
-        {/* Join: root */}
-        {!isEnrolled && isRootUser && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Crown size={16} className="text-amber-500" />
-              <h2 className="font-semibold text-sm text-gray-700">You are the Root of the Binary Tree</h2>
+          {/* Stats */}
+          {isEnrolled && (
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <StatCard label="Left Leg"   value={status?.leftLegCount ?? 0}   color="text-blue-600" />
+              <StatCard label="Right Leg"  value={status?.rightLegCount ?? 0}  color="text-purple-600" />
+              <StatCard label="Pairs Done" value={status?.pairsCompleted ?? 0} color="text-amber-600" />
             </div>
-            <p className="text-xs text-gray-500 mb-4">
-              As RD0001 you don&apos;t need a Sponsor ID — you&apos;re the very first member.
-            </p>
-            {joinError && <p className="text-xs text-red-500 mb-2">{joinError}</p>}
-            {joinMsg   && <p className="text-xs text-emerald-600 mb-2">{joinMsg}</p>}
-            <button
-              onClick={handleJoinClick} disabled={joining}
-              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
-            >
-              {joining ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-              {joining ? 'Placing as root…' : 'Join Binary Plan as Root'}
-            </button>
-          </div>
-        )}
+          )}
 
-        {/* Join: regular user with BFS placement */}
-        {!isEnrolled && !isRootUser && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-            <h2 className="font-semibold text-sm text-gray-700 mb-3">Join Binary Plan</h2>
-            
-            <label className="block text-xs font-medium text-gray-500 mb-1">Sponsor ID</label>
-            <input
-              type="text" 
-              value={sponsorInput}
-              onChange={e => setSponsorInput(e.target.value.trim().toUpperCase())}
-              placeholder="e.g. RD0001"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
-            
-            <label className="block text-xs font-medium text-gray-500 mb-1">Your Position Under Sponsor</label>
-            <div className="flex gap-3 mb-4">
-              {(['LEFT', 'RIGHT'] as const).map(pos => (
-                <button
-                  key={`pos-btn-${pos}`} 
-                  onClick={() => setPositionInput(pos)}
-                  className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors
-                    ${positionInput === pos
-                      ? pos === 'LEFT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-purple-600 text-white border-purple-600'
-                      : 'bg-gray-50 text-gray-500 border-gray-200'}`}
-                >
-                  {pos}
-                </button>
-              ))}
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-xs text-blue-700">
-              <p className="font-semibold mb-1">ℹ️ How BFS Placement Works:</p>
-              <p>If you choose <strong>LEFT</strong>, you'll be placed at the leftmost empty position under your sponsor.</p>
-              <p>If you choose <strong>RIGHT</strong>, you'll be placed at the rightmost empty position under your sponsor.</p>
-            </div>
-
-            {(joinError || previewError) && <p className="text-xs text-red-500 mb-2">{joinError || previewError}</p>}
-            {joinMsg   && <p className="text-xs text-emerald-600 mb-2">{joinMsg}</p>}
-            
-            <button
-              onClick={handleJoinClick} 
-              disabled={joining || previewLoading}
-              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
-            >
-              {(joining || previewLoading) ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-              {joining ? 'Placing in tree…' : previewLoading ? 'Checking placement…' : 'Join Binary Plan'}
-            </button>
-          </div>
-        )}
-
-        {/* Activate section: 3 states based on pendingOrderStatus */}
-        {isEnrolled && !isActive && (
-          <>
-            {/* PENDING: payment submitted, waiting for admin */}
-            {pendingOrderStatus === 'Pending' && (
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4 flex items-start gap-3">
-                <Loader2 size={18} className="text-blue-500 flex-shrink-0 mt-0.5 animate-spin" />
-                <div>
-                  <h2 className="font-semibold text-sm text-blue-800 mb-1">Payment Under Review</h2>
-                  <p className="text-xs text-blue-600">
-                    Your payment has been submitted and is awaiting admin verification.
-                    Your Binary ID will activate automatically once approved.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* REJECTED: admin rejected, let them try again */}
-            {pendingOrderStatus === 'Rejected' && (
-              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4">
-                <h2 className="font-semibold text-sm text-red-800 mb-1">Payment Rejected</h2>
-                <p className="text-xs text-red-600 mb-3">
-                  Your previous payment was rejected by the admin. Please submit a new payment to activate your Binary ID.
-                </p>
-                <button
-                  onClick={() => setView('shop')}
-                  className="bg-red-500 hover:bg-red-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-colors"
-                >
-                  <ShoppingCart size={15} /> Go to Shop (600 BV required)
-                </button>
-              </div>
-            )}
-
-            {/* NO ORDER YET: first-time, prompt them to buy */}
-            {!pendingOrderStatus && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
-                <h2 className="font-semibold text-sm text-amber-800 mb-1">Activate Your Binary ID</h2>
-                <p className="text-xs text-amber-600 mb-3">
-                  Purchase products worth ≥600 BV to activate your ID and start earning pair commissions.
-                </p>
-                <button
-                  onClick={() => setView('shop')}
-                  className="bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-colors"
-                >
-                  <ShoppingCart size={15} /> Go to Shop (600 BV required)
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Wallet */}
-        {isEnrolled && wallet && (
+          {/* Rules */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4">
             <button
-              onClick={() => setShowWallet(w => !w)}
+              onClick={() => setShowRules(r => !r)}
               className="w-full flex items-center justify-between p-4 text-sm font-semibold text-gray-700"
             >
-              <div className="flex items-center gap-2">
-                <Wallet size={16} className="text-purple-600" />
-                <span>Binary Wallet</span>
-                <span className="text-purple-600 font-bold">₹{wallet.balance.toFixed(2)}</span>
-              </div>
-              {showWallet ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              <span>Binary Plan Rules & Commission</span>
+              {showRules ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
-            {showWallet && (
-              <div className="px-4 pb-4">
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                  <MiniStat label="Balance" value={`₹${wallet.balance.toFixed(0)}`}     color="text-emerald-600" />
-                  <MiniStat label="Earned"  value={`₹${wallet.totalEarned.toFixed(0)}`} color="text-blue-600" />
-                  <MiniStat label="Pairs"   value={wallet.pairsCount.toString()}         color="text-amber-600" />
-                </div>
-                <div className={`flex items-start gap-2 p-3 rounded-xl mb-4 text-xs ${wallet.withdrawalUnlocked ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-500'}`}>
-                  {wallet.withdrawalUnlocked ? <Unlock size={14} className="flex-shrink-0 mt-0.5" /> : <Lock size={14} className="flex-shrink-0 mt-0.5" />}
-                  <span>{wallet.withdrawalUnlockMessage}</span>
-                </div>
-                {wallet.withdrawalUnlocked && (
-                  <div className="mb-4">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Withdrawal Amount (min ₹250)</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="number" 
-                        value={withdrawAmt} 
-                        onChange={e => setWithdrawAmt(e.target.value)}
-                        placeholder="Enter amount"
-                        className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
-                      />
-                      <button
-                        onClick={handleWithdraw} 
-                        disabled={withdrawing}
-                        className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1 transition-colors"
-                      >
-                        {withdrawing && <Loader2 size={12} className="animate-spin" />} Withdraw
-                      </button>
-                    </div>
-                    {withdrawError && <p className="text-xs text-red-500 mt-1">{withdrawError}</p>}
-                    {withdrawMsg   && <p className="text-xs text-emerald-600 mt-1">{withdrawMsg}</p>}
-                  </div>
-                )}
-                {(wallet.recentTransactions ?? []).length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent Transactions</p>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {wallet.recentTransactions.map(txn => (
-                        <div key={`txn-${txn.id}`} className="flex items-center justify-between text-xs bg-gray-50 rounded-xl px-3 py-2">
-                          <div>
-                            <p className="font-medium text-gray-700">{txn.source}</p>
-                            <p className="text-gray-400">{new Date(txn.createdAt).toLocaleDateString('en-IN')}</p>
-                          </div>
-                          <span className={`font-bold ${txn.type === 'Credit' ? 'text-emerald-600' : 'text-red-500'}`}>
-                            {txn.type === 'Credit' ? '+' : '-'}₹{txn.amount.toFixed(2)}
-                          </span>
-                        </div>
+            {showRules && (
+              <div className="px-4 pb-4 space-y-3">
+                <RuleItem icon="🌳" text="Each user can sponsor exactly 2 people — one LEFT and one RIGHT." />
+                <RuleItem icon="💰" text="Every matched pair (1 LEFT + 1 RIGHT) earns you ₹150 instantly." />
+                <RuleItem icon="🛍️" text="To activate your Binary ID, purchase products worth at least 600 BV." />
+                <RuleItem icon="🔒" text="First withdrawal requires ≥3 downline members (at least 2 on one side, 1 on the other)." />
+                <RuleItem icon="📊" text="Pairs cascade — as your downline grows, commissions keep flowing." />
+                <RuleItem icon="💳" text="Minimum withdrawal amount is ₹250." />
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Pair Earnings Example</p>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="text-left p-2 font-medium text-gray-500">Pairs</th>
+                        <th className="text-right p-2 font-medium text-gray-500">Total Earned</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pairCommissionInfo.map(row => (
+                        <tr key={`pair-row-${row.pairs}`} className="border-t border-gray-100">
+                          <td className="p-2">{row.pairs}</td>
+                          <td className="p-2 text-right font-semibold text-emerald-600">{row.earn}</td>
+                        </tr>
                       ))}
-                    </div>
-                  </div>
-                )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
-        )}
 
-        {isEnrolled && (
-          <button
-            onClick={() => router.push('/network/binary-view')}
-            className="w-full bg-white border border-purple-200 text-purple-700 text-sm font-semibold py-3 rounded-2xl flex items-center justify-center gap-2 hover:bg-purple-50 transition-colors"
-          >
-            <GitBranch size={16} /> View My Binary Tree
-          </button>
-        )}
-      </main>
+          {/* Join: root */}
+          {!isEnrolled && isRootUser && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Crown size={16} className="text-amber-500" />
+                <h2 className="font-semibold text-sm text-gray-700">You are the Root of the Binary Tree</h2>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                As RD0001 you don&apos;t need a Sponsor ID — you&apos;re the very first member.
+              </p>
+              {joinError && <p className="text-xs text-red-500 mb-2">{joinError}</p>}
+              {joinMsg   && <p className="text-xs text-emerald-600 mb-2">{joinMsg}</p>}
+              <button
+                onClick={handleJoinClick} disabled={joining}
+                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
+                {joining ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+                {joining ? 'Placing as root…' : 'Join Binary Plan as Root'}
+              </button>
+            </div>
+          )}
 
-      {/* Placement confirmation modal - shown when the requested slot is taken and user will be auto-placed */}
+          {/* Join: regular user with BFS placement */}
+          {!isEnrolled && !isRootUser && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+              <h2 className="font-semibold text-sm text-gray-700 mb-3">Join Binary Plan</h2>
+
+              <label className="block text-xs font-medium text-gray-500 mb-1">Sponsor ID</label>
+              <input
+                type="text"
+                value={sponsorInput}
+                onChange={e => setSponsorInput(e.target.value.trim().toUpperCase())}
+                placeholder="e.g. RD0001"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-purple-300"
+              />
+
+              <label className="block text-xs font-medium text-gray-500 mb-1">Sponsor Name</label>
+              <div className="relative mb-3">
+                <input
+                  type="text"
+                  value={sponsorNameLoading ? 'Looking up…' : sponsorName}
+                  readOnly
+                  placeholder="Auto-filled from Sponsor ID"
+                  className={`w-full border rounded-xl px-3 py-2 text-sm bg-gray-50 pr-9
+                    ${sponsorNameError ? 'border-red-300 text-red-500' : 'border-gray-200 text-gray-700'}`}
+                />
+                {sponsorNameLoading && (
+                  <Loader2 size={14} className="animate-spin text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                )}
+                {!sponsorNameLoading && sponsorName && !sponsorNameError && (
+                  <CheckCircle2 size={14} className="text-emerald-500 absolute right-3 top-1/2 -translate-y-1/2" />
+                )}
+              </div>
+              {sponsorNameError && <p className="text-xs text-red-500 mb-3">{sponsorNameError}</p>}
+
+              <label className="block text-xs font-medium text-gray-500 mb-1">Your Position Under Sponsor</label>
+              <div className="flex gap-3 mb-4">
+                {(['LEFT', 'RIGHT'] as const).map(pos => (
+                  <button
+                    key={`pos-btn-${pos}`}
+                    onClick={() => setPositionInput(pos)}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors
+                      ${positionInput === pos
+                        ? pos === 'LEFT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-purple-600 text-white border-purple-600'
+                        : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+                  >
+                    {pos}
+                  </button>
+                ))}
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-xs text-blue-700">
+                <p className="font-semibold mb-1">ℹ️ How BFS Placement Works:</p>
+                <p>If you choose <strong>LEFT</strong>, you'll be placed at the leftmost empty position under your sponsor.</p>
+                <p>If you choose <strong>RIGHT</strong>, you'll be placed at the rightmost empty position under your sponsor.</p>
+              </div>
+
+              {(joinError || previewError) && <p className="text-xs text-red-500 mb-2">{joinError || previewError}</p>}
+              {joinMsg   && <p className="text-xs text-emerald-600 mb-2">{joinMsg}</p>}
+
+              <button
+                onClick={handleJoinClick}
+                disabled={joining || previewLoading || sponsorNameLoading}
+                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
+                {(joining || previewLoading || sponsorNameLoading) ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+                {joining ? 'Placing in tree…' : previewLoading ? 'Checking placement…' : sponsorNameLoading ? 'Verifying sponsor…' : 'Join Binary Plan'}
+              </button>
+            </div>
+          )}
+
+          {/* Activate section */}
+          {isEnrolled && !isActive && (
+            <>
+              {pendingOrderStatus === 'Pending' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4 flex items-start gap-3">
+                  <Loader2 size={18} className="text-blue-500 flex-shrink-0 mt-0.5 animate-spin" />
+                  <div>
+                    <h2 className="font-semibold text-sm text-blue-800 mb-1">Payment Under Review</h2>
+                    <p className="text-xs text-blue-600">
+                      Your payment has been submitted and is awaiting admin verification.
+                      Your Binary ID will activate automatically once approved.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {pendingOrderStatus === 'Rejected' && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4">
+                  <h2 className="font-semibold text-sm text-red-800 mb-1">Payment Rejected</h2>
+                  <p className="text-xs text-red-600 mb-3">
+                    Your previous payment was rejected by the admin. Please submit a new payment to activate your Binary ID.
+                  </p>
+                  <button
+                    onClick={() => setView('shop')}
+                    className="bg-red-500 hover:bg-red-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-colors"
+                  >
+                    <ShoppingCart size={15} /> Go to Shop (600 BV required)
+                  </button>
+                </div>
+              )}
+
+              {!pendingOrderStatus && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
+                  <h2 className="font-semibold text-sm text-amber-800 mb-1">Activate Your Binary ID</h2>
+                  <p className="text-xs text-amber-600 mb-3">
+                    Purchase products worth ≥600 BV to activate your ID and start earning pair commissions.
+                  </p>
+                  <button
+                    onClick={() => setView('shop')}
+                    className="bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-colors"
+                  >
+                    <ShoppingCart size={15} /> Go to Shop (600 BV required)
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Wallet */}
+          {isEnrolled && wallet && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4">
+              <button
+                onClick={() => setShowWallet(w => !w)}
+                className="w-full flex items-center justify-between p-4 text-sm font-semibold text-gray-700"
+              >
+                <div className="flex items-center gap-2">
+                  <Wallet size={16} className="text-purple-600" />
+                  <span>Binary Wallet</span>
+                  <span className="text-purple-600 font-bold">₹{wallet.balance.toFixed(2)}</span>
+                </div>
+                {showWallet ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+              {showWallet && (
+                <div className="px-4 pb-4">
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <MiniStat label="Balance" value={`₹${wallet.balance.toFixed(0)}`}     color="text-emerald-600" />
+                    <MiniStat label="Earned"  value={`₹${wallet.totalEarned.toFixed(0)}`} color="text-blue-600" />
+                    <MiniStat label="Pairs"   value={wallet.pairsCount.toString()}         color="text-amber-600" />
+                  </div>
+                  <div className={`flex items-start gap-2 p-3 rounded-xl mb-4 text-xs ${wallet.withdrawalUnlocked ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-500'}`}>
+                    {wallet.withdrawalUnlocked ? <Unlock size={14} className="flex-shrink-0 mt-0.5" /> : <Lock size={14} className="flex-shrink-0 mt-0.5" />}
+                    <span>{wallet.withdrawalUnlockMessage}</span>
+                  </div>
+                  {wallet.withdrawalUnlocked && (
+                    <div className="mb-4">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Withdrawal Amount (min ₹250)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={withdrawAmt}
+                          onChange={e => setWithdrawAmt(e.target.value)}
+                          placeholder="Enter amount"
+                          className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                        />
+                        <button
+                          onClick={handleWithdraw}
+                          disabled={withdrawing}
+                          className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1 transition-colors"
+                        >
+                          {withdrawing && <Loader2 size={12} className="animate-spin" />} Withdraw
+                        </button>
+                      </div>
+                      {withdrawError && <p className="text-xs text-red-500 mt-1">{withdrawError}</p>}
+                      {withdrawMsg   && <p className="text-xs text-emerald-600 mt-1">{withdrawMsg}</p>}
+                    </div>
+                  )}
+                  {(wallet.recentTransactions ?? []).length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent Transactions</p>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {wallet.recentTransactions.map(txn => (
+                          <div key={`txn-${txn.id}`} className="flex items-center justify-between text-xs bg-gray-50 rounded-xl px-3 py-2">
+                            <div>
+                              <p className="font-medium text-gray-700">{txn.source}</p>
+                              <p className="text-gray-400">{new Date(txn.createdAt).toLocaleDateString('en-IN')}</p>
+                            </div>
+                            <span className={`font-bold ${txn.type === 'Credit' ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {txn.type === 'Credit' ? '+' : '-'}₹{txn.amount.toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {isEnrolled && (
+            <button
+              onClick={() => router.push('/network/binary-view')}
+              className="w-full bg-white border border-purple-200 text-purple-700 text-sm font-semibold py-3 rounded-2xl flex items-center justify-center gap-2 hover:bg-purple-50 transition-colors"
+            >
+              <GitBranch size={16} /> View My Binary Tree
+            </button>
+          )}
+        </main>
+      </div>
+
+      {/* Placement confirmation modal */}
       {showPlacementConfirm && placementPreview && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5">
@@ -1253,6 +1306,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
   );
 }
 
+// Keep MiniStat and RuleItem declarations unmodified below...
 function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="bg-gray-50 rounded-xl p-2 text-center">

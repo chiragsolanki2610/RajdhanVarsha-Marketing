@@ -33,6 +33,10 @@ namespace RegisterApi.Models
         [Column(TypeName = "decimal(18,2)")]
         public decimal Bv { get; set; }
 
+        // Current stock on hand. Increased via admin "add stock", decreased
+        // automatically when an order containing this product is approved.
+        public int Quantity { get; set; } = 0;
+
         // Public URL from Supabase Storage bucket "products"
         public string ImageUrl { get; set; } = string.Empty;
 

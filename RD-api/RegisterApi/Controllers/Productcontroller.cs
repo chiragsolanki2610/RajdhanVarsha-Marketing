@@ -91,6 +91,7 @@ namespace RegisterApi.Controllers
                 Gst = dto.Gst,
                 Dp = dto.Dp,
                 Bv = dto.Bv,
+                Quantity = dto.Quantity,
                 ImageUrl = imageUrl,
                 IsActive = true,
                 AddedBy = adminUserId,
@@ -115,6 +116,7 @@ namespace RegisterApi.Controllers
                     product.Gst,
                     product.Dp,
                     product.Bv,
+                    product.Quantity,
                     product.ImageUrl,
                     product.IsActive,
                     product.CreatedAt
@@ -152,6 +154,65 @@ namespace RegisterApi.Controllers
                 .ToListAsync();
 
             return Ok(products);
+        }
+
+        // ── GET /api/Products/admin/inventory ──────────────────────────────────
+        // Admin only — full stock list (active + inactive), includes exact Quantity.
+        // Not exposed on the public GetAllProducts endpoint to avoid leaking stock data.
+        [HttpGet("admin/inventory")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetInventory([FromQuery] string? category = null)
+        {
+            var query = _db.Products.AsQueryable();
+
+            if (!string.IsNullOrEmpty(category))
+                query = query.Where(p => p.Category == category);
+
+            var products = await query
+                .OrderBy(p => p.ProductName)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.ProductNo,
+                    p.ProductName,
+                    p.Category,
+                    p.Mrp,
+                    p.Dp,
+                    p.Bv,
+                    p.Quantity,
+                    p.ImageUrl,
+                    p.IsActive,
+                    p.UpdatedAt
+                })
+                .ToListAsync();
+
+            return Ok(products);
+        }
+
+        // ── PUT /api/Products/{id}/add-stock ───────────────────────────────────
+        // Admin only — adjust stock by a delta (positive to restock, negative to
+        // manually correct e.g. damaged/lost goods). Resulting Quantity may be
+        // allowed to go negative by the caller's own validation upstream if desired,
+        // but here we simply apply the delta.
+        [HttpPut("{id}/add-stock")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AddStock(int id, [FromBody] AddStockDto dto)
+        {
+            var product = await _db.Products.FindAsync(id);
+            if (product == null)
+                return NotFound(new { message = "Product not found." });
+
+            product.Quantity += dto.Quantity;
+            product.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Stock updated successfully.",
+                id = product.Id,
+                quantity = product.Quantity
+            });
         }
 
         // ── GET /api/Products/{id} ─────────────────────────────────────────────

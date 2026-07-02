@@ -22,7 +22,8 @@ import {
   MapPin,
   PackagePlus,
   UserSearch,
-  ClipboardList
+  ClipboardList,
+  Archive
 } from 'lucide-react';
 
 interface UserData {
@@ -210,8 +211,9 @@ export default function Sidebar() {
     { icon: CheckSquare,   label: 'KYC Requests',          path: '/admin/kyc-requests' },
     { icon: Banknote,      label: 'Withdrawal Requests',    path: '/admin/withdrawal-requests' },
     { icon: MapPin,        label: 'Pickup Center Requests', path: '/admin/pickup-center-requests' },
-    { icon: ClipboardList, label: 'Order Requests',         path: '/admin/order-requests' },  // ← NEW
+    { icon: ClipboardList, label: 'Order Requests',         path: '/admin/order-requests' },
     { icon: PackagePlus,   label: 'Add Products',           path: '/admin/add-products' },
+    { icon: Archive,       label: 'Inventory Management',   path: '/admin/inventory-management' },
     { icon: UserSearch,    label: 'Search User Info',       path: '/admin/search-user-info' },
   ];
 
