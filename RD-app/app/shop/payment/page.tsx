@@ -135,8 +135,8 @@ function PaymentContent() {
     }
   };
 
-  const QR_IMAGE_URL = "/images/payment-qr.png";
-  const UPI_ID       = "rajdhanvarsha@upi";
+  const QR_IMAGE_URL = "/photos/QR.jpg";
+  const UPI_ID       = "QR917404526380-0195@UNIONBANKOFINDIA";
 
   return (
     <div className="flex h-screen bg-[#f0f2f5] overflow-hidden font-sans">

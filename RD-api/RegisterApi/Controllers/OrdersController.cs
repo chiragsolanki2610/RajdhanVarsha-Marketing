@@ -153,6 +153,21 @@ public class OrdersController : ControllerBase
                 });
         }
 
+        // 5c. Dream Plan: must clear the same 600 BV threshold as the UI enforces
+        //     client-side. Checked here so someone can't bypass the frontend's
+        //     bvMet gate by calling the API directly with a smaller cart.
+        if (planType == "Dream Plan")
+        {
+            const decimal dreamPlanBvTarget = 600m;
+            if (totalBv < dreamPlanBvTarget)
+                return BadRequest(new
+                {
+                    message = $"Dream Plan requires at least {dreamPlanBvTarget} BV. You selected {totalBv} BV.",
+                    required = dreamPlanBvTarget,
+                    selected = totalBv
+                });
+        }
+
         // 6. Save payment order to database
         try
         {
@@ -236,12 +251,16 @@ public class OrdersController : ControllerBase
         var userNames = await _db.Users
           .Where(u => userIds.Contains(u.UserId))
           .ToDictionaryAsync(u => u.UserId, u => u.Name);
+        var userPhones = await _db.Users
+          .Where(u => userIds.Contains(u.UserId))
+          .ToDictionaryAsync(u => u.UserId, u => u.MobileNo);
 
         var result = orders.Select(o => new PaymentOrderDto
         {
             Id = o.Id,
             UserId = o.UserId,
             UserName = userNames.TryGetValue(o.UserId, out var n) ? n : o.UserId,
+            Phone = userPhones.TryGetValue(o.UserId, out var ph) ? ph : string.Empty,
             UtrNumber = o.UtrNumber,
             PlanType = o.PlanType,
             ScreenshotUrl = null,          // loaded on-demand via GET .../screenshot
@@ -277,16 +296,17 @@ public class OrdersController : ControllerBase
         if (order == null)
             return NotFound(new { message = "Payment order not found." });
 
-        var userName = await _db.Users
+        var userRow = await _db.Users
           .Where(u => u.UserId == order.UserId)
-          .Select(u => u.Name)
-          .FirstOrDefaultAsync() ?? order.UserId;
+          .Select(u => new { u.Name, u.MobileNo })
+          .FirstOrDefaultAsync();
 
         var result = new PaymentOrderDto
         {
             Id = order.Id,
             UserId = order.UserId,
-            UserName = userName,
+            UserName = userRow?.Name ?? order.UserId,
+            Phone = userRow?.MobileNo ?? string.Empty,
             UtrNumber = order.UtrNumber,
             PlanType = order.PlanType,
             ScreenshotUrl = order.ScreenshotUrl,   // included here — single order, not a list

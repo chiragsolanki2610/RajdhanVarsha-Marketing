@@ -30,6 +30,7 @@ interface UserData {
   name: string;
   memberId: string;
   role: string; 
+  profilePictureUrl?: string | null;
 }
 
 const ADMIN_MEMBER_IDS = ['RD0001'];
@@ -40,7 +41,7 @@ function MobileBottomNav({ isAdmin }: { isAdmin: boolean }) {
   const navItems = [
     { icon: Home,        label: 'Home',    path: '/dashboard' },
     { icon: Layers,      label: 'Plans',   path: '/plan' },
-    { icon: ShoppingBag, label: 'Product', path: '/shop' }, 
+    { icon: ShoppingBag, label: 'Product', path: '/shop-for-mobile' }, 
     { icon: Users,       label: 'Network', path: '/network' }, 
     ...(isAdmin ? [{ icon: ShieldCheck, label: 'Admin', path: '/admin' }] : []),
   ];
@@ -104,6 +105,7 @@ export default function Sidebar() {
     let currentUserId = 'RD0001';
     let fallbackName = 'FIRSTUSER';
     let fallbackRole = 'User';
+    let fallbackPicture: string | null = null;
 
     try {
       const profileString = localStorage.getItem('userProfile');
@@ -116,6 +118,7 @@ export default function Sidebar() {
           currentUserId = profileData.userId || profileData.memberId || currentUserId;
           fallbackName = profileData.name || fallbackName;
           fallbackRole = profileData.role || fallbackRole;
+          fallbackPicture = profileData.profilePictureUrl ?? fallbackPicture;
         } catch (e) {
           console.error('Failed parsing userProfile from localStorage:', e);
         }
@@ -125,6 +128,7 @@ export default function Sidebar() {
           currentUserId = alternateData.userId || alternateData.memberId || rememberedId || currentUserId;
           fallbackName = alternateData.name || fallbackName;
           fallbackRole = alternateData.role || fallbackRole;
+          fallbackPicture = alternateData.profilePictureUrl ?? fallbackPicture;
         } catch (e) {
           console.error('Failed parsing user from localStorage:', e);
         }
@@ -132,7 +136,7 @@ export default function Sidebar() {
         currentUserId = rememberedId;
       }
 
-      setUserData({ name: fallbackName, memberId: currentUserId, role: fallbackRole });
+      setUserData({ name: fallbackName, memberId: currentUserId, role: fallbackRole, profilePictureUrl: fallbackPicture });
 
       const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
       const savedToken = localStorage.getItem('token');
@@ -151,6 +155,7 @@ export default function Sidebar() {
           name: apiData.name || fallbackName,
           memberId: currentUserId,
           role: apiData.role || fallbackRole,
+          profilePictureUrl: apiData.profilePictureUrl ?? null,
         };
         setUserData(updatedProfile);
         localStorage.setItem('userProfile', JSON.stringify(updatedProfile));
@@ -165,8 +170,12 @@ export default function Sidebar() {
   useEffect(() => {
     loadUserAndFetchRole();
     window.addEventListener('storage', loadUserAndFetchRole);
+    // Fires when the profile page uploads/removes a picture in this same tab
+    // (the 'storage' event above only fires across *other* tabs).
+    window.addEventListener('profile-picture-updated', loadUserAndFetchRole);
     return () => {
       window.removeEventListener('storage', loadUserAndFetchRole);
+      window.removeEventListener('profile-picture-updated', loadUserAndFetchRole);
     };
   }, []);
 
@@ -197,7 +206,7 @@ export default function Sidebar() {
   };
 
   const networkSubItems = [
-    { icon: UserPlus,  label: 'Team Detail',    path: '/network/team-detail' },
+    { icon: UserPlus,  label: 'Team Detail',    path: '/team-detail' },
     { icon: GitBranch, label: 'Dream Tree View', path: '/dream-tree-view' },
     { icon: Network,   label: 'Binary Tree View',     path: '/binary-tree-view' },
   ];
@@ -282,11 +291,19 @@ export default function Sidebar() {
                     : 'bg-blue-900/30 hover:bg-blue-900/50 border-blue-400/20 text-white'
                 }`}
               >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 uppercase shadow-inner ${
-                  isProfileActive ? 'bg-[#3B5998] text-white' : 'bg-blue-600 text-white'
-                }`}>
-                  {isLoading ? '...' : getInitials(userData?.name)}
-                </div>
+                {userData?.profilePictureUrl ? (
+                  <img
+                    src={userData.profilePictureUrl}
+                    alt={userData.name}
+                    className="w-10 h-10 rounded-full object-cover shrink-0 shadow-inner"
+                  />
+                ) : (
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 uppercase shadow-inner ${
+                    isProfileActive ? 'bg-[#3B5998] text-white' : 'bg-blue-600 text-white'
+                  }`}>
+                    {isLoading ? '...' : getInitials(userData?.name)}
+                  </div>
+                )}
 
                 {isOpen && (
                   <div className="truncate w-full flex flex-col justify-center">

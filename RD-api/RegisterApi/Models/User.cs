@@ -64,4 +64,8 @@ public class User
     // Helps quickly locate everyone down the Left or Right lineage
     public string LeftLineage { get; set; } = string.Empty;
     public string RightLineage { get; set; } = string.Empty;
+
+    // Profile picture stored as a Base64 data URI directly in the DB
+    // (same pattern as PaymentOrder.ScreenshotUrl) -- no file bucket needed.
+    public string? ProfilePictureUrl { get; set; }
 }

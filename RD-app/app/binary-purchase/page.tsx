@@ -14,6 +14,11 @@ import {
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://rd-api-j7zj.onrender.com';
 const ROOT_USER_ID = 'RD0001';
 
+// IMPORTANT: this file must physically exist at "public/photos/QR.jpg" in your Next.js project.
+// Anything under /public is served from the root, so public/photos/QR.jpg → /photos/QR.jpg
+const QR_IMAGE_URL = '/photos/QR.jpg';
+const UPI_ID = 'QR917404526380-0195@UNIONBANKOFINDIA';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BinaryStatus {
@@ -136,6 +141,7 @@ export default function BinaryPlanPage() {
   const [error,      setError]      = useState('');
   const [showRules,  setShowRules]  = useState(false);
   const [showWallet, setShowWallet] = useState(false);
+  const [qrFailed,   setQrFailed]   = useState(false); // tracks whether the QR image failed to load
 
   const [pendingOrderStatus, setPendingOrderStatus] = useState<'Pending' | 'Rejected' | null>(null);
 
@@ -594,19 +600,31 @@ export default function BinaryPlanPage() {
                       <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Scan & Pay via UPI</p>
                       <p className="text-2xl font-bold text-purple-700 mb-5">₹{cartTotal.toLocaleString('en-IN')}</p>
 
-                      <div className="inline-flex flex-col items-center justify-center w-52 h-52 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-dashed border-purple-200 rounded-2xl mx-auto mb-5">
-                        <QrCode size={72} className="text-purple-300 mb-2" />
-                        <p className="text-[10px] text-gray-400 text-center px-4 leading-relaxed">
-                          Replace with your<br />company UPI QR image
-                        </p>
+                      <div className="inline-flex flex-col items-center justify-center w-52 h-52 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-dashed border-purple-200 rounded-2xl mx-auto mb-5 overflow-hidden">
+                        {!qrFailed ? (
+                          <img
+                            src={QR_IMAGE_URL}
+                            alt="UPI QR Code"
+                            className="w-full h-full object-contain p-3"
+                            onError={() => setQrFailed(true)}
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center gap-2 px-4 text-center">
+                            <QrCode size={56} className="text-purple-300" />
+                            <p className="text-[10px] text-gray-400 leading-relaxed">
+                              QR image not found.<br />
+                              Add it at <code className="font-mono">public{QR_IMAGE_URL}</code>
+                            </p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-center gap-2 bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3 mb-3">
                         <IndianRupee size={15} className="text-purple-500 flex-shrink-0" />
-                        <span className="font-mono text-purple-800 font-semibold text-sm">rajdhanvarsha@upi</span>
+                        <span className="font-mono text-purple-800 font-semibold text-xs break-all">{UPI_ID}</span>
                         <button
-                          onClick={() => navigator.clipboard?.writeText('rajdhanvarsha@upi')}
-                          className="ml-1 text-purple-400 hover:text-purple-700 transition-colors p-1 hover:bg-purple-100 rounded-lg"
+                          onClick={() => navigator.clipboard?.writeText(UPI_ID)}
+                          className="ml-1 text-purple-400 hover:text-purple-700 transition-colors p-1 hover:bg-purple-100 rounded-lg flex-shrink-0"
                           title="Copy UPI ID"
                         >
                           <Copy size={14} />

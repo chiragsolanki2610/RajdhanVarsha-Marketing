@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckSquare, Banknote, MapPin, ShieldCheck, ChevronRight, PackagePlus, UserSearch } from 'lucide-react';
+import { CheckSquare, Banknote, MapPin, ShieldCheck, ChevronRight, PackagePlus, UserSearch, ShoppingCart } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import LoginTopbar from '@/components/loginTopbar';
 
@@ -31,10 +31,16 @@ const adminOptions = [
     path: '/admin/add-products',
   },
   {
+    icon: ShoppingCart,
+    label: 'Order Requests',
+    description: 'Review and manage pending customer order requests.',
+    path: '/admin/order-requests',
+  },
+  {
     icon: UserSearch,
     label: 'Search User Info',
     description: 'Search and view detailed information of any registered user.',
-    path: '/admin/search-user',
+    path: '/admin/search-user-info',
   },
 ];
 

@@ -105,6 +105,19 @@ interface TodayActivationsData {
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
 
+// ── Reads the auth token regardless of which key the login/register flow
+// happened to save it under. Some flows save "token", others save
+// "authToken" — checking both here means the dashboard works no matter
+// which page the user arrived from.
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return (
+    localStorage.getItem('token') ||
+    localStorage.getItem('authToken') ||
+    null
+  );
+}
+
 function money(value: number | null | undefined) {
   return (value ?? 0).toLocaleString('en-IN', {
     minimumFractionDigits: 2,
@@ -1010,7 +1023,7 @@ export default function DashboardPage() {
       setProfileLoading(true);
       setProfileError(null);
 
-      const token = localStorage.getItem('token');
+      const token = getAuthToken();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1104,7 +1117,7 @@ export default function DashboardPage() {
   const fetchTree = useCallback(async () => {
     try {
       setTreeLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getAuthToken();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1130,7 +1143,7 @@ export default function DashboardPage() {
     try {
       setBinaryLoading(true);
       setBinaryError(null);
-      const token = localStorage.getItem('token');
+      const token = getAuthToken();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1176,7 +1189,7 @@ export default function DashboardPage() {
     try {
       setTodayLoading(true);
       setTodayError(null);
-      const token = localStorage.getItem('token');
+      const token = getAuthToken();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1377,7 +1390,7 @@ export default function DashboardPage() {
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <LoginTopbar logoSrc="/logo.png" pageTitle="Dashboard" />
+        <LoginTopbar pageTitle="Dashboard" />
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           <div className="p-4 md:p-8 space-y-5">
 

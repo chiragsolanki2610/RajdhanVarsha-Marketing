@@ -629,6 +629,9 @@ namespace RegisterApi.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("ProductNo");
 
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -714,6 +717,9 @@ namespace RegisterApi.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Position")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProfilePictureUrl")
                         .HasColumnType("text");
 
                     b.Property<string>("RightLineage")

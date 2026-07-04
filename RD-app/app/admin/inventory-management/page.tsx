@@ -193,7 +193,7 @@ export default function InventoryManagementPage() {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#F7F6F3" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "#FFFFFF" }}>
       {/* ── Sidebar ──────────────────────────────────────────────────── */}
       <Sidebar />
 

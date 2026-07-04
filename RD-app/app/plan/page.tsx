@@ -194,7 +194,13 @@ export default function PlanPage() {
           </div>
         </header> */}
 
-        <main className="p-4 md:p-6 max-w-[1600px] w-full mx-auto space-y-8">
+        {/*
+          FIX: added pb-28 (mobile) / md:pb-6 (desktop) so scrollable content
+          never sits underneath the fixed bottom mobile navbar.
+          Adjust pb-28 to match your navbar's actual height + safe-area inset
+          if it's still tight on very small devices (try pb-32 if so).
+        */}
+        <main className="p-4 md:p-6 pb-28 md:pb-6 max-w-[1600px] w-full mx-auto space-y-8">
 
           {/* ── DREAM PLAN ───────────────────────────────────────────────── */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden relative transition-all duration-300">

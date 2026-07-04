@@ -60,3 +60,22 @@ public class LoginResponseDto
     public string Token { get; set; } = string.Empty;
     public string Message { get; set; } = "Login successful";
 }
+
+public class ChangePasswordRequestDto
+{
+    [Required(ErrorMessage = "Current password is required")]
+    public string OldPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "New password is required")]
+    [MinLength(8, ErrorMessage = "New password must be at least 8 characters long")]
+    public string NewPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Please confirm your new password")]
+    [Compare("NewPassword", ErrorMessage = "New password and confirmation do not match")]
+    public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+public class ChangePasswordResponseDto
+{
+    public string Message { get; set; } = "Password changed successfully.";
+}

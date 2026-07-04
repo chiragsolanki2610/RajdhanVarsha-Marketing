@@ -12,7 +12,7 @@ const PRODUCTS = [
     price: 350, // MRP
     dp: 250,
     bv: 150,
-    category: "Bags", 
+    category: "Healthcare", 
     image: "/photos/product_digestive_drop.jpg"
   },
   { 
@@ -21,7 +21,7 @@ const PRODUCTS = [
     price: 349, 
     dp: 249,
     bv: 140,
-    category: "Electronics", 
+    category: "Herbal", 
     image: "/photos/product_lady_care.jpg"
   },
   { 
@@ -30,7 +30,7 @@ const PRODUCTS = [
     price: 350, 
     dp: 250,
     bv: 150,
-    category: "Electronics", 
+    category: "Healthcare", 
     image: "/photos/product_relex_on.jpg"
   },
   { 
@@ -39,7 +39,7 @@ const PRODUCTS = [
     price: 500, 
     dp: 380,
     bv: 200,
-    category: "Accessories", 
+    category: "Electromagnetic", 
     image: "/photos/product_chip.jpg"
   },
   { 
@@ -48,7 +48,7 @@ const PRODUCTS = [
     price: 1100, 
     dp: 850,
     bv: 400,
-    category: "Furniture", 
+    category: "BIOMAGNETIC", 
     image: "/photos/product_bottle_cover.jpg"
   },
   { 
@@ -57,7 +57,7 @@ const PRODUCTS = [
     price: 900, 
     dp: 700,
     bv: 350,
-    category: "Accessories", 
+    category: "BIOMAGNETIC", 
     image: "/photos/product_wrist_band.jpg"
   },
   { 
@@ -66,12 +66,12 @@ const PRODUCTS = [
     price: 15000, 
     dp: 12000,
     bv: 5000,
-    category: "Electronics", 
+    category: "BIOMAGNETIC", 
     image: "/photos/product_bedSheat.jpg"
   },
 ];
 
-const CATEGORIES = ["All", "Bags", "Electronics", "Accessories", "Furniture"];
+const CATEGORIES = ["All", "Healthcare", "Herbal", "Electromagnetic", "BIOMAGNETIC"];
 
 export default function ProductsPage() {
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -160,16 +160,6 @@ export default function ProductsPage() {
                     {/* MRP Badge (Blue) */}
                     <div className="inline-flex items-center justify-center bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
                       MRP : {product.price}
-                    </div>
-                    
-                    {/* DP Badge (Red) */}
-                    <div className="inline-flex items-center justify-center bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
-                      DP : {product.dp}
-                    </div>
-
-                    {/* BV Badge (Blue) */}
-                    <div className="inline-flex items-center justify-center bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
-                      BV : {product.bv}
                     </div>
                   </div>
 

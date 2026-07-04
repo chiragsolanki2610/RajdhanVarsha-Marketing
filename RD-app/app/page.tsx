@@ -131,7 +131,7 @@ export default function Home() {
                   </div>
                   <h2 className="text-2xl sm:text-3xl md:text-4xl xl:text-5xl font-black tracking-tight mt-6 mb-6 lg:ml-4 leading-tight text-center lg:text-left">
                     <span className="text-red-600">RAJ </span>
-                    <span style={{ color: "rgb(43, 64, 169)" }}>DHANVARSHA</span>{" "}
+                    <span className="text-[#2b40a9]">DHANVARSHA</span>{" "}
                     <span className="text-red-600">MARKETING</span>
                   </h2>
                 </motion.div>

@@ -8,6 +8,7 @@ public class PaymentOrderDto
     public int Id { get; set; }
     public string UserId { get; set; } = string.Empty;
     public string UserName { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
     public string UtrNumber { get; set; } = string.Empty;
     public string? ScreenshotUrl { get; set; }
     public string PlanType { get; set; } = "Dream Plan";

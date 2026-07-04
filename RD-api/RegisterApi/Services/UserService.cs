@@ -180,6 +180,52 @@ public class UserService : IUserService
             .FirstOrDefaultAsync(u => u.UserId == userId.Trim());
     }
 
+    public async Task<(bool Success, string Error)> ChangePasswordAsync(string userId, ChangePasswordRequestDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return (false, "Invalid or expired session token.");
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId.Trim());
+        if (user is null)
+            return (false, "User record not found in database.");
+
+        // 1. Verify the current password
+        if (!_passwordService.VerifyPassword(dto.OldPassword, user.PasswordHash))
+            return (false, "Current password is incorrect.");
+
+        // 2. Don't allow "changing" to the same password
+        if (_passwordService.VerifyPassword(dto.NewPassword, user.PasswordHash))
+            return (false, "New password must be different from the current password.");
+
+        // 3. Hash and persist the new password
+        user.PasswordHash = _passwordService.HashPassword(dto.NewPassword);
+        user.Password = dto.NewPassword; // kept in sync with the plaintext field used elsewhere (e.g. registration)
+
+        await _db.SaveChangesAsync();
+
+        return (true, string.Empty);
+    }
+
+    /// <summary>
+    /// Updates (or clears, if null) the current user's profile picture.
+    /// The picture is a Base64 data URI stored directly on the User row --
+    /// same pattern as PaymentOrder.ScreenshotUrl, no file bucket needed.
+    /// </summary>
+    public async Task<(bool Success, string Error)> UpdateProfilePictureAsync(string userId, string? profilePictureUrl)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return (false, "Invalid or expired session token.");
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId.Trim());
+        if (user is null)
+            return (false, "User record not found in database.");
+
+        user.ProfilePictureUrl = profilePictureUrl;
+        await _db.SaveChangesAsync();
+
+        return (true, string.Empty);
+    }
+
     /// <summary>
     /// Traverses down the leg structure along the selected side (Left or Right) 
     /// until it discovers an open position to correctly link the node.
