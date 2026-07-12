@@ -43,6 +43,7 @@ function MobileBottomNav({ isAdmin }: { isAdmin: boolean }) {
     { icon: Layers,      label: 'Plans',   path: '/plan' },
     { icon: ShoppingBag, label: 'Product', path: '/shop-for-mobile' }, 
     { icon: Users,       label: 'Network', path: '/network' }, 
+    { icon: Wallet,      label: 'Wallet',  path: '/wallet' },
     ...(isAdmin ? [{ icon: ShieldCheck, label: 'Admin', path: '/admin' }] : []),
   ];
 

@@ -205,7 +205,7 @@ export default function Footer({ scrollTo }: FooterProps) {
               behavior: "smooth",
             })
           }
-          className="fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg transition-all"
+          className="fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-lg transition-all"
           aria-label="Scroll to top"
         >
           ▲

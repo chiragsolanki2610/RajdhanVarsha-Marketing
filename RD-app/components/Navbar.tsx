@@ -120,13 +120,13 @@ export default function Navbar({ transparent = false }: NavbarProps) {
                   : "bg-white/20 backdrop-blur-xl border-white/40 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.6),_0_12px_24px_rgba(0,0,0,0.15)]"
                 }`}
               >
-                <Link
+                {/* <Link
                   href="/overview"
                   onClick={() => setAboutDropdownOpen(false)}
                   className={dropdownItemStyles}
                 >
                   Overview
-                </Link>
+                </Link> */}
                 
                 {/* Redirecting to Our Team page */}
                 <Link

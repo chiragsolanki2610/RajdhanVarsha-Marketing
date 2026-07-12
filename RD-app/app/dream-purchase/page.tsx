@@ -62,8 +62,8 @@ function ProductImage({ imageUrl, name, className }: { imageUrl: string; name: s
 
   if (!imageUrl || imgError) {
     return (
-      <div className={`bg-purple-50 flex items-center justify-center ${className ?? ""}`}>
-        <Package size={22} className="text-purple-300" />
+      <div className={`bg-[#eef1f8] flex items-center justify-center ${className ?? ""}`}>
+        <Package size={22} className="text-[#8fa0ce]" />
       </div>
     );
   }
@@ -252,11 +252,13 @@ export default function DreamPurchasePage() {
 
   // ─── Shell wrapper ────────────────────────────────────────────────────────────
   const Shell = ({ children, gradient }: { children: React.ReactNode; gradient?: boolean }) => (
-    <div className={`flex min-h-screen ${gradient ? "bg-gradient-to-br from-slate-50 via-purple-50 to-indigo-50" : "bg-gray-50"}`}>
+    <div className={`flex h-screen overflow-hidden ${gradient ? "bg-gradient-to-br from-slate-50 via-[#eef1f8] to-indigo-50" : "bg-gray-50"}`}>
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-auto">
-        <LoginTopBar />
-        <main className="flex-1">{children}</main>
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="sticky top-0 z-20 shrink-0 bg-white">
+          <LoginTopBar pagetitle="Dream Purchase" />
+        </div>
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );
@@ -289,7 +291,7 @@ export default function DreamPurchasePage() {
               </div>
               <button
                 onClick={handleReset}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-8 py-3 rounded-2xl transition-colors w-full"
+                className="bg-[#3b5998] hover:bg-[#2f4677] text-white font-semibold px-8 py-3 rounded-2xl transition-colors w-full"
               >
                 Go to Plans →
               </button>
@@ -325,7 +327,7 @@ export default function DreamPurchasePage() {
               <div className="space-y-5">
                 {/* Order Summary */}
                 <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                  <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-4">
+                  <div className="bg-gradient-to-r from-[#3b5998] to-indigo-600 px-5 py-4">
                     <h2 className="text-white font-bold text-base flex items-center gap-2">
                       <Package size={16} /> Order Summary
                     </h2>
@@ -350,7 +352,7 @@ export default function DreamPurchasePage() {
                       </div>
                       <div className="flex justify-between text-base font-bold text-gray-900">
                         <span>Total Amount</span>
-                        <span className="text-purple-600">₹{totalPrice.toLocaleString("en-IN")}</span>
+                        <span className="text-[#3b5998]">₹{totalPrice.toLocaleString("en-IN")}</span>
                       </div>
                     </div>
                   </div>
@@ -359,9 +361,9 @@ export default function DreamPurchasePage() {
                 {/* QR Card */}
                 <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 text-center">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Scan &amp; Pay via UPI</p>
-                  <p className="text-2xl font-bold text-purple-700 mb-5">₹{totalPrice.toLocaleString("en-IN")}</p>
+                  <p className="text-2xl font-bold text-[#2f4677] mb-5">₹{totalPrice.toLocaleString("en-IN")}</p>
 
-                  <div className="inline-flex flex-col items-center justify-center w-52 h-52 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-dashed border-purple-200 rounded-2xl mx-auto mb-5 overflow-hidden">
+                  <div className="inline-flex flex-col items-center justify-center w-52 h-52 bg-gradient-to-br from-[#eef1f8] to-indigo-50 border-2 border-dashed border-[#b8c3e1] rounded-2xl mx-auto mb-5 overflow-hidden">
                     {!qrFailed ? (
                       <img
                         src={QR_IMAGE_URL}
@@ -371,7 +373,7 @@ export default function DreamPurchasePage() {
                       />
                     ) : (
                       <div className="flex flex-col items-center gap-2 px-4 text-center">
-                        <QrCode size={56} className="text-purple-300" />
+                        <QrCode size={56} className="text-[#8fa0ce]" />
                         <p className="text-[10px] text-gray-400 leading-relaxed">
                           QR image not found.<br />
                           Add it at <code className="font-mono">public{QR_IMAGE_URL}</code>
@@ -380,12 +382,12 @@ export default function DreamPurchasePage() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-center gap-2 bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3 mb-3">
-                    <IndianRupee size={15} className="text-purple-500 flex-shrink-0" />
-                    <span className="font-mono text-purple-800 font-semibold text-xs break-all">{UPI_ID}</span>
+                  <div className="flex items-center justify-center gap-2 bg-[#eef1f8] border border-[#dde3f1] rounded-2xl px-4 py-3 mb-3">
+                    <IndianRupee size={15} className="text-[#46608f] flex-shrink-0" />
+                    <span className="font-mono text-[#253a63] font-semibold text-xs break-all">{UPI_ID}</span>
                     <button
                       onClick={handleCopyUpi}
-                      className="ml-1 text-purple-400 hover:text-purple-700 transition-colors p-1 hover:bg-purple-100 rounded-lg flex-shrink-0"
+                      className="ml-1 text-[#5f76ab] hover:text-[#2f4677] transition-colors p-1 hover:bg-[#dde3f1] rounded-lg flex-shrink-0"
                       title="Copy UPI ID"
                     >
                       <Copy size={14} />
@@ -413,7 +415,7 @@ export default function DreamPurchasePage() {
                       { n: "4", text: "Upload screenshot & enter UTR below" },
                     ].map((s) => (
                       <div key={s.n} className="flex items-start gap-3">
-                        <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{s.n}</div>
+                        <div className="w-6 h-6 rounded-full bg-[#dde3f1] text-[#2f4677] text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{s.n}</div>
                         <p className="text-sm text-gray-600">{s.text}</p>
                       </div>
                     ))}
@@ -432,7 +434,7 @@ export default function DreamPurchasePage() {
                     value={utrNumber}
                     onChange={(e) => setUtrNumber(e.target.value)}
                     placeholder="e.g. 426891234567"
-                    className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm mb-5 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all"
+                    className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm mb-5 focus:outline-none focus:ring-2 focus:ring-[#5f76ab] focus:border-transparent transition-all"
                   />
 
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
@@ -444,7 +446,7 @@ export default function DreamPurchasePage() {
                       <img
                         src={screenshotPrev}
                         alt="Payment screenshot"
-                        className="w-full max-h-60 object-contain rounded-2xl border-2 border-purple-100"
+                        className="w-full max-h-60 object-contain rounded-2xl border-2 border-[#dde3f1]"
                       />
                       <button
                         onClick={() => { setScreenshot(null); setScreenshotPrev(""); }}
@@ -457,11 +459,11 @@ export default function DreamPurchasePage() {
                       </div>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all mb-5 group">
-                      <div className="w-10 h-10 bg-gray-100 group-hover:bg-purple-100 rounded-xl flex items-center justify-center mb-2 transition-colors">
-                        <Upload size={20} className="text-gray-400 group-hover:text-purple-500 transition-colors" />
+                    <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-[#5f76ab] hover:bg-[#eef1f8] transition-all mb-5 group">
+                      <div className="w-10 h-10 bg-gray-100 group-hover:bg-[#dde3f1] rounded-xl flex items-center justify-center mb-2 transition-colors">
+                        <Upload size={20} className="text-gray-400 group-hover:text-[#46608f] transition-colors" />
                       </div>
-                      <span className="text-sm font-medium text-gray-500 group-hover:text-purple-600 transition-colors">Click to upload screenshot</span>
+                      <span className="text-sm font-medium text-gray-500 group-hover:text-[#3b5998] transition-colors">Click to upload screenshot</span>
                       <span className="text-xs text-gray-400 mt-0.5">PNG, JPG, WEBP — max 5 MB</span>
                       <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" className="hidden" onChange={handleScreenshotChange} />
                     </label>
@@ -477,7 +479,7 @@ export default function DreamPurchasePage() {
                   <button
                     onClick={handlePaymentSubmit}
                     disabled={submitting}
-                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:from-purple-300 disabled:to-indigo-300 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-200 text-sm"
+                    className="w-full bg-gradient-to-r from-[#3b5998] to-indigo-600 hover:from-[#2f4677] hover:to-indigo-700 disabled:from-[#8fa0ce] disabled:to-indigo-300 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#b8c3e1] text-sm"
                   >
                     {submitting
                       ? <><Loader2 size={16} className="animate-spin" /> Verifying your payment…</>
@@ -501,11 +503,11 @@ export default function DreamPurchasePage() {
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <Shell>
-      <div className="p-4 md:p-6 pb-52 flex-1">
+      <div className="p-4 md:p-6 pb-24 flex-1">
         <div className="flex items-center gap-3 mb-5">
           <div className="flex-1">
             <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <ShoppingCart size={20} className="text-purple-600" /> Dream Plan — Select Products
+              <ShoppingCart size={20} className="text-[#3b5998]" /> Dream Plan — Select Products
             </h1>
             <p className="text-xs text-gray-400 mt-0.5">
               Add products worth at least {DREAM_PLAN_BV_TARGET} BV to activate your Dream Plan
@@ -513,8 +515,8 @@ export default function DreamPurchasePage() {
           </div>
           {cartCount > 0 && (
             <div className="relative">
-              <ShoppingCart size={22} className="text-purple-600" />
-              <span className="absolute -top-1.5 -right-1.5 bg-purple-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+              <ShoppingCart size={22} className="text-[#3b5998]" />
+              <span className="absolute -top-1.5 -right-1.5 bg-[#3b5998] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                 {cartCount}
               </span>
             </div>
@@ -525,13 +527,13 @@ export default function DreamPurchasePage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
           <div className="flex justify-between text-xs text-gray-500 mb-1.5">
             <span>Business Volume</span>
-            <span className={`font-bold ${bvMet ? "text-emerald-600" : "text-purple-600"}`}>
+            <span className={`font-bold ${bvMet ? "text-emerald-600" : "text-[#3b5998]"}`}>
               {totalBV} / {DREAM_PLAN_BV_TARGET} BV
             </span>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${bvMet ? "bg-emerald-500" : "bg-purple-500"}`}
+              className={`h-full rounded-full transition-all duration-500 ${bvMet ? "bg-emerald-500" : "bg-[#46608f]"}`}
               style={{ width: `${bvProgress}%` }}
             />
           </div>
@@ -550,8 +552,8 @@ export default function DreamPurchasePage() {
               onClick={() => setSelectedCategory(cat)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                 selectedCategory === cat
-                  ? "bg-purple-600 text-white border-purple-600"
-                  : "bg-white text-gray-600 border-gray-200 hover:border-purple-300"
+                  ? "bg-[#3b5998] text-white border-[#3b5998]"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-[#8fa0ce]"
               }`}
             >
               {cat}
@@ -574,7 +576,7 @@ export default function DreamPurchasePage() {
             <p className="text-red-500 font-medium text-sm mb-3">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
+              className="bg-[#3b5998] hover:bg-[#2f4677] text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
             >
               Retry
             </button>
@@ -596,11 +598,11 @@ export default function DreamPurchasePage() {
               const cartItem = cart.find((i) => i.id === product.id);
               return (
                 <div key={product.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                  <div className="w-full h-48 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
+                  <div className="w-full h-48 bg-gradient-to-br from-[#eef1f8] to-indigo-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
                     {product.imageUrl ? (
                       <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover rounded-xl" />
                     ) : (
-                      <Package size={32} className="text-purple-200" />
+                      <Package size={32} className="text-[#b8c3e1]" />
                     )}
                   </div>
 
@@ -613,7 +615,7 @@ export default function DreamPurchasePage() {
                   <div className="flex items-end justify-between mb-3">
                     <div>
                       <p className="text-base font-bold text-gray-800">₹{product.price.toLocaleString("en-IN")}</p>
-                      <p className="text-[11px] text-purple-500 font-medium">{product.bv} BV</p>
+                      <p className="text-[11px] text-[#46608f] font-medium">{product.bv} BV</p>
                     </div>
                   </div>
 
@@ -638,7 +640,7 @@ export default function DreamPurchasePage() {
                   ) : (
                     <button
                       onClick={() => addToCart(product)}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                      className="w-full bg-[#3b5998] hover:bg-[#2f4677] text-white text-xs font-semibold py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                     >
                       <Plus size={13} /> Add to Cart
                     </button>
@@ -651,19 +653,18 @@ export default function DreamPurchasePage() {
 
         {/* Floating cart pill */}
         {cart.length > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+          <div className="fixed bottom-6 right-6 z-40">
             <button
               onClick={() => setShowCart(true)}
-              className="flex items-center gap-3 bg-purple-700 hover:bg-purple-800 text-white px-5 py-3 rounded-full shadow-2xl transition-all"
+              className="flex items-center gap-3 bg-[#2f4677] hover:bg-[#253a63] text-white pl-4 pr-5 py-3 rounded-full shadow-2xl transition-all"
             >
               <div className="relative">
                 <ShoppingCart size={18} />
-                <span className="absolute -top-2 -right-2 bg-white text-purple-700 text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                <span className="absolute -top-2 -right-2 bg-white text-[#2f4677] text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                   {cartCount}
                 </span>
               </div>
-              <span className="text-sm font-semibold">{cartCount} item{cartCount > 1 ? "s" : ""} in cart</span>
-              <span className="text-sm font-bold">₹{totalPrice.toLocaleString("en-IN")}</span>
+              <span className="text-sm font-bold whitespace-nowrap">₹{totalPrice.toLocaleString("en-IN")}</span>
               <ArrowRight size={15} />
             </button>
           </div>
@@ -674,11 +675,11 @@ export default function DreamPurchasePage() {
           <>
             <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setShowCart(false)} />
             <div className="fixed top-0 right-0 h-full w-80 bg-white z-50 shadow-2xl flex flex-col">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-purple-700">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-[#2f4677]">
                 <h2 className="text-white font-bold text-base flex items-center gap-2">
                   <ShoppingCart size={18} /> Cart ({cartCount})
                 </h2>
-                <button onClick={() => setShowCart(false)} className="text-white hover:text-purple-200 transition-colors">
+                <button onClick={() => setShowCart(false)} className="text-white hover:text-[#b8c3e1] transition-colors">
                   <X size={20} />
                 </button>
               </div>
@@ -692,7 +693,7 @@ export default function DreamPurchasePage() {
                       <ProductImage imageUrl={item.imageUrl} name={item.name} className="w-12 h-12 rounded-lg flex-shrink-0 bg-white border border-gray-100" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-gray-800 truncate">{item.name}</p>
-                        <p className="text-[11px] text-purple-500 font-medium">BV {item.bv}</p>
+                        <p className="text-[11px] text-[#46608f] font-medium">BV {item.bv}</p>
                         <div className="flex items-center justify-between mt-1.5">
                           <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
                             <button onClick={() => updateQty(item.id, item.qty - 1)} className="px-2 py-1 hover:bg-gray-50 transition-colors"><Minus size={10} /></button>
@@ -714,11 +715,11 @@ export default function DreamPurchasePage() {
                 <div className="border-t border-gray-100 px-5 py-4 bg-white">
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-500">Total BV</span>
-                    <span className={`font-bold ${bvMet ? "text-emerald-600" : "text-purple-600"}`}>{totalBV} BV</span>
+                    <span className={`font-bold ${bvMet ? "text-emerald-600" : "text-[#3b5998]"}`}>{totalBV} BV</span>
                   </div>
                   <div className="flex justify-between text-base font-bold text-gray-800 mb-3">
                     <span>Total Amount</span>
-                    <span className="text-purple-700">₹{totalPrice.toLocaleString("en-IN")}</span>
+                    <span className="text-[#2f4677]">₹{totalPrice.toLocaleString("en-IN")}</span>
                   </div>
                   {!bvMet && (
                     <p className="text-[11px] text-amber-500 text-center mb-2">
@@ -729,7 +730,7 @@ export default function DreamPurchasePage() {
                     onClick={() => { if (bvMet) { setShowCart(false); setStep("checkout"); } }}
                     disabled={!bvMet}
                     className={`w-full flex items-center justify-center gap-2 text-sm font-bold py-3 rounded-xl transition-colors ${
-                      bvMet ? "bg-purple-700 hover:bg-purple-800 text-white" : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      bvMet ? "bg-[#2f4677] hover:bg-[#253a63] text-white" : "bg-gray-200 text-gray-400 cursor-not-allowed"
                     }`}
                   >
                     <ArrowRight size={14} /> Proceed to Payment →
@@ -738,28 +739,6 @@ export default function DreamPurchasePage() {
               )}
             </div>
           </>
-        )}
-
-        {/* Sticky checkout bar */}
-        {cartCount > 0 && !showCart && (
-          <div className="fixed bottom-0 left-0 right-0 bg-purple-700 text-white px-6 py-3.5 flex justify-between items-center z-30 shadow-lg">
-            <div className="flex items-center gap-3 text-sm">
-              <span className="font-semibold">{cartCount} item(s)</span>
-              <span className="text-purple-300">|</span>
-              <span>₹{totalPrice.toLocaleString("en-IN")}</span>
-              <span className="text-purple-300">|</span>
-              <span className={bvMet ? "text-emerald-300" : "text-amber-300"}>{totalBV} BV</span>
-            </div>
-            <button
-              onClick={() => { if (bvMet) setStep("checkout"); }}
-              disabled={!bvMet}
-              className={`px-5 py-2 rounded-xl font-bold text-sm transition-colors ${
-                bvMet ? "bg-white text-purple-700 hover:bg-gray-100" : "bg-white/40 text-white/70 cursor-not-allowed"
-              }`}
-            >
-              {bvMet ? "Checkout →" : `Need ${DREAM_PLAN_BV_TARGET - totalBV} more BV`}
-            </button>
-          </div>
         )}
       </div>
     </Shell>

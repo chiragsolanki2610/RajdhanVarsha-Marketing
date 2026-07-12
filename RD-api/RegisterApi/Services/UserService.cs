@@ -155,7 +155,8 @@ public class UserService : IUserService
         var user = await _db.Users
             .FirstOrDefaultAsync(u => u.UserId == dto.UserId.Trim());
 
-        if (user is null || !_passwordService.VerifyPassword(dto.Password, user.PasswordHash))
+        // Check if user exists and verify password using the safe fallback method
+        if (user is null || !VerifyPasswordWithLegacyFallback(dto.Password, user.PasswordHash))
             return (false, "Invalid User ID or password.", null);
 
         var token = GenerateJwtToken(user);
@@ -189,15 +190,15 @@ public class UserService : IUserService
         if (user is null)
             return (false, "User record not found in database.");
 
-        // 1. Verify the current password
-        if (!_passwordService.VerifyPassword(dto.OldPassword, user.PasswordHash))
+        // 1. Verify the current password using the safe fallback method
+        if (!VerifyPasswordWithLegacyFallback(dto.OldPassword, user.PasswordHash))
             return (false, "Current password is incorrect.");
 
         // 2. Don't allow "changing" to the same password
-        if (_passwordService.VerifyPassword(dto.NewPassword, user.PasswordHash))
+        if (VerifyPasswordWithLegacyFallback(dto.NewPassword, user.PasswordHash))
             return (false, "New password must be different from the current password.");
 
-        // 3. Hash and persist the new password
+        // 3. Hash and persist the new password securely
         user.PasswordHash = _passwordService.HashPassword(dto.NewPassword);
         user.Password = dto.NewPassword; // kept in sync with the plaintext field used elsewhere (e.g. registration)
 
@@ -283,5 +284,25 @@ public class UserService : IUserService
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <summary>
+    /// Helper method to safely verify passwords for both new users (BCrypt) 
+    /// and legacy users imported from CSV (plain-text).
+    /// </summary>
+    private bool VerifyPasswordWithLegacyFallback(string plainTextPassword, string hashFromDatabase)
+    {
+        if (string.IsNullOrEmpty(hashFromDatabase))
+            return false;
+
+        // BCrypt hashes always start with "$2" (e.g., $2a$, $2b$)
+        if (!hashFromDatabase.StartsWith("$2"))
+        {
+            // Legacy plain-text compare for imported users
+            return plainTextPassword == hashFromDatabase;
+        }
+
+        // Standard secure BCrypt compare
+        return _passwordService.VerifyPassword(plainTextPassword, hashFromDatabase);
     }
 }

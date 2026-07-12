@@ -8,7 +8,7 @@ import {
   User, Landmark, Edit, Lock, Download, AlertCircle,
   ShieldAlert, CheckCircle, FileText, MapPin, Hash, MoveRight,
   CircleCheck, CircleX, X, Loader2, Eye, EyeOff,
-  Camera, Image as ImageIcon, Trash2, Pencil
+  Camera, Image as ImageIcon, Trash2, Pencil, ChevronLeft, ChevronRight, ArrowLeft
 } from 'lucide-react';
 
 interface UserProfileData {
@@ -37,6 +37,11 @@ interface UserProfileData {
   ifscCode?: string;
   accountType?: string;
   profilePictureUrl?: string | null;
+  // ✅ NEW: KYC document images
+  aadharFrontImageUrl?: string | null;
+  aadharBackImageUrl?: string | null;
+  panCardImageUrl?: string | null;
+  bankProofImageUrl?: string | null;
 }
 
 const API_BASE = 'https://rd-api-j7zj.onrender.com';
@@ -73,6 +78,11 @@ export default function ProfilePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // ✅ NEW: Show Documents modal state
+  const [showDocumentsModal, setShowDocumentsModal] = useState(false);
+  const [activeDocTab, setActiveDocTab] = useState<'list' | 'aadhar' | 'pan' | 'bank'>('list');
+  const [aadharSlideIndex, setAadharSlideIndex] = useState(0); // 0 for front, 1 for back
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -134,7 +144,12 @@ export default function ProfilePage() {
           accountNo: apiData.accountNo || '',
           ifscCode: apiData.ifscCode || '',
           accountType: apiData.accountType || 'Savings',
-          profilePictureUrl: apiData.profilePictureUrl || null
+          profilePictureUrl: apiData.profilePictureUrl || null,
+          // ✅ NEW: KYC document images
+          aadharFrontImageUrl: apiData.aadharFrontImageUrl || null,
+          aadharBackImageUrl: apiData.aadharBackImageUrl || null,
+          panCardImageUrl: apiData.panCardImageUrl || null,
+          bankProofImageUrl: apiData.bankProofImageUrl || null,
         });
 
       } catch (err: any) {
@@ -169,7 +184,12 @@ export default function ProfilePage() {
               accountNo: parsed.accountNo || '',
               ifscCode: parsed.ifscCode || '',
               accountType: parsed.accountType || 'Savings',
-              profilePictureUrl: parsed.profilePictureUrl || null
+              profilePictureUrl: parsed.profilePictureUrl || null,
+              // ✅ NEW: KYC document images
+              aadharFrontImageUrl: parsed.aadharFrontImageUrl || null,
+              aadharBackImageUrl: parsed.aadharBackImageUrl || null,
+              panCardImageUrl: parsed.panCardImageUrl || null,
+              bankProofImageUrl: parsed.bankProofImageUrl || null,
             });
           } catch {
             setProfile({
@@ -192,7 +212,11 @@ export default function ProfilePage() {
               nextRank: "Silver Member",
               neededReferrals: 10,
               isKycCompleted: false,
-              profilePictureUrl: null
+              profilePictureUrl: null,
+              aadharFrontImageUrl: null,
+              aadharBackImageUrl: null,
+              panCardImageUrl: null,
+              bankProofImageUrl: null,
             });
           }
         } else {
@@ -216,7 +240,11 @@ export default function ProfilePage() {
             nextRank: "Silver Member",
             neededReferrals: 10,
             isKycCompleted: false,
-            profilePictureUrl: null
+            profilePictureUrl: null,
+            aadharFrontImageUrl: null,
+            aadharBackImageUrl: null,
+            panCardImageUrl: null,
+            bankProofImageUrl: null,
           });
         }
       } finally {
@@ -515,6 +543,17 @@ export default function ProfilePage() {
     }
   };
 
+  // ✅ NEW: Show Documents modal handlers
+  const openDocumentsModal = () => {
+    setActiveDocTab('list');
+    setAadharSlideIndex(0);
+    setShowDocumentsModal(true);
+  };
+
+  const closeDocumentsModal = () => {
+    setShowDocumentsModal(false);
+  };
+
   return (
     <div className="flex h-screen w-screen bg-[#F4F7FC] overflow-hidden font-sans">
       <Sidebar />
@@ -767,8 +806,15 @@ export default function ProfilePage() {
                 >
                   <Lock size={14} /> Change Password
                 </button>
-                <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 text-xs font-bold uppercase tracking-wider rounded-xl transition sm:ml-auto">
-                  <Download size={14} /> Print Identity Badge
+
+                {/* ✅ REPLACED: "Print Identity Badge" -> "Show Documents" */}
+                <button
+                  onClick={openDocumentsModal}
+                  disabled={!profile.isKycCompleted}
+                  title={!profile.isKycCompleted ? 'Complete KYC to view your submitted documents' : undefined}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 text-xs font-bold uppercase tracking-wider rounded-xl transition sm:ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                >
+                  <FileText size={14} /> Show Documents
                 </button>
               </div>
 
@@ -1063,6 +1109,228 @@ export default function ProfilePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: SHOW DOCUMENTS MODAL WITH OPTION LIST & NAVIGATION BACK BUTTON */}
+      {showDocumentsModal && profile && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={closeDocumentsModal}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 relative animate-fadeIn max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top Right Close Button */}
+            <button
+              onClick={closeDocumentsModal}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Modal Header */}
+            <div className="flex items-center gap-2 mb-5">
+              {activeDocTab !== 'list' && (
+                <button
+                  onClick={() => setActiveDocTab('list')}
+                  className="mr-1 p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition"
+                  title="Go Back"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+              )}
+              <div className="p-2 bg-[#2B4C7E]/10 text-[#2B4C7E] rounded-lg">
+                <FileText size={18} />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">
+                  {activeDocTab === 'list' && 'KYC Documents'}
+                  {activeDocTab === 'aadhar' && 'Aadhar Card Verification'}
+                  {activeDocTab === 'pan' && 'PAN Card Verification'}
+                  {activeDocTab === 'bank' && 'Bank Passbook / Proof'}
+                </h2>
+                <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                  {activeDocTab === 'list' && 'Select a document item to view your submitted proofs'}
+                  {activeDocTab === 'aadhar' && `Showing: ${aadharSlideIndex === 0 ? 'Front Side' : 'Back Side'}`}
+                  {activeDocTab === 'pan' && 'Your registered PAN card item verification profile'}
+                  {activeDocTab === 'bank' && 'Your banking branch node settlement document proof'}
+                </p>
+              </div>
+            </div>
+
+            {profile.isKycCompleted ? (
+              <div>
+                {/* 1. DOCUMENT INDEX NAVIGATION LIST VIEW */}
+                {activeDocTab === 'list' && (
+                  <div className="space-y-3 pt-2">
+                    <button
+                      onClick={() => { setActiveDocTab('aadhar'); setAadharSlideIndex(0); }}
+                      className="w-full flex items-center justify-between p-4 bg-gray-50/50 hover:bg-gray-50 border border-gray-100 rounded-xl transition group text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 font-bold text-xs uppercase tracking-wider">AA</div>
+                        <div>
+                          <p className="text-sm font-bold text-[#334155]">Aadhar Card</p>
+                          <p className="text-[11px] text-gray-400 font-medium">Contains Front & Back view slides</p>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-400 group-hover:translate-x-0.5 transition-transform" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveDocTab('pan')}
+                      className="w-full flex items-center justify-between p-4 bg-gray-50/50 hover:bg-gray-50 border border-gray-100 rounded-xl transition group text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 font-bold text-xs uppercase tracking-wider">PC</div>
+                        <div>
+                          <p className="text-sm font-bold text-[#334155]">Pan Card</p>
+                          <p className="text-[11px] text-gray-400 font-medium">Single image layout node asset</p>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-400 group-hover:translate-x-0.5 transition-transform" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveDocTab('bank')}
+                      className="w-full flex items-center justify-between p-4 bg-gray-50/50 hover:bg-gray-50 border border-gray-100 rounded-xl transition group text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 font-bold text-xs uppercase tracking-wider">BP</div>
+                        <div>
+                          <p className="text-sm font-bold text-[#334155]">Bank Passbook</p>
+                          <p className="text-[11px] text-gray-400 font-medium">Verification settlement document proof</p>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-400 group-hover:translate-x-0.5 transition-transform" />
+                    </button>
+                  </div>
+                )}
+
+                {/* 2. AADHAR CARD VIEWING REGION (SLIDER MECHANISM) */}
+                {activeDocTab === 'aadhar' && (
+                  <div className="space-y-4">
+                    <div className="relative bg-gray-900 rounded-2xl overflow-hidden aspect-[1.6/1] border border-gray-200 group shadow-inner">
+                      {/* Left Navigation Arrow */}
+                      <button
+                        onClick={() => setAadharSlideIndex(aadharSlideIndex === 0 ? 1 : 0)}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-gray-700 shadow flex items-center justify-center backdrop-blur-sm transition"
+                        title="Previous Image"
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+
+                      {/* Document Image Element */}
+                      {((aadharSlideIndex === 0 && profile.aadharFrontImageUrl) || (aadharSlideIndex === 1 && profile.aadharBackImageUrl)) ? (
+                        <img
+                          src={aadharSlideIndex === 0 ? (profile.aadharFrontImageUrl || '') : (profile.aadharBackImageUrl || '')}
+                          alt={`Aadhar Card ${aadharSlideIndex === 0 ? 'Front' : 'Back'}`}
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-gray-400">
+                          <ImageIcon size={24} className="text-gray-600" />
+                          <p className="text-xs font-semibold">Image content not loaded</p>
+                        </div>
+                      )}
+
+                      {/* Right Navigation Arrow */}
+                      <button
+                        onClick={() => setAadharSlideIndex(aadharSlideIndex === 0 ? 1 : 0)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-gray-700 shadow flex items-center justify-center backdrop-blur-sm transition"
+                        title="Next Image"
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+
+                      {/* Slide Information Bar Layout Tag Overlay */}
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide text-white backdrop-blur-sm">
+                        {aadharSlideIndex === 0 ? 'FRONT SIDE (1/2)' : 'BACK SIDE (2/2)'}
+                      </div>
+                    </div>
+
+                    {/* Pagination Dot Indicator Bullets */}
+                    <div className="flex items-center justify-center gap-1.5 py-1">
+                      <button onClick={() => setAadharSlideIndex(0)} className={`w-2 h-2 rounded-full transition-all ${aadharSlideIndex === 0 ? 'bg-[#2B4C7E] w-4' : 'bg-gray-300'}`} />
+                      <button onClick={() => setAadharSlideIndex(1)} className={`w-2 h-2 rounded-full transition-all ${aadharSlideIndex === 1 ? 'bg-[#2B4C7E] w-4' : 'bg-gray-300'}`} />
+                    </div>
+
+                    <button
+                      onClick={() => setActiveDocTab('list')}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wider rounded-xl transition"
+                    >
+                      <ArrowLeft size={14} /> Back To List
+                    </button>
+                  </div>
+                )}
+
+                {/* 3. PAN CARD VIEWING REGION */}
+                {activeDocTab === 'pan' && (
+                  <div className="space-y-4">
+                    <div className="bg-gray-900 rounded-2xl overflow-hidden aspect-[1.6/1] border border-gray-200 shadow-inner flex items-center justify-center">
+                      {profile.panCardImageUrl ? (
+                        <img
+                          src={profile.panCardImageUrl}
+                          alt="PAN Card"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center gap-2 text-gray-400">
+                          <ImageIcon size={24} className="text-gray-600" />
+                          <p className="text-xs font-semibold">PAN Card image asset not present</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => setActiveDocTab('list')}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wider rounded-xl transition"
+                    >
+                      <ArrowLeft size={14} /> Back To List
+                    </button>
+                  </div>
+                )}
+
+                {/* 4. BANK PASSBOOK VIEWING REGION */}
+                {activeDocTab === 'bank' && (
+                  <div className="space-y-4">
+                    <div className="bg-gray-900 rounded-2xl overflow-hidden aspect-[1.6/1] border border-gray-200 shadow-inner flex items-center justify-center">
+                      {profile.bankProofImageUrl ? (
+                        <img
+                          src={profile.bankProofImageUrl}
+                          alt="Bank Passbook Proof"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center gap-2 text-gray-400">
+                          <ImageIcon size={24} className="text-gray-600" />
+                          <p className="text-xs font-semibold">Bank proof schema asset not present</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => setActiveDocTab('list')}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wider rounded-xl transition"
+                    >
+                      <ArrowLeft size={14} /> Back To List
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-center gap-3 py-10">
+                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                  <ShieldAlert size={22} />
+                </div>
+                <p className="text-sm font-bold text-gray-700">No documents to show yet</p>
+                <p className="text-xs text-gray-400 max-w-xs">Complete your KYC verification to submit and view your identity and bank documents here.</p>
+              </div>
+            )}
           </div>
         </div>
       )}

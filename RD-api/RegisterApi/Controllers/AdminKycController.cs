@@ -93,6 +93,14 @@ namespace RegisterApi.Controllers
                     user.AccountNo = kyc.AccountNo;
                     user.IfscCode = kyc.IfscCode;
                     user.AccountType = "Savings";
+
+                    // ✅ NEW: persist the uploaded KYC document URLs onto the User record
+                    // before the KycRequest row is deleted below — otherwise they're lost
+                    // the moment KYC is approved.
+                    user.AadharFrontImageUrl = kyc.AadharFrontImageUrl;
+                    user.AadharBackImageUrl = kyc.AadharBackImageUrl;
+                    user.PanCardImageUrl = kyc.PanCardImageUrl;
+                    user.BankProofImageUrl = kyc.BankProofImageUrl;
                 }
             }
 

@@ -39,7 +39,10 @@ public class AppDbContext : DbContext
             entity.Property(e => e.UserId).HasMaxLength(10).IsRequired();
             entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
             entity.Property(e => e.MobileNo).HasMaxLength(15).IsRequired();
-            entity.Property(e => e.AadharNo).HasMaxLength(12).IsRequired();
+
+            // REMOVED .IsRequired() here so EF allows NULLs
+            entity.Property(e => e.AadharNo).HasMaxLength(12);
+
             entity.Property(e => e.Role)
                   .HasConversion<string>()
                   .HasMaxLength(20)

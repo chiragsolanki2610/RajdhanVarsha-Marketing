@@ -108,7 +108,13 @@ public class AuthController : ControllerBase
             accountNo = user.AccountNo ?? "",
             ifscCode = user.IfscCode ?? "",
             accountType = user.AccountType ?? "Savings",
-            profilePictureUrl = user.ProfilePictureUrl
+            profilePictureUrl = user.ProfilePictureUrl,
+
+            // ✅ NEW: KYC document images (persisted onto User at approval time)
+            aadharFrontImageUrl = user.AadharFrontImageUrl,
+            aadharBackImageUrl = user.AadharBackImageUrl,
+            panCardImageUrl = user.PanCardImageUrl,
+            bankProofImageUrl = user.BankProofImageUrl
         });
     }
 
@@ -273,7 +279,13 @@ public class AuthController : ControllerBase
                 accountNo = user.AccountNo ?? "",
                 ifscCode = user.IfscCode ?? "",
                 accountType = user.AccountType ?? "Savings",
-                profilePictureUrl = user.ProfilePictureUrl
+                profilePictureUrl = user.ProfilePictureUrl,
+
+                // ✅ NEW: KYC document images
+                aadharFrontImageUrl = user.AadharFrontImageUrl,
+                aadharBackImageUrl = user.AadharBackImageUrl,
+                panCardImageUrl = user.PanCardImageUrl,
+                bankProofImageUrl = user.BankProofImageUrl
             });
         }
 

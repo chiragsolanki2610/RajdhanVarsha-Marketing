@@ -48,35 +48,84 @@ namespace RegisterApi.Controllers
             if (user == null)
                 return NotFound(new { message = "User not found." });
 
-            // Fetch latest of EACH plan type separately
-            var latestDreamPlan = await _db.Plans
+            // ── Legacy source: the old direct-checkout flow (POST /api/Plans/checkout).
+            //    Kept for backward compatibility with any historical data, but this
+            //    endpoint is no longer what the app actually uses to purchase. ──
+            var latestDreamPlanLegacy = await _db.Plans
                 .Where(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid && p.PlanType == "Dream Plan")
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync();
 
-            var latestBinaryPlan = await _db.Plans
+            var latestBinaryPlanLegacy = await _db.Plans
                 .Where(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid && p.PlanType == "Binary Plan")
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync();
 
-            var totalSells = await _db.Plans
-                .CountAsync(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid);
+            // ── Real source: the actual live flow. A user submits a payment via
+            //    POST /api/Orders/payment (UTR + screenshot), and an admin approves
+            //    it via POST /api/Orders/payment-requests/{id}/approve. THAT approval
+            //    is what really activates a plan — this endpoint was never reading
+            //    from it before, which is why an approved order never showed as
+            //    "active" here even though the admin panel said Approved. ──
+            var latestDreamOrder = await _db.PaymentOrders
+                .Where(o => o.UserId == user.UserId && o.PlanType == "Dream Plan" && o.Status == PaymentOrderStatus.Approved)
+                .OrderByDescending(o => o.ProcessedAt)
+                .FirstOrDefaultAsync();
 
-            // Use whichever is more recent as the "primary" plan
-            var latestPlan = (latestDreamPlan?.CreatedAt ?? DateTime.MinValue) >= (latestBinaryPlan?.CreatedAt ?? DateTime.MinValue)
-                ? latestDreamPlan
-                : latestBinaryPlan;
+            var latestBinaryOrder = await _db.PaymentOrders
+                .Where(o => o.UserId == user.UserId && o.PlanType == "Binary Plan" && o.Status == PaymentOrderStatus.Approved)
+                .OrderByDescending(o => o.ProcessedAt)
+                .FirstOrDefaultAsync();
+
+            var totalSells =
+                await _db.Plans.CountAsync(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid) +
+                await _db.PaymentOrders.CountAsync(o => o.UserId == user.UserId && o.Status == PaymentOrderStatus.Approved);
+
+            // ── Merge: whichever of legacy vs. real is more recent for each plan wins ──
+            DateTime? dreamDate = null;
+            decimal dreamBv = 0;
+            bool dreamIsActive = latestDreamPlanLegacy != null || latestDreamOrder != null;
+            if ((latestDreamOrder?.ProcessedAt ?? DateTime.MinValue) >= (latestDreamPlanLegacy?.CreatedAt ?? DateTime.MinValue))
+            {
+                dreamDate = latestDreamOrder?.ProcessedAt;
+                dreamBv = latestDreamOrder?.TotalBv ?? 0;
+            }
+            else
+            {
+                dreamDate = latestDreamPlanLegacy?.CreatedAt;
+                dreamBv = latestDreamPlanLegacy?.TotalBv ?? 0;
+            }
+
+            DateTime? binaryDate = null;
+            decimal binaryBv = 0;
+            bool binaryIsActive = latestBinaryPlanLegacy != null || latestBinaryOrder != null;
+            if ((latestBinaryOrder?.ProcessedAt ?? DateTime.MinValue) >= (latestBinaryPlanLegacy?.CreatedAt ?? DateTime.MinValue))
+            {
+                binaryDate = latestBinaryOrder?.ProcessedAt;
+                binaryBv = latestBinaryOrder?.TotalBv ?? 0;
+            }
+            else
+            {
+                binaryDate = latestBinaryPlanLegacy?.CreatedAt;
+                binaryBv = latestBinaryPlanLegacy?.TotalBv ?? 0;
+            }
+
+            // Use whichever plan (Dream or Binary) is more recent as the "primary" one
+            var useDreamAsPrimary = (dreamDate ?? DateTime.MinValue) >= (binaryDate ?? DateTime.MinValue);
 
             return Ok(new
             {
                 isActive = user.IsActive,
-                purchaseDate = latestPlan?.CreatedAt,
-                bv = latestPlan?.TotalBv ?? 0,
-                planType = latestPlan?.PlanType,
+                purchaseDate = useDreamAsPrimary ? dreamDate : binaryDate,
+                bv = useDreamAsPrimary ? dreamBv : binaryBv,
+                planType = useDreamAsPrimary
+                    ? (dreamIsActive ? "Dream Plan" : null)
+                    : (binaryIsActive ? "Binary Plan" : null),
                 totalSells,
-                // ── NEW: individual active flags for each plan ──
-                dreamIsActive = latestDreamPlan != null,
-                binaryIsActive = latestBinaryPlan != null
+                // ── Individual active flags for each plan — now correctly reflect
+                //    admin-approved orders from the real purchase flow. ──
+                dreamIsActive,
+                binaryIsActive
             });
         }
 

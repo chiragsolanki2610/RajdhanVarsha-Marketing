@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace RegisterApi.Models;
 
@@ -15,7 +16,7 @@ public class User
     public string UserId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string MobileNo { get; set; } = string.Empty;
-    public string AadharNo { get; set; } = string.Empty;
+    public string? AadharNo { get; set; } = string.Empty;
     public string? SponsorId { get; set; } = string.Empty;
     public string SponsorIdName { get; set; } = string.Empty;
 
@@ -68,4 +69,13 @@ public class User
     // Profile picture stored as a Base64 data URI directly in the DB
     // (same pattern as PaymentOrder.ScreenshotUrl) -- no file bucket needed.
     public string? ProfilePictureUrl { get; set; }
+    // KYC uploaded document images — copied over from KycRequest on approval
+    [NotMapped]
+    public string? AadharFrontImageUrl { get; set; }
+    [NotMapped]
+    public string? AadharBackImageUrl { get; set; }
+    [NotMapped]
+    public string? PanCardImageUrl { get; set; }
+    [NotMapped]
+    public string? BankProofImageUrl { get; set; }
 }

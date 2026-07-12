@@ -13,6 +13,9 @@ import { Check, Network, ChevronDown, ChevronUp, CircleDot, FileText, BadgeCheck
 // (same pattern for binary)
 // -----------------------------------------------------------------------------
 
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
+
 export default function PlanPage() {
   const router = useRouter();
 
@@ -23,6 +26,12 @@ export default function PlanPage() {
   // ── "Enrolled" = user joined the plan but hasn't purchased a product yet ──
   const [isDreamEnrolled,  setIsDreamEnrolled]  = useState(false);
   const [isBinaryEnrolled, setIsBinaryEnrolled] = useState(false);
+
+  // ── Order awaiting admin approval (UTR/screenshot submitted, not yet
+  //    reviewed) — same concept already handled on the Binary purchase page
+  //    via /api/Orders/my-orders, just missing here on the Plan page. ──
+  const [dreamOrderStatus,  setDreamOrderStatus]  = useState<'Pending' | 'Rejected' | null>(null);
+  const [binaryOrderStatus, setBinaryOrderStatus] = useState<'Pending' | 'Rejected' | null>(null);
 
   const [loadingPlan, setLoadingPlan] = useState(true);
 
@@ -46,21 +55,70 @@ export default function PlanPage() {
           'Content-Type': 'application/json',
         };
 
-        const [planRes, binaryRes] = await Promise.all([
-          fetch(`https://rd-api-j7zj.onrender.com/api/Plans/my-plan`,  { headers, cache: 'no-store' }),
-          fetch(`https://rd-api-j7zj.onrender.com/api/Binary/status`,  { headers, cache: 'no-store' }),
+        const [planRes, binaryRes, ordersRes] = await Promise.all([
+          fetch(`${API_BASE}/api/Plans/my-plan`,   { headers, cache: 'no-store' }),
+          fetch(`${API_BASE}/api/Binary/status`,   { headers, cache: 'no-store' }),
+          fetch(`${API_BASE}/api/Orders/my-orders`, { headers, cache: 'no-store' }),
         ]);
+
+        // ── Latest order per plan, straight from /api/Orders/my-orders ──────
+        // This is the SAME endpoint & pattern already used on the Binary
+        // purchase page (app/binary-purchase/page.tsx) to detect an order
+        // that's been submitted (UTR + screenshot) but not yet approved by
+        // an admin. The Plan page never checked this, so a pending Dream
+        // Plan submission looked identical to "never purchased" and kept
+        // showing the buy button.
+        //
+        // We also now treat an "Approved" order as proof of activation.
+        // This is a workaround for a backend gap: approving an order in
+        // the admin panel only updates that order's own `status` field —
+        // it does NOT flip `dreamIsActive`/`bv`/`purchaseDate` on
+        // /api/Plans/my-plan (confirmed: an account with 5 Approved Dream
+        // Plan orders still returns dreamIsActive:false, bv:0, planType:
+        // null from that endpoint). Until that's fixed on the backend, the
+        // order history is the only reliable source of truth here.
+        let latestDreamStatus:  'Pending' | 'Rejected' | 'Approved' | null = null;
+        let latestBinaryStatus: 'Pending' | 'Rejected' | 'Approved' | null = null;
+        if (ordersRes.ok) {
+          try {
+            const orders: { status: string; planType: string; requestedAt: string }[] =
+              await ordersRes.json();
+
+            const pick = (planType: string) => {
+              const matching = orders.filter(o => o.planType === planType);
+              const latest = matching.sort(
+                (a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()
+              )[0];
+              if (latest?.status === 'Approved') return 'Approved' as const;
+              if (latest?.status === 'Pending')  return 'Pending'  as const;
+              if (latest?.status === 'Rejected') return 'Rejected' as const;
+              return null;
+            };
+
+            latestDreamStatus  = pick('Dream Plan');
+            latestBinaryStatus = pick('Binary Plan');
+          } catch { /* ignore — fall back to plan/binary status only */ }
+        }
+        // Only the Pending/Rejected states are shown as a banner — an
+        // "Approved" order is folded straight into isDreamActive/isBinaryActive
+        // below instead, so the UI just shows the normal green "Active" state.
+        setDreamOrderStatus(latestDreamStatus === 'Approved' ? null : latestDreamStatus);
+        setBinaryOrderStatus(latestBinaryStatus === 'Approved' ? null : latestBinaryStatus);
 
         // ── Dream Plan ──────────────────────────────────────────────────────
         if (planRes.ok) {
           const data = await planRes.json();
 
+          // NOTE: `data.isActive` is a generic account-level flag and is
+          // NOT specific to the Dream Plan (it can be true from Binary Plan
+          // activity alone). Only `dreamIsActive`/`DreamIsActive` genuinely
+          // reflect whether an admin has approved a Dream Plan purchase —
+          // trust those exclusively, and use `===` rather than `??` since
+          // the field is explicitly `false` (not missing) until approved.
           const dreamActive: boolean =
-            data?.dreamIsActive       ??   
-            data?.DreamIsActive       ??
-            data?.isActive            ??
-            data?.IsActive            ??
-            false;
+            data?.dreamIsActive === true ||
+            data?.DreamIsActive === true ||
+            latestDreamStatus === 'Approved';
 
           const dreamEnrolled: boolean =
             data?.dreamIsEnrolled     ??
@@ -74,7 +132,7 @@ export default function PlanPage() {
           setIsDreamActive(dreamActive);
           setIsDreamEnrolled(!dreamActive && dreamEnrolled);
         } else {
-          setIsDreamActive(false);
+          setIsDreamActive(latestDreamStatus === 'Approved');
           setIsDreamEnrolled(false);
         }
 
@@ -83,11 +141,11 @@ export default function PlanPage() {
           const data = await binaryRes.json();
 
           const binaryActive: boolean =
-            data?.isBinaryActive      ??
-            data?.IsBinaryActive      ??
-            data?.isActive            ??
-            data?.IsActive            ??
-            false;
+            (data?.isBinaryActive      ??
+             data?.IsBinaryActive      ??
+             data?.isActive            ??
+             data?.IsActive            ??
+             false) || latestBinaryStatus === 'Approved';
 
           const binaryEnrolled: boolean =
             data?.isInBinaryPlan      ??
@@ -97,7 +155,7 @@ export default function PlanPage() {
           setIsBinaryActive(binaryActive);
           setIsBinaryEnrolled(!binaryActive && binaryEnrolled);
         } else {
-          setIsBinaryActive(false);
+          setIsBinaryActive(latestBinaryStatus === 'Approved');
           setIsBinaryEnrolled(false);
         }
 
@@ -105,6 +163,7 @@ export default function PlanPage() {
         console.error(err);
         setIsDreamActive(false);   setIsDreamEnrolled(false);
         setIsBinaryActive(false);  setIsBinaryEnrolled(false);
+        setDreamOrderStatus(null); setBinaryOrderStatus(null);
       } finally {
         setLoadingPlan(false);
       }
@@ -141,6 +200,7 @@ export default function PlanPage() {
     enrolledLabel: string,
     onActivate: () => void,
     activateLabel: string,
+    orderStatus: 'Pending' | 'Rejected' | null = null,
   ) => {
     if (loadingPlan) {
       return <div className="w-full h-12 bg-slate-100 animate-pulse rounded-xl" />;
@@ -150,6 +210,37 @@ export default function PlanPage() {
         <div className="w-full flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 py-3.5 px-6 rounded-xl">
           <BadgeCheck size={16} className="text-emerald-500 shrink-0" />
           <span className="font-black text-xs uppercase tracking-widest">{activeLabel}</span>
+        </div>
+      );
+    }
+    // ── Order submitted (UTR + screenshot) but not yet reviewed by an admin ──
+    // Without this check, a pending submission looked identical to "never
+    // purchased" and the person kept getting told to buy again.
+    if (orderStatus === 'Pending') {
+      return (
+        <div className="w-full flex items-center justify-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 py-3.5 px-6 rounded-xl">
+          <Clock size={16} className="text-amber-500 shrink-0" />
+          <span className="font-black text-xs uppercase tracking-widest">
+            Order Submitted — Pending Admin Verification
+          </span>
+        </div>
+      );
+    }
+    if (orderStatus === 'Rejected') {
+      return (
+        <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 py-3 px-5 rounded-xl flex-1">
+            <Clock size={15} className="text-red-500 shrink-0" />
+            <span className="font-black text-xs uppercase tracking-widest">
+              Last Order Rejected — Please Resubmit
+            </span>
+          </div>
+          <button
+            onClick={onActivate}
+            className="shrink-0 bg-[#2B4C8C] hover:bg-blue-700 text-white py-3.5 px-5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all"
+          >
+            Resubmit Order
+          </button>
         </div>
       );
     }
@@ -178,6 +269,7 @@ export default function PlanPage() {
       </button>
     );
   };
+
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] overflow-hidden font-sans antialiased">
@@ -375,6 +467,7 @@ export default function PlanPage() {
                   'Enrolled — Purchase Product to Activate',
                   () => router.push('/dream-purchase'),
                   'Get Started & Select Products',
+                  dreamOrderStatus,
                 )}
               </div>
             </div>
@@ -518,6 +611,7 @@ export default function PlanPage() {
                   'Enrolled — Purchase Product to Activate',
                   () => handleActivation('binary-plan'),
                   'Activate Binary Target & Shop',
+                  binaryOrderStatus,
                 )}
               </div>
             </div>

@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   Circle,
+  Lock,
 } from 'lucide-react';
 
 import { useRouter } from 'next/navigation';
@@ -371,14 +372,9 @@ export default function WalletPage() {
       <div className="flex-1 flex flex-col min-w-0">
         <LoginTopbar pageTitle='My Wallets'/>
 
-        <div className="p-6 text-[#1e293b] font-sans max-w-7xl w-full mx-auto">
+        <div className="p-3 sm:p-6 text-[#1e293b] font-sans max-w-7xl w-full mx-auto pb-24 sm:pb-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            {/* <div>
-              <h1 className="text-2xl font-bold text-[#0f172a]">My Wallets</h1>
-              <p className="text-sm text-gray-500 mt-1">Manage your dream funds and binary matching commissions.</p>
-            </div> */}
-
+          <div className="flex items-center justify-between mb-4 sm:mb-8">
             {selectedWallet && (
               <button
                 onClick={() => {
@@ -387,9 +383,9 @@ export default function WalletPage() {
                   setWithdrawSuccess(null);
                   setBinaryStatus(null);
                 }}
-                className="flex items-center gap-2 text-sm font-medium text-[#3b82f6] bg-white border border-gray-200 px-4 py-2 rounded-xl shadow-sm hover:bg-gray-50 transition-all"
+                className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium text-[#3b82f6] bg-white border border-gray-200 px-3 py-2 sm:px-4 sm:py-2 rounded-xl shadow-sm hover:bg-gray-50 transition-all"
               >
-                <ArrowLeft className="w-4 h-4" /> Switch Wallet
+                <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Switch Wallet
               </button>
             )}
           </div>
@@ -406,7 +402,7 @@ export default function WalletPage() {
 
           {/* STEP 1: Wallet selection */}
           {!selectedWallet && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               {(Object.keys(PLAN_TYPES) as PlanKey[]).map((key) => {
                 const meta = WALLET_META[key];
                 const wallet = wallets[key];
@@ -418,25 +414,25 @@ export default function WalletPage() {
                       setActivePanel('accounts');
                       setBinaryStatus(null);
                     }}
-                    className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group overflow-hidden flex flex-col"
+                    className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group overflow-hidden flex flex-col active:scale-[0.99]"
                   >
                     <div className={`h-1.5 ${meta.accent}`} />
-                    <div className="p-6 flex flex-col justify-between flex-1">
+                    <div className="p-4 sm:p-6 flex flex-col justify-between flex-1">
                       <div>
                         <div className="flex justify-between items-start">
-                          <div className={`w-12 h-12 rounded-xl ${meta.iconBg} flex items-center justify-center ${meta.iconColor}`}>
-                            <WalletIcon className="w-6 h-6" />
+                          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${meta.iconBg} flex items-center justify-center ${meta.iconColor}`}>
+                            <WalletIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                           </div>
                           <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 group-hover:translate-x-1 transition-all" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-800 mt-4">{meta.title}</h2>
-                        <p className="text-sm text-gray-400 mt-1">{meta.description}</p>
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-800 mt-3 sm:mt-4">{meta.title}</h2>
+                        <p className="text-xs sm:text-sm text-gray-400 mt-1">{meta.description}</p>
                       </div>
-                      <div className="mt-8 pt-4 border-t border-gray-50 flex justify-between items-baseline">
-                        <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">
+                      <div className="mt-6 sm:mt-8 pt-4 border-t border-gray-50 flex justify-between items-baseline">
+                        <span className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wider font-semibold">
                           Available Balance
                         </span>
-                        <span className="text-2xl font-bold text-gray-900">
+                        <span className="text-xl sm:text-2xl font-bold text-gray-900">
                           {loadingWallets ? '…' : formatINR(wallet.balance)}
                         </span>
                       </div>
@@ -449,9 +445,9 @@ export default function WalletPage() {
 
           {/* STEP 2: Wallet dashboard */}
           {selectedWallet && currentWallet && currentMeta && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* Stat cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
                 <StatCard
                   label="Total Balance"
                   value={formatINR(currentWallet.balance)}
@@ -480,7 +476,7 @@ export default function WalletPage() {
 
               {/* Panel */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="flex border-b border-gray-100 bg-gray-50/50 p-2 gap-2">
+                <div className="grid grid-cols-3 sm:flex border-b border-gray-100 bg-gray-50/50 p-1.5 sm:p-2 gap-1.5 sm:gap-2">
                   <TabButton
                     active={activePanel === 'accounts'}
                     onClick={() => setActivePanel('accounts')}
@@ -491,23 +487,23 @@ export default function WalletPage() {
                     active={activePanel === 'withdrawal'}
                     onClick={() => setActivePanel('withdrawal')}
                     icon={<ArrowUpRight className="w-4 h-4" />}
-                    label="Withdrawal System"
+                    label="Withdrawal"
                     locked={kycStatus !== 'LOADING' && kycStatus !== 'VERIFIED'}
                   />
                   <TabButton
                     active={activePanel === 'history'}
                     onClick={() => setActivePanel('history')}
                     icon={<History className="w-4 h-4" />}
-                    label="Transaction History"
+                    label="History"
                   />
                 </div>
 
-                <div className="p-6">
+                <div className="p-4 sm:p-6">
                   {/* Wallet Info */}
                   {activePanel === 'accounts' && (
                     <div className="space-y-4 max-w-2xl">
-                      <h4 className="text-base font-bold text-gray-800">{currentMeta.title} Details</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <h4 className="text-sm sm:text-base font-bold text-gray-800">{currentMeta.title} Details</h4>
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         <InfoBox label="Plan Type" value={currentWallet.planType} />
                         <InfoBox label="Minimum Withdrawal" value={formatINR(currentWallet.minWithdrawalAmount)} />
                         <InfoBox label="Lifetime Earned" value={formatINR(currentWallet.totalEarned)} />
@@ -517,7 +513,7 @@ export default function WalletPage() {
                       {/* NEW: Binary tree eligibility snapshot, visible even outside the withdrawal tab */}
                       {isBinary && (
                         <div className="pt-2">
-                          <h5 className="text-xs font-bold text-gray-500 uppercase mb-2">Team Eligibility</h5>
+                          <h5 className="text-[11px] sm:text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">Team Eligibility</h5>
                           {binaryStatusLoading && (
                             <p className="text-sm text-gray-400 flex items-center gap-2">
                               <Loader2 className="w-4 h-4 animate-spin" /> Checking your binary team…
@@ -554,13 +550,13 @@ export default function WalletPage() {
 
                       {/* ── KYC NOT verified — block withdrawal ── */}
                       {kycStatus !== 'LOADING' && kycStatus !== 'VERIFIED' && (
-                        <div className="flex flex-col items-center text-center gap-5 py-6">
-                          <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
-                            <ShieldAlert className="w-8 h-8 text-amber-500" />
+                        <div className="flex flex-col items-center text-center gap-4 sm:gap-5 py-4 sm:py-6">
+                          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                            <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8 text-amber-500" />
                           </div>
                           <div>
-                            <h4 className="text-base font-bold text-gray-800">KYC Verification Required</h4>
-                            <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                            <h4 className="text-sm sm:text-base font-bold text-gray-800">KYC Verification Required</h4>
+                            <p className="text-xs sm:text-sm text-gray-500 mt-2 leading-relaxed">
                               {kycStatus === 'PENDING'
                                 ? 'Your KYC is under review. Withdrawals will be unlocked once an admin verifies your documents.'
                                 : kycStatus === 'REJECTED'
@@ -571,12 +567,12 @@ export default function WalletPage() {
                           {kycStatus !== 'PENDING' && (
                             <button
                               onClick={() => router.push('/dashboard/kyc')}
-                              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-sm"
+                              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-sm text-sm"
                             >
                               {kycStatus === 'REJECTED' ? 'Resubmit KYC Documents' : 'Complete KYC Now'}
                             </button>
                           )}
-                          <p className="text-xs text-gray-400">
+                          <p className="text-[11px] sm:text-xs text-gray-400">
                             {kycStatus === 'PENDING'
                               ? "We'll notify you once your KYC is approved."
                               : "KYC is a one-time process to verify your identity and bank account."}
@@ -587,9 +583,9 @@ export default function WalletPage() {
                       {/* ── KYC VERIFIED ── */}
                       {kycStatus === 'VERIFIED' && (
                         <>
-                          <div className="flex items-center gap-2 mb-4 bg-green-50 border border-green-100 rounded-xl px-4 py-2">
+                          <div className="flex items-center gap-2 mb-4 bg-green-50 border border-green-100 rounded-xl px-3 sm:px-4 py-2">
                             <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" />
-                            <span className="text-xs font-semibold text-green-700">KYC Verified — Withdrawals Unlocked</span>
+                            <span className="text-[11px] sm:text-xs font-semibold text-green-700">KYC Verified — Withdrawals Unlocked</span>
                           </div>
 
                           {/* NEW: Binary Plan team check — still loading */}
@@ -602,13 +598,13 @@ export default function WalletPage() {
 
                           {/* NEW: Binary Plan locked — team requirement not met */}
                           {isBinary && !binaryStatusLoading && !binaryUnlocked && (
-                            <div className="flex flex-col items-center text-center gap-5 py-6">
-                              <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
-                                <ShieldAlert className="w-8 h-8 text-amber-500" />
+                            <div className="flex flex-col items-center text-center gap-4 sm:gap-5 py-4 sm:py-6">
+                              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                                <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8 text-amber-500" />
                               </div>
                               <div>
-                                <h4 className="text-base font-bold text-gray-800">Build Your Team to Unlock Withdrawals</h4>
-                                <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                                <h4 className="text-sm sm:text-base font-bold text-gray-800">Build Your Team to Unlock Withdrawals</h4>
+                                <p className="text-xs sm:text-sm text-gray-500 mt-2 leading-relaxed">
                                   You need an active LEFT child, an active RIGHT child, and at least one active
                                   grandchild under either of them before your first Binary Wallet withdrawal.
                                 </p>
@@ -630,14 +626,14 @@ export default function WalletPage() {
                           {/* ── Withdrawal form (Dream Plan always; Binary Plan only once unlocked) ── */}
                           {!isBinary || (!binaryStatusLoading && binaryUnlocked) ? (
                             <>
-                              <h4 className="text-base font-bold text-gray-800 mb-1">Request Fund Settlement</h4>
-                              <p className="text-xs text-gray-400 mb-4">
+                              <h4 className="text-sm sm:text-base font-bold text-gray-800 mb-1">Request Fund Settlement</h4>
+                              <p className="text-[11px] sm:text-xs text-gray-400 mb-4">
                                 Minimum withdrawal: {formatINR(currentWallet.minWithdrawalAmount)}. Requests are reviewed by
                                 an admin before payout.
                               </p>
                               <form onSubmit={handleWithdrawSubmit} className="space-y-4">
                                 <div>
-                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
+                                  <label className="block text-[11px] sm:text-xs font-bold text-gray-500 uppercase mb-2">
                                     Enter Amount (₹)
                                   </label>
                                   <input
@@ -647,22 +643,22 @@ export default function WalletPage() {
                                     placeholder="₹0.00"
                                     min={currentWallet.minWithdrawalAmount}
                                     step="0.01"
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 font-medium focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 font-medium text-base focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
                                     required
                                   />
                                 </div>
 
                                 {withdrawError && (
-                                  <p className="text-sm text-red-600 flex items-center gap-1">
-                                    <AlertCircle className="w-4 h-4" /> {withdrawError}
+                                  <p className="text-xs sm:text-sm text-red-600 flex items-start gap-1">
+                                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> {withdrawError}
                                   </p>
                                 )}
-                                {withdrawSuccess && <p className="text-sm text-green-600">{withdrawSuccess}</p>}
+                                {withdrawSuccess && <p className="text-xs sm:text-sm text-green-600">{withdrawSuccess}</p>}
 
                                 <button
                                   type="submit"
                                   disabled={withdrawSubmitting}
-                                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+                                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm sm:text-base"
                                 >
                                   {withdrawSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                                   {withdrawSubmitting ? 'Submitting…' : 'Submit Payout Request'}
@@ -678,7 +674,7 @@ export default function WalletPage() {
                   {/* History */}
                   {activePanel === 'history' && (
                     <div>
-                      <h4 className="text-base font-bold text-gray-800 mb-4">Statement Log</h4>
+                      <h4 className="text-sm sm:text-base font-bold text-gray-800 mb-4">Statement Log</h4>
 
                       {historyLoading && (
                         <p className="text-sm text-gray-400 flex items-center gap-2">
@@ -704,31 +700,31 @@ export default function WalletPage() {
                       )}
 
                       {!historyLoading && !historyError && history.length > 0 && (
-                        <div className="space-y-3">
+                        <div className="space-y-2.5 sm:space-y-3">
                           {history.map((tx) => {
                             const { date, time } = formatDateTime(tx.createdAt);
                             const isCredit = tx.type === 'Credit';
                             return (
                               <div
                                 key={tx.id}
-                                className="flex items-center justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all"
+                                className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-gray-50/50 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all"
                               >
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                                   <div
-                                    className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 ${
                                       isCredit ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
                                     }`}
                                   >
                                     {isCredit ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                                   </div>
-                                  <div>
-                                    <p className="text-sm font-semibold text-gray-800">{tx.description || tx.source}</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">
+                                  <div className="min-w-0">
+                                    <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate">{tx.description || tx.source}</p>
+                                    <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">
                                       {date} • {time}
                                     </p>
                                   </div>
                                 </div>
-                                <span className={`text-sm font-bold ${isCredit ? 'text-[#22c55e]' : 'text-gray-700'}`}>
+                                <span className={`text-xs sm:text-sm font-bold whitespace-nowrap ${isCredit ? 'text-[#22c55e]' : 'text-gray-700'}`}>
                                   {isCredit ? '+' : '-'} {formatINR(tx.amount)}
                                 </span>
                               </div>
@@ -767,12 +763,12 @@ function StatCard({
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className={`h-1.5 ${accent}`} />
-      <div className="p-6 flex items-center justify-between">
+      <div className="p-4 sm:p-6 flex items-center justify-between">
         <div>
-          <p className="text-xs font-bold text-gray-400 tracking-wider uppercase">{label}</p>
-          <h3 className="text-2xl font-black text-gray-900 mt-2">{value}</h3>
+          <p className="text-[10px] sm:text-xs font-bold text-gray-400 tracking-wider uppercase">{label}</p>
+          <h3 className="text-lg sm:text-2xl font-black text-gray-900 mt-1.5 sm:mt-2">{value}</h3>
         </div>
-        <div className={`w-10 h-10 rounded-xl ${iconBg} ${iconColor} flex items-center justify-center flex-shrink-0`}>
+        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${iconBg} ${iconColor} flex items-center justify-center flex-shrink-0`}>
           {icon}
         </div>
       </div>
@@ -780,6 +776,10 @@ function StatCard({
   );
 }
 
+// UPDATED: tabs now sit in a fixed 3-column grid on mobile (icon on top, label
+// below) so they always fit on screen instead of overflowing/wrapping like
+// they did in the flex-row layout. From `sm:` up it goes back to the original
+// horizontal pill layout.
 function TabButton({
   active,
   onClick,
@@ -796,27 +796,29 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all ${
+      title={locked ? 'Complete KYC to unlock withdrawals' : undefined}
+      className={`relative flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1.5 py-2.5 sm:px-5 sm:py-3 rounded-xl text-[11px] sm:text-sm font-semibold text-center leading-tight transition-all ${
         active
           ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
           : locked
           ? 'text-amber-400 hover:text-amber-500'
           : 'text-gray-500 hover:text-gray-900'
       }`}
-      title={locked ? 'Complete KYC to unlock withdrawals' : undefined}
     >
       {icon}
-      {label}
-      {locked && <span className="text-[10px] ml-0.5">🔒</span>}
+      <span className="truncate max-w-full">{label}</span>
+      {locked && (
+        <Lock className="w-2.5 h-2.5 sm:w-3 sm:h-3 absolute top-1.5 right-1.5 sm:static sm:top-auto sm:right-auto" />
+      )}
     </button>
   );
 }
 
 function InfoBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-      <span className="text-xs text-gray-400 font-medium block mb-1">{label}</span>
-      <span className="text-sm font-bold text-gray-700">{value}</span>
+    <div className="p-3 sm:p-4 bg-gray-50 rounded-xl border border-gray-100">
+      <span className="text-[10px] sm:text-xs text-gray-400 font-medium block mb-1">{label}</span>
+      <span className="text-xs sm:text-sm font-bold text-gray-700 break-words">{value}</span>
     </div>
   );
 }
@@ -824,11 +826,11 @@ function InfoBox({ label, value }: { label: string; value: string }) {
 // NEW: small checklist row used for the binary-tree eligibility rule
 function EligibilityRow({ done, label }: { done: boolean; label: string }) {
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="flex items-start gap-2 text-xs sm:text-sm">
       {done ? (
-        <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+        <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
       ) : (
-        <Circle className="w-4 h-4 text-gray-300 shrink-0" />
+        <Circle className="w-4 h-4 text-gray-300 shrink-0 mt-0.5" />
       )}
       <span className={done ? 'text-gray-700' : 'text-gray-400'}>{label}</span>
     </div>

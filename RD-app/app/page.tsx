@@ -222,21 +222,11 @@ export default function Home() {
                       {product.name}
                     </h4>
 
-                    {/* Updated Pricing Badges matching design parameters perfectly */}
+                    {/* Updated Pricing Badges - MRP only (DP and BV removed) */}
                     <div className="mt-3 mb-4 flex items-center justify-start gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
                       {/* MRP Badge (Blue) */}
                       <div className="inline-flex items-center justify-center bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
                         MRP : {product.price}
-                      </div>
-                      
-                      {/* DP Badge (Red) */}
-                      <div className="inline-flex items-center justify-center bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
-                        DP : {product.dp}
-                      </div>
-
-                      {/* BV Badge (Blue) */}
-                      <div className="inline-flex items-center justify-center bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full tracking-wide whitespace-nowrap">
-                        BV : {product.bv}
                       </div>
                     </div>
 

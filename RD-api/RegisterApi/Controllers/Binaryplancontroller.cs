@@ -282,15 +282,21 @@ public class BinaryPlanController : ControllerBase
 
     // ─────────────────────────────────────────────────────────────────────
     // GET /api/binary/tree
-    // Returns the binary tree rooted at the current user (up to 10 levels).
+    // Returns the FULL binary tree rooted at the current user — every
+    // descendant, however deep. The recursion in GetBinaryTreeAsync already
+    // stops naturally once a node has no LeftChildId/RightChildId, so depth
+    // is only used as a safety ceiling (not a real limit on real data).
     // ─────────────────────────────────────────────────────────────────────
     [HttpGet("tree")]
-    public async Task<IActionResult> GetMyBinaryTree([FromQuery] int depth = 5)
+    public async Task<IActionResult> GetMyBinaryTree([FromQuery] int depth = 50)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
 
-        depth = Math.Clamp(depth, 1, 10);
+        // 50 is a safety ceiling against runaway recursion if bad data ever
+        // created a cycle in Left/RightChildId — not a real depth limit,
+        // since no realistic binary tree grows anywhere near that deep.
+        depth = Math.Clamp(depth, 1, 50);
         var tree = await _binaryService.GetBinaryTreeAsync(userId, depth);
 
         if (tree == null)
