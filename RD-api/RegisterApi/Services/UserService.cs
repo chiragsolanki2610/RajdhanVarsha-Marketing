@@ -228,6 +228,47 @@ public class UserService : IUserService
     }
 
     /// <summary>
+    /// One-time sponsor attachment for legacy-imported accounts whose
+    /// SponsorId is null/empty. Used by the Dream Plan "enroll" gate:
+    /// POST /api/Auth/set-sponsor. Once a user has a non-empty SponsorId
+    /// (including the root user's "SYSTEM" value) this always rejects —
+    /// there is no separate "locked" flag, the SponsorId column itself is
+    /// the lock, same as it already is for freshly-registered users.
+    /// </summary>
+    public async Task<(bool Success, string Error, string SponsorId, string SponsorIdName)> SetSponsorAsync(string userId, string sponsorId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return (false, "Invalid or expired session token.", "", "");
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId.Trim());
+        if (user is null)
+            return (false, "User record not found in database.", "", "");
+
+        // Already has a sponsor (fresh registration, an earlier call to this
+        // endpoint, or the root user's "SYSTEM" value) — reject, this is a
+        // one-time operation.
+        if (!string.IsNullOrWhiteSpace(user.SponsorId))
+            return (false, "Sponsor is already set for this account.", "", "");
+
+        var trimmedSponsorId = (sponsorId ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(trimmedSponsorId))
+            return (false, "Sponsor ID is required.", "", "");
+
+        if (string.Equals(trimmedSponsorId, user.UserId, StringComparison.OrdinalIgnoreCase))
+            return (false, "You cannot set yourself as your own sponsor.", "", "");
+
+        var sponsor = await _db.Users.FirstOrDefaultAsync(u => u.UserId == trimmedSponsorId);
+        if (sponsor is null)
+            return (false, "Sponsor ID does not exist. Please enter a valid Sponsor ID.", "", "");
+
+        user.SponsorId = sponsor.UserId;
+        user.SponsorIdName = sponsor.Name;
+        await _db.SaveChangesAsync();
+
+        return (true, string.Empty, sponsor.UserId, sponsor.Name);
+    }
+
+    /// <summary>
     /// Traverses down the leg structure along the selected side (Left or Right) 
     /// until it discovers an open position to correctly link the node.
     /// </summary>

@@ -9,9 +9,17 @@ const API_BASE = 'https://rd-api-j7zj.onrender.com';
 const VISIBLE_LEVELS = 3; // how many levels deep to render under whichever node is currently focused
 const LONG_PRESS_MS = 400; // how long a press/touch must be held to reveal details on mobile
 
+// How many levels to ask the BACKEND for in one call. maxDepth=2 on the
+// server means: root (level 0) + its children (level 1) + its grandchildren
+// (level 2) => 1 + 2 + 4 = 7 nodes per fetch. This must stay in sync with
+// VISIBLE_LEVELS above (VISIBLE_LEVELS levels rendered == FETCH_DEPTH + 1
+// levels of data).
+const FETCH_DEPTH = VISIBLE_LEVELS - 1;
+
 interface BinaryTreeNode {
   userId: string;
   name: string;
+  profileImage?: string;
   parentId?: string;
   position: 'LEFT' | 'RIGHT' | 'ROOT';
   treeLevel: number;
@@ -113,9 +121,12 @@ function CurvedConnector({
 
 // ── Single tree node card ──────────────────────────────────────────────────
 // Expansion is now purely depth-driven (VISIBLE_LEVELS), not click-to-toggle.
-// Clicking any non-root node re-focuses the whole tree on that node via onSelect.
+// Clicking any non-root node re-focuses the whole tree on that node via onSelect,
+// which triggers a FRESH fetch of that node's own next 7-node batch (see
+// handleSelect in the page component below) — we never assume children are
+// already loaded just because a node object exists.
 //
-// Mobile behavior: the card shows ONLY the avatar icon + userId. A tap still
+// Mobile behavior: the card shows the avatar icon + userId + name. A tap still
 // navigates (re-focuses the tree) exactly like before. Pressing and HOLDING
 // the card reveals a floating box with the name, pairs count, and status —
 // released touch hides it again and does NOT trigger navigation.
@@ -124,17 +135,20 @@ function TreeNodeCard({
   node,
   isRoot = false,
   depthRemaining,
+  loadingUserId,
   onSelect,
 }: {
   node: BinaryTreeNode;
   isRoot?: boolean;
   depthRemaining: number;
+  loadingUserId: string | null;
   onSelect: (node: BinaryTreeNode) => void;
 }) {
   const hasLeft  = !!node.leftChild;
   const hasRight = !!node.rightChild;
   const hasChildren = hasLeft || hasRight;
   const showChildren = hasChildren && depthRemaining > 1;
+  const isLoadingThis = loadingUserId === node.userId;
 
   const nodeRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -198,25 +212,49 @@ function TreeNodeCard({
         onTouchCancel={cancelPress}
         className={`relative rounded-xl border-2 shadow-sm px-2 py-2 sm:px-3 sm:py-2.5 w-fit min-w-[72px] sm:min-w-[160px] max-w-[208px] transition-all duration-200
           ${!isRoot ? 'cursor-pointer sm:hover:scale-105 sm:hover:shadow-[0_0_18px_4px_rgba(96,165,250,0.55)] sm:hover:border-blue-400 sm:hover:-translate-y-0.5' : ''}
+          ${isLoadingThis ? 'opacity-60' : ''}
           ${node.isActive
             ? 'bg-white border-blue-400 shadow-[0_0_10px_2px_rgba(59,130,246,0.6)]'
             : 'bg-gray-50 border-red-400 shadow-[0_0_10px_2px_rgba(248,113,113,0.6)]'}`}
       >
-        {/* Mobile compact view: avatar + userId only */}
+        {isLoadingThis && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded-xl z-10">
+            <Loader2 size={16} className="animate-spin text-blue-500" />
+          </div>
+        )}
+
+        {/* Mobile compact view: avatar + userId + name */}
         <div className="flex sm:hidden flex-col items-center gap-1">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden
             ${node.isActive ? 'bg-emerald-100' : 'bg-gray-200'}`}>
-            <User size={18} className={node.isActive ? 'text-emerald-600' : 'text-gray-400'} />
+            {node.profileImage ? (
+              <img
+                src={node.profileImage}
+                alt={node.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <User size={18} className={node.isActive ? 'text-emerald-600' : 'text-gray-400'} />
+            )}
           </div>
           <p className="text-[9px] text-gray-500 font-semibold">{node.userId}</p>
+          <p className="text-[9px] text-gray-400 font-medium truncate max-w-[64px]">{node.name}</p>
         </div>
 
         {/* Desktop full view: avatar+ID on the left, name+pairs+status on the right */}
         <div className="hidden sm:flex items-center gap-2">
           <div className="flex flex-col items-center gap-0.5 shrink-0">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden
               ${node.isActive ? 'bg-emerald-100' : 'bg-gray-200'}`}>
-              <User size={18} className={node.isActive ? 'text-emerald-600' : 'text-gray-400'} />
+              {node.profileImage ? (
+                <img
+                  src={node.profileImage}
+                  alt={node.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User size={18} className={node.isActive ? 'text-emerald-600' : 'text-gray-400'} />
+              )}
             </div>
             <p className="text-[9px] text-gray-400 font-medium">{node.userId}</p>
           </div>
@@ -270,6 +308,7 @@ function TreeNodeCard({
                 <TreeNodeCard
                   node={node.leftChild!}
                   depthRemaining={depthRemaining - 1}
+                  loadingUserId={loadingUserId}
                   onSelect={onSelect}
                 />
               ) : (
@@ -283,6 +322,7 @@ function TreeNodeCard({
                 <TreeNodeCard
                   node={node.rightChild!}
                   depthRemaining={depthRemaining - 1}
+                  loadingUserId={loadingUserId}
                   onSelect={onSelect}
                 />
               ) : (
@@ -401,7 +441,12 @@ function PanZoomCanvas({ children, resetKey }: { children: React.ReactNode; rese
   );
 }
 
-// ── Find the path (root → ... → matched node) for a search query ──────────
+// ── Find a node within whatever is CURRENTLY loaded (this batch of 7) ──────
+// NOTE: since we now lazy-load only 7 nodes at a time, search can only match
+// against nodes already fetched into the currently-focused subtree — it can
+// no longer search your entire downline in one shot. See note to the team
+// about adding a dedicated backend search endpoint if full-downline search
+// is needed.
 function findPathToNode(
   root: BinaryTreeNode,
   query: string
@@ -431,54 +476,90 @@ function findPathToNode(
   return walk(root, []);
 }
 
-const FETCH_DEPTH = 8; // how deep we pull from the API in one go — search works against whatever is loaded
-
 // ── Main page ────────────────────────────────────────────────────────────────
 export default function BinaryTreeViewPage() {
   const [tree, setTree]       = useState<BinaryTreeNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
+  // Which node's next batch is currently being fetched (for the small
+  // per-card spinner overlay). null when nothing is loading.
+  const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
+
   // Navigation stack: focusStack[0] is the real root, last item is whatever
   // node is currently being viewed as the "root" of the visible 3 levels.
+  // Every entry here always has its OWN freshly-fetched children (or none),
+  // never a stale/truncated object from a much deeper original fetch.
   const [focusStack, setFocusStack] = useState<BinaryTreeNode[]>([]);
 
   const [searchQuery, setSearchQuery]   = useState('');
   const [searchError, setSearchError]   = useState('');
 
+  const authHeaders = useCallback((): HeadersInit => {
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken') || '';
+    return { Authorization: `Bearer ${token}` };
+  }, []);
+
+  // Fetches a fresh 7-node batch (this node + up to 2 children + up to 4
+  // grandchildren) rooted at `userId`. Pass isSelf=true only for the very
+  // first load (the logged-in user's own tree), which uses the
+  // `/api/binary/tree` endpoint; every other node uses
+  // `/api/binary/tree/{userId}` which is allowed for any of your downline.
+  const fetchBatch = useCallback(async (userId: string | null, isSelf: boolean) => {
+    const url = isSelf
+      ? `${API_BASE}/api/binary/tree?depth=${FETCH_DEPTH}`
+      : `${API_BASE}/api/binary/tree/${userId}?depth=${FETCH_DEPTH}`;
+
+    const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' });
+
+    if (isSelf && res.status === 404) {
+      throw new Error('not-enrolled');
+    }
+    if (!res.ok) {
+      let bodyText = '';
+      try { bodyText = await res.text(); } catch { /* ignore */ }
+      // eslint-disable-next-line no-console
+      console.error(`[binary-tree] ${url} -> ${res.status}`, bodyText);
+      throw new Error(`Failed to fetch binary tree (HTTP ${res.status}). ${bodyText || ''}`.trim());
+    }
+
+    return (await res.json()) as BinaryTreeNode;
+  }, [authHeaders]);
+
   const fetchTree = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token') || localStorage.getItem('authToken') || '';
-      const res = await fetch(`${API_BASE}/api/binary/tree?depth=${FETCH_DEPTH}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-
-      if (res.status === 404) {
-        setError('not-enrolled');
-        return;
-      }
-      if (!res.ok) throw new Error('Failed to fetch binary tree.');
-
-      const data = await res.json();
+      const data = await fetchBatch(null, true);
       setTree(data);
       setFocusStack([data]); // reset navigation back to the real root on every fresh fetch
-    } catch {
-      setError('Failed to load binary tree. Please try again.');
+    } catch (e) {
+      setError(e instanceof Error && e.message === 'not-enrolled' ? 'not-enrolled' : 'Failed to load binary tree. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchBatch]);
 
   useEffect(() => { fetchTree(); }, [fetchTree]);
 
   const currentFocus = focusStack[focusStack.length - 1] ?? null;
 
-  const handleSelect = (node: BinaryTreeNode) => {
-    setFocusStack(prev => [...prev, node]);
-  };
+  // Clicking a node: fetch ITS OWN fresh 7-node batch from the backend
+  // (rather than trusting whatever partial data happened to already be
+  // sitting on that node object) and push the up-to-date version onto the
+  // focus stack.
+  const handleSelect = useCallback(async (node: BinaryTreeNode) => {
+    setLoadingUserId(node.userId);
+    try {
+      const fresh = await fetchBatch(node.userId, false);
+      setFocusStack(prev => [...prev, fresh]);
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : 'Unknown error';
+      setError(`Couldn't load ${node.name}'s downline. ${detail}`);
+    } finally {
+      setLoadingUserId(null);
+    }
+  }, [fetchBatch]);
 
   const handleBack = () => {
     setFocusStack(prev => (prev.length > 1 ? prev.slice(0, -1) : prev));
@@ -486,14 +567,16 @@ export default function BinaryTreeViewPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tree) return;
-    const path = findPathToNode(tree, searchQuery);
+    if (!currentFocus) return;
+    // Only searches within the currently-loaded 7-node batch — see the
+    // findPathToNode note above about full-downline search.
+    const path = findPathToNode(currentFocus, searchQuery);
     if (!path) {
-      setSearchError(`No one found under you matching "${searchQuery}"`);
+      setSearchError(`No one found in the currently loaded view matching "${searchQuery}"`);
       return;
     }
     setSearchError('');
-    setFocusStack(path);
+    setFocusStack(prev => [...prev.slice(0, -1), ...path]);
     setSearchQuery('');
   };
 
@@ -515,7 +598,7 @@ export default function BinaryTreeViewPage() {
                   type="text"
                   value={searchQuery}
                   onChange={e => { setSearchQuery(e.target.value); setSearchError(''); }}
-                  placeholder="Search name or ID…"
+                  placeholder="Search loaded nodes…"
                   className="text-xs border border-gray-200 rounded-lg pl-8 pr-3 py-2 bg-white shadow-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 />
               </div>
@@ -547,7 +630,8 @@ export default function BinaryTreeViewPage() {
                 <ChevronLeft size={14} />
                 Back
               </button>
-              <div className="flex flex-wrap items-center gap-1 text-[11px] text-gray-500 bg-white/90 px-2 py-1 rounded-lg shadow-sm max-w-xs">
+              {/* Breadcrumb trail: hidden on mobile per request, only shown from sm breakpoint up */}
+              <div className="hidden sm:flex flex-wrap items-center gap-1 text-[11px] text-gray-500 bg-white/90 px-2 py-1 rounded-lg shadow-sm max-w-xs">
                 {focusStack.map((n, i) => (
                   <React.Fragment key={n.userId}>
                     {i > 0 && <span className="text-gray-300">/</span>}
@@ -593,6 +677,7 @@ export default function BinaryTreeViewPage() {
                 node={currentFocus}
                 isRoot
                 depthRemaining={VISIBLE_LEVELS}
+                loadingUserId={loadingUserId}
                 onSelect={handleSelect}
               />
             </PanZoomCanvas>

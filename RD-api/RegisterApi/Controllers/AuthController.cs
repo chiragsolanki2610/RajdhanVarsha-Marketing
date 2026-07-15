@@ -299,6 +299,42 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// One-time sponsor attachment for the currently logged-in user. Used by the
+    /// Dream Plan purchase page: legacy-imported accounts (SponsorId = null) are
+    /// sent here to enter and confirm a sponsor before they're allowed to buy.
+    /// Rejects if the account already has a SponsorId — this can only run once.
+    /// </summary>
+    [HttpPost("set-sponsor")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> SetSponsor([FromBody] SetSponsorDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? User.FindFirst("UserId")?.Value
+                     ?? User.FindFirst("userId")?.Value;
+
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized(new { message = "Invalid or expired session token." });
+
+        var (success, error, sponsorId, sponsorIdName) = await _userService.SetSponsorAsync(userId, dto.SponsorId);
+
+        if (!success)
+            return BadRequest(new { message = error });
+
+        return Ok(new SetSponsorResponseDto
+        {
+            SponsorId = sponsorId,
+            SponsorIdName = sponsorIdName,
+            Message = "Sponsor set successfully."
+        });
+    }
+
+    /// <summary>
     /// Live sponsor lookup for the public registration form. 
     /// Does not require [Authorize] so the register page can verify codes on the fly.
     /// </summary>

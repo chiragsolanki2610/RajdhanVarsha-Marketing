@@ -306,6 +306,59 @@ public class BinaryPlanController : ControllerBase
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/tree/{targetUserId}
+    // Lazy-load endpoint: returns a small subtree (default depth 3 = up to
+    // 7 nodes) rooted at ANY node in the caller's own downline — used by the
+    // frontend to fetch the next batch of nodes only when the user drills
+    // into a branch, instead of pulling the whole tree up front.
+    //
+    // Security: targetUserId must be the caller themselves OR somewhere in
+    // the caller's downline. We verify this by walking UP the parent chain
+    // from targetUserId until we either hit the caller's userId (allowed)
+    // or run out of parents (not in caller's downline -> Forbid).
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("tree/{targetUserId}")]
+    public async Task<IActionResult> GetSubTree(string targetUserId, [FromQuery] int depth = 3)
+    {
+        var callerId = GetUserId();
+        if (callerId == null) return Unauthorized();
+
+        depth = Math.Clamp(depth, 1, 10);
+
+        if (targetUserId != callerId)
+        {
+            var isDownline = await IsInDownlineAsync(callerId, targetUserId);
+            if (!isDownline) return Forbid();
+        }
+
+        var tree = await _binaryService.GetBinaryTreeAsync(targetUserId, depth);
+        if (tree == null)
+            return NotFound(new { message = "Node not found." });
+
+        return Ok(tree);
+    }
+
+    // Walks up targetUserId's ParentId chain looking for callerId.
+    private async Task<bool> IsInDownlineAsync(string callerId, string targetUserId)
+    {
+        var parentLookup = await _db.BinaryNodes
+            .Select(n => new { n.UserId, n.ParentId })
+            .ToDictionaryAsync(n => n.UserId, n => n.ParentId);
+
+        if (!parentLookup.ContainsKey(targetUserId)) return false;
+
+        var current = targetUserId;
+        var guard = 0; // safety against cycles in bad data
+        while (parentLookup.TryGetValue(current, out var parentId) && guard++ < 1000)
+        {
+            if (parentId == null) return false;
+            if (parentId == callerId) return true;
+            current = parentId;
+        }
+        return false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // GET /api/binary/today-activations
     // Returns the IDs (LEFT / RIGHT split) in the current user's entire
     // downline that got their Binary Plan ID activated today.

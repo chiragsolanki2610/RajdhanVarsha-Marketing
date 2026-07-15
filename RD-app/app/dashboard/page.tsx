@@ -1084,15 +1084,25 @@ export default function DashboardPage() {
         } catch { /* keep profile defaults */ }
       }
 
-      // ── Merge wallet ───────────────────────────────────────────────────
+// ── Merge wallet ───────────────────────────────────────────────────
+      // /api/wallet returns BOTH sub-wallets (Dream Plan + Binary Plan) in
+      // one array. Must select the Dream Plan one explicitly by planType —
+      // grabbing walletRaw[0] was unsafe because array order isn't
+      // guaranteed, which was pulling the Binary Plan balance onto this tab.
       if (walletResult.status === 'fulfilled' && walletResult.value.ok) {
         try {
           const walletRaw: WalletData | WalletData[] = await walletResult.value.json();
-          const wallet = Array.isArray(walletRaw) ? walletRaw[0] : walletRaw as any;
+          const wallet = Array.isArray(walletRaw)
+            ? walletRaw.find((w: any) => (w.planType ?? w.PlanType) === 'Dream Plan')
+            : (walletRaw as any);
           if (wallet) {
             profileData.totalEarned = wallet.totalEarned ?? 0;
             profileData.withdrawal = wallet.totalWithdrawn ?? 0;
             profileData.balance = wallet.balance ?? 0;
+          } else {
+            profileData.totalEarned = 0;
+            profileData.withdrawal = 0;
+            profileData.balance = 0;
           }
         } catch {
           profileData.totalEarned = 0;

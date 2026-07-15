@@ -655,7 +655,6 @@ namespace RegisterApi.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("AadharNo")
-                        .IsRequired()
                         .HasMaxLength(12)
                         .HasColumnType("character varying(12)");
 
@@ -830,6 +829,9 @@ namespace RegisterApi.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<decimal>("NetPayableAmount")
+                        .HasColumnType("numeric");
+
                     b.Property<string>("PlanType")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -838,10 +840,16 @@ namespace RegisterApi.Migrations
                     b.Property<string>("ReferenceId")
                         .HasColumnType("text");
 
+                    b.Property<decimal>("ServiceTaxAmount")
+                        .HasColumnType("numeric");
+
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("TdsAmount")
+                        .HasColumnType("numeric");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -878,6 +886,9 @@ namespace RegisterApi.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("NetPayableAmount")
+                        .HasColumnType("numeric");
+
                     b.Property<string>("PlanType")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -894,10 +905,16 @@ namespace RegisterApi.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<decimal>("ServiceTaxAmount")
+                        .HasColumnType("numeric");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("TdsAmount")
+                        .HasColumnType("numeric");
 
                     b.Property<string>("UserId")
                         .IsRequired()

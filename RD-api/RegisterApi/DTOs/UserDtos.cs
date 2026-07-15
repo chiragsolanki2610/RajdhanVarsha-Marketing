@@ -79,3 +79,22 @@ public class ChangePasswordResponseDto
 {
     public string Message { get; set; } = "Password changed successfully.";
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Used by POST /api/Auth/set-sponsor — lets a legacy user (imported with a
+// null SponsorId) attach themselves under a sponsor before their first
+// Dream Plan purchase. One-time: rejected if the user already has a
+// SponsorId set.
+// ─────────────────────────────────────────────────────────────────────────
+public class SetSponsorDto
+{
+    [Required(ErrorMessage = "Sponsor ID is required")]
+    public string SponsorId { get; set; } = string.Empty;
+}
+
+public class SetSponsorResponseDto
+{
+    public string SponsorId { get; set; } = string.Empty;
+    public string SponsorIdName { get; set; } = string.Empty;
+    public string Message { get; set; } = "Sponsor set successfully.";
+}

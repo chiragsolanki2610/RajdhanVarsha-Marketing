@@ -11,4 +11,9 @@ public interface IUserService
     Task<User?> GetUserByIdAsync(string userId);
     Task<(bool Success, string Error)> ChangePasswordAsync(string userId, ChangePasswordRequestDto dto);
     Task<(bool Success, string Error)> UpdateProfilePictureAsync(string userId, string? profilePictureUrl);
+
+    // One-time: attaches a sponsor to a user whose SponsorId is currently
+    // null/empty (legacy imported accounts). Returns the resolved sponsor's
+    // UserId + Name on success.
+    Task<(bool Success, string Error, string SponsorId, string SponsorIdName)> SetSponsorAsync(string userId, string sponsorId);
 }

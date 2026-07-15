@@ -68,9 +68,14 @@ namespace RegisterApi.Controllers
                 return dto;
             }
 
-            // Fetch children of THIS specific node (not the logged-in user)
+            // Fetch children of THIS specific node (not the logged-in user).
+            // The `u.UserId != node.UserId` guard prevents infinite/duplicate
+            // recursion if a row's SponsorId ever ends up equal to its own
+            // UserId (self-sponsor bad data) — without it, a self-sponsored
+            // node gets returned as its own child at every level down to
+            // MaxLevel, producing duplicate ids in the tree.
             var directChildren = await _db.Users
-                .Where(u => u.SponsorId == node.UserId)
+                .Where(u => u.SponsorId == node.UserId && u.UserId != node.UserId)
                 .OrderBy(u => u.UserId)
                 .Take(10)
                 .ToListAsync();

@@ -239,7 +239,17 @@ function TreeCanvas() {
 
       const canGoBack = historyStack.current.length > 0;
 
+      // Guards against the same node ever being added twice — e.g. when the
+      // focused node IS the root, it would otherwise be added once via the
+      // "ROOT" entry in historyStack and again as focusNode itself, producing
+      // two React Flow nodes with the same id/key ("Encountered two children
+      // with the same key" warning).
+      const seenIds = new Set<string>();
+
       const addNode = (n: TreeNode, parentId?: string) => {
+        if (seenIds.has(n.id)) return;
+        seenIds.add(n.id);
+
         allNodes.push({
           id: n.id,
           type: "userNode",

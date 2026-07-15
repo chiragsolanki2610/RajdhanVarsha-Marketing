@@ -53,6 +53,9 @@ public class WalletService : IWalletService
         BalanceAfter = t.BalanceAfter,
         Source = t.Source,
         Description = t.Description,
+        ServiceTaxAmount = t.ServiceTaxAmount,
+        TdsAmount = t.TdsAmount,
+        NetPayableAmount = t.NetPayableAmount,
         CreatedAt = t.CreatedAt
     };
 
@@ -63,6 +66,9 @@ public class WalletService : IWalletService
         UserName = userName,
         PlanType = r.PlanType,
         Amount = r.Amount,
+        ServiceTaxAmount = r.ServiceTaxAmount,
+        TdsAmount = r.TdsAmount,
+        NetPayableAmount = r.NetPayableAmount,
         Status = r.Status.ToString(),
         RequestedAt = r.RequestedAt,
         ProcessedAt = r.ProcessedAt,
@@ -160,6 +166,10 @@ public class WalletService : IWalletService
         if (preCheck.Balance < amount)
             throw new InvalidOperationException("Insufficient wallet balance.");
 
+        // Tax breakdown: 5% Service Tax + 5% TDS deducted from the requested amount.
+        // e.g. request 300 -> 15 Service Tax + 15 TDS -> 270 net payable to the user.
+        var (serviceTax, tds, netPayable) = WalletRules.CalculateWithdrawalTax(amount);
+
         WithdrawalRequestDto? result = null;
 
         var strategy = _db.Database.CreateExecutionStrategy();
@@ -182,6 +192,9 @@ public class WalletService : IWalletService
                     UserId = userId,
                     PlanType = planType,
                     Amount = amount,
+                    ServiceTaxAmount = serviceTax,
+                    TdsAmount = tds,
+                    NetPayableAmount = netPayable,
                     Status = WithdrawalStatus.Pending
                 };
                 _db.WithdrawalRequests.Add(request);
@@ -195,7 +208,10 @@ public class WalletService : IWalletService
                     Amount = amount,
                     BalanceAfter = wallet.Balance,
                     Source = "Withdrawal Request",
-                    Description = "Funds reserved pending admin approval",
+                    Description = $"Funds reserved pending admin approval. Service Tax (5%): {serviceTax}, TDS (5%): {tds}, Net payable: {netPayable}",
+                    ServiceTaxAmount = serviceTax,
+                    TdsAmount = tds,
+                    NetPayableAmount = netPayable,
                     ReferenceId = request.Id.ToString()
                 };
                 _db.WalletTransactions.Add(walletTxn);

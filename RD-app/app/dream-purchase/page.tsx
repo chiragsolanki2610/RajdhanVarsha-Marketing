@@ -7,7 +7,7 @@ import LoginTopBar from "@/components/loginTopbar";
 import {
   ShoppingCart, Plus, Minus, Trash2, X, ArrowRight, ArrowLeft,
   Package, CheckCheck, Copy, IndianRupee, Upload, AlertCircle,
-  CheckCircle2, Loader2, QrCode,
+  CheckCircle2, Loader2, QrCode, UserCheck, Search,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ interface CartItem extends Product {
   qty: number;
 }
 
-type PaymentStep = "cart" | "checkout" | "success";
+type PaymentStep = "sponsor" | "cart" | "checkout" | "success";
 
 // ─── API URL ──────────────────────────────────────────────────────────────────
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
@@ -86,9 +86,18 @@ export default function DreamPurchasePage() {
   const [error, setError]                       = useState<string | null>(null);
   const [cart, setCart]                         = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [step, setStep]                         = useState<PaymentStep>("cart");
+  const [step, setStep]                         = useState<PaymentStep>("sponsor");
   const [showCart, setShowCart]                 = useState(false);
   const [qrFailed, setQrFailed]                 = useState(false);
+
+  // ── Sponsor gate state
+  const [checkingSponsor, setCheckingSponsor] = useState(true);
+  const [sponsorIdInput, setSponsorIdInput]   = useState("");
+  const [sponsorVerified, setSponsorVerified] = useState<{ sponsorId: string; name: string } | null>(null);
+  const [sponsorLookupLoading, setSponsorLookupLoading] = useState(false);
+  const [sponsorLookupError, setSponsorLookupError]     = useState<string | null>(null);
+  const [sponsorSubmitting, setSponsorSubmitting]       = useState(false);
+  const [sponsorSubmitError, setSponsorSubmitError]     = useState<string | null>(null);
 
   // payment form
   const [utrNumber, setUtrNumber]           = useState("");
@@ -98,8 +107,55 @@ export default function DreamPurchasePage() {
   const [submitError, setSubmitError]       = useState<string | null>(null);
   const [orderMsg, setOrderMsg]             = useState("");
 
-  // ── Fetch products from backend
+  // ── Step 1: check sponsor status on mount (before loading products)
   useEffect(() => {
+    const checkSponsor = async () => {
+      try {
+        setCheckingSponsor(true);
+
+        if (!getToken()) {
+          router.push("/login");
+          return;
+        }
+
+        const res = await fetch(`${API_URL}/api/Auth/profile`, {
+          headers: getAuthHeaders(),
+        });
+
+        if (res.status === 401 || res.status === 403) {
+          localStorage.clear();
+          router.push("/login");
+          return;
+        }
+
+        if (!res.ok) throw new Error(`Failed to fetch profile (${res.status})`);
+
+        const data = await res.json();
+        const sponsorId: string = data.sponsorId ?? "";
+
+        // Has a sponsor already (SYSTEM counts as having a sponsor) → skip gate
+        if (sponsorId && sponsorId.trim() !== "") {
+          setStep("cart");
+        } else {
+          setStep("sponsor");
+        }
+      } catch (err: any) {
+        console.error("Profile fetch error:", err);
+        // Fail safe: don't block the user forever, show sponsor gate so they can proceed
+        setStep("sponsor");
+      } finally {
+        setCheckingSponsor(false);
+      }
+    };
+
+    checkSponsor();
+  }, []);
+
+  // ── Step 2: fetch products only once we're past the sponsor gate
+  useEffect(() => {
+    if (step !== "cart" && step !== "checkout") return;
+    if (products.length > 0) return; // already loaded
+
     const fetchProducts = async () => {
       try {
         setLoading(true);
@@ -145,7 +201,71 @@ export default function DreamPurchasePage() {
     };
 
     fetchProducts();
-  }, []);
+  }, [step]);
+
+  // ── Sponsor gate handlers
+  const handleSponsorLookup = async () => {
+    setSponsorLookupError(null);
+    setSponsorVerified(null);
+
+    const id = sponsorIdInput.trim();
+    if (!id) { setSponsorLookupError("Please enter a Sponsor ID."); return; }
+
+    setSponsorLookupLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/Auth/sponsor-lookup/${encodeURIComponent(id)}`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || "Sponsor ID not found.");
+      }
+
+      const data = await res.json();
+      setSponsorVerified({ sponsorId: data.sponsorId, name: data.name ?? data.sponsorIdName ?? "" });
+    } catch (err: any) {
+      setSponsorLookupError(err.message ?? "Sponsor ID not found.");
+    } finally {
+      setSponsorLookupLoading(false);
+    }
+  };
+
+  const handleSponsorConfirm = async () => {
+    if (!sponsorVerified) return;
+    setSponsorSubmitError(null);
+    setSponsorSubmitting(true);
+
+    try {
+      const res = await fetch(`${API_URL}/api/Auth/set-sponsor`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ sponsorId: sponsorVerified.sponsorId }),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        localStorage.clear();
+        router.push("/login");
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || `Could not set sponsor (${res.status})`);
+
+      // Sponsor successfully set → proceed to shop
+      setStep("cart");
+    } catch (err: any) {
+      setSponsorSubmitError(err.message ?? "Something went wrong. Please try again.");
+    } finally {
+      setSponsorSubmitting(false);
+    }
+  };
+
+  const handleChangeSponsorInput = () => {
+    setSponsorVerified(null);
+    setSponsorLookupError(null);
+    setSponsorSubmitError(null);
+  };
 
   // ── Derived values
   const CATEGORIES = ["All", ...Array.from(new Set(products.map((p) => p.category)))];
@@ -256,12 +376,130 @@ export default function DreamPurchasePage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <div className="sticky top-0 z-20 shrink-0 bg-white">
-          <LoginTopBar pagetitle="Dream Purchase" />
+          <LoginTopBar pageTitle="Dream Purchase" />
         </div>
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // INITIAL LOADING (checking sponsor status)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (checkingSponsor) {
+    return (
+      <Shell gradient>
+        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] text-gray-400">
+          <Loader2 size={26} className="animate-spin mb-3" />
+          <p className="text-sm">Checking your account...</p>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SPONSOR GATE SCREEN (legacy users with no SponsorId yet)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (step === "sponsor") {
+    return (
+      <Shell gradient>
+        <div className="p-6 md:p-8 flex items-center justify-center min-h-[calc(100vh-64px)]">
+          <div className="max-w-lg w-full">
+            <div className="bg-white rounded-3xl shadow-xl p-8 md:p-10 border border-gray-100">
+              <div className="w-16 h-16 bg-[#eef1f8] rounded-full flex items-center justify-center mx-auto mb-5">
+                <UserCheck size={30} className="text-[#3b5998]" />
+              </div>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2 text-center">
+                Set Your Sponsor ID
+              </h2>
+              <p className="text-sm text-gray-500 mb-7 text-center leading-relaxed">
+                Before you can enter the Dream Plan, please confirm who referred you.
+                This can only be set once, so please enter it carefully.
+              </p>
+
+              {!sponsorVerified ? (
+                <>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Sponsor ID <span className="text-red-400">*</span>
+                  </label>
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      type="text"
+                      value={sponsorIdInput}
+                      onChange={(e) => setSponsorIdInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSponsorLookup(); }}
+                      placeholder="e.g. RD0001"
+                      className="flex-1 border border-gray-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#5f76ab] focus:border-transparent transition-all"
+                    />
+                    <button
+                      onClick={handleSponsorLookup}
+                      disabled={sponsorLookupLoading}
+                      className="bg-[#3b5998] hover:bg-[#2f4677] disabled:bg-[#8fa0ce] text-white font-semibold px-5 rounded-2xl flex items-center justify-center gap-2 transition-colors text-sm"
+                    >
+                      {sponsorLookupLoading
+                        ? <Loader2 size={16} className="animate-spin" />
+                        : <><Search size={15} /> Verify</>}
+                    </button>
+                  </div>
+
+                  {sponsorLookupError && (
+                    <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl px-4 py-3 mb-2 flex items-start gap-2">
+                      <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                      {sponsorLookupError}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4 flex items-start gap-3">
+                    <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wide mb-0.5">
+                        Sponsor Found
+                      </p>
+                      <p className="text-sm text-emerald-800 font-medium">
+                        {sponsorVerified.name} ({sponsorVerified.sponsorId})
+                      </p>
+                    </div>
+                  </div>
+
+                  {sponsorSubmitError && (
+                    <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl px-4 py-3 mb-4 flex items-start gap-2">
+                      <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                      {sponsorSubmitError}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleChangeSponsorInput}
+                      disabled={sponsorSubmitting}
+                      className="flex-1 border border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold py-3 rounded-2xl transition-colors text-sm"
+                    >
+                      Change
+                    </button>
+                    <button
+                      onClick={handleSponsorConfirm}
+                      disabled={sponsorSubmitting}
+                      className="flex-1 bg-[#3b5998] hover:bg-[#2f4677] disabled:bg-[#8fa0ce] text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-colors text-sm"
+                    >
+                      {sponsorSubmitting
+                        ? <><Loader2 size={16} className="animate-spin" /> Confirming…</>
+                        : <><CheckCheck size={16} /> Confirm &amp; Continue</>}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <p className="text-xs text-gray-400 text-center mt-6">
+                ⚠️ Once confirmed, your sponsor ID cannot be changed later.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SUCCESS SCREEN

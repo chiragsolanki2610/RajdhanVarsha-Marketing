@@ -17,6 +17,18 @@ public static class WalletRules
 
     public static decimal GetMinWithdrawal(string planType)
         => MinWithdrawalByPlan.TryGetValue(planType, out var min) ? min : DefaultMinWithdrawal;
+
+    // --- Withdrawal taxes (applied to both Dream Plan and Binary Plan) ---
+    public const decimal ServiceTaxPercent = 5m;
+    public const decimal TdsPercent = 5m;
+
+    public static (decimal ServiceTax, decimal Tds, decimal NetPayable) CalculateWithdrawalTax(decimal amount)
+    {
+        var serviceTax = Math.Round(amount * ServiceTaxPercent / 100m, 2);
+        var tds = Math.Round(amount * TdsPercent / 100m, 2);
+        var netPayable = amount - serviceTax - tds;
+        return (serviceTax, tds, netPayable);
+    }
 }
 
 public class Wallet

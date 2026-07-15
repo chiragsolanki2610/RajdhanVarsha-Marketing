@@ -20,6 +20,9 @@ public class WalletTransactionDto
     public decimal BalanceAfter { get; set; }
     public string Source { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public decimal ServiceTaxAmount { get; set; }
+    public decimal TdsAmount { get; set; }
+    public decimal NetPayableAmount { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -36,6 +39,9 @@ public class WithdrawalRequestDto
     public string UserName { get; set; } = string.Empty;
     public string PlanType { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    public decimal ServiceTaxAmount { get; set; }
+    public decimal TdsAmount { get; set; }
+    public decimal NetPayableAmount { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime RequestedAt { get; set; }
     public DateTime? ProcessedAt { get; set; }
