@@ -18,6 +18,8 @@
  *      components/LoginTopbar.tsx  -> default export, no required props
  *    Update the two import paths below if your files live elsewhere or
  *    use different export names.
+ * 4. This version requires Tailwind CSS to be configured in the project
+ *    (used for the responsive mobile-card / desktop-table layout).
  * ──────────────────────────────────────────────────────────────────────────
  */
 
@@ -193,135 +195,172 @@ export default function InventoryManagementPage() {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#FFFFFF" }}>
-      {/* ── Sidebar ──────────────────────────────────────────────────── */}
+    <div className="flex min-h-screen bg-white">
       <Sidebar />
 
-      {/* ── Main column: topbar + page content ──────────────────────── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div className="flex-1 flex flex-col min-w-0">
         <LoginTopbar />
 
-        <div style={{ flex: 1, color: "#181B20" }}>
-          <div style={{ maxWidth: 1180, margin: "0 auto", padding: "40px 24px 80px" }}>
-            {/* ── Header / ledger stamp ─────────────────────────────────── */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-end",
-                flexWrap: "wrap",
-                gap: 20,
-                marginBottom: 28,
-              }}
-            >
+        <div className="flex-1 text-[#181B20] pb-24 md:pb-10">
+          <div className="max-w-[1180px] mx-auto px-4 md:px-6 pt-6 md:pt-10 pb-16">
+            {/* ── Header / ledger stamp ── */}
+            <div className="flex justify-between items-end flex-wrap gap-5 mb-6">
               <div>
-                <div
-                  style={{
-                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                    fontSize: 12,
-                    letterSpacing: "0.14em",
-                    textTransform: "uppercase",
-                    color: "#8A8375",
-                    marginBottom: 8,
-                  }}
-                >
+                <div className="font-mono text-[11px] tracking-[0.14em] uppercase text-[#8A8375] mb-2">
                   Warehouse / Stock Ledger
                 </div>
-                <h1 style={{ fontSize: 30, fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>
+                <h1 className="text-2xl md:text-[30px] font-semibold m-0 tracking-tight">
                   Inventory management
                 </h1>
-                <p style={{ margin: "6px 0 0", color: "#6B6558", fontSize: 14.5, maxWidth: 520 }}>
+                <p className="mt-1.5 text-[#6B6558] text-sm max-w-[520px]">
                   Stock reduces automatically when an order is approved, and only then — pending or
                   rejected orders never touch these numbers.
                 </p>
               </div>
 
-              <div style={{ display: "flex", gap: 10 }}>
+              <div className="flex gap-2 w-full md:w-auto">
                 <SummaryPill label="Products" value={summary.total} tone="neutral" />
                 <SummaryPill label="Low stock" value={summary.low} tone="low" />
                 <SummaryPill label="Out of stock" value={summary.out} tone="out" />
               </div>
             </div>
 
-            {/* ── Controls ───────────────────────────────────────────────── */}
-            <div
-              style={{
-                display: "flex",
-                gap: 12,
-                flexWrap: "wrap",
-                alignItems: "center",
-                marginBottom: 18,
-                padding: "14px 16px",
-                background: "#FFFFFF",
-                border: "1px solid #E7E3D9",
-                borderRadius: 10,
-              }}
-            >
+            {/* ── Controls ── */}
+            <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center mb-5 p-3.5 bg-white border border-[#E7E3D9] rounded-[10px]">
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name or product no."
-                style={inputStyle({ minWidth: 220, flex: "1 1 220px" })}
+                className="flex-1 min-w-0 rounded-[7px] border border-[#DDD8CB] bg-white text-[13.5px] text-[#181B20] outline-none px-3 py-2"
               />
 
-              <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle({ width: 170 })}>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-3 flex-wrap items-center">
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="rounded-[7px] border border-[#DDD8CB] bg-white text-[13.5px] text-[#181B20] outline-none px-3 py-2 w-full sm:w-[170px]"
+                >
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "#4B4638" }}>
-                Low-stock at ≤
-                <input
-                  type="number"
-                  min={0}
-                  value={threshold}
-                  onChange={(e) => setThreshold(Math.max(0, Number(e.target.value) || 0))}
-                  style={inputStyle({ width: 64, textAlign: "center", padding: "6px 8px" })}
-                />
-                units
-              </label>
+                <label className="flex items-center gap-2 text-[13.5px] text-[#4B4638] whitespace-nowrap">
+                  Low-stock ≤
+                  <input
+                    type="number"
+                    min={0}
+                    value={threshold}
+                    onChange={(e) => setThreshold(Math.max(0, Number(e.target.value) || 0))}
+                    className="w-16 text-center rounded-[7px] border border-[#DDD8CB] bg-white text-[13.5px] outline-none px-2 py-1.5"
+                  />
+                  units
+                </label>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5, color: "#4B4638" }}>
-                <input type="checkbox" checked={onlyLow} onChange={(e) => setOnlyLow(e.target.checked)} />
-                Needs attention only
-              </label>
+                <label className="flex items-center gap-1.5 text-[13.5px] text-[#4B4638] whitespace-nowrap">
+                  <input type="checkbox" checked={onlyLow} onChange={(e) => setOnlyLow(e.target.checked)} />
+                  Needs attention only
+                </label>
 
-              <button onClick={loadInventory} style={ghostButtonStyle({ marginLeft: "auto" })}>
-                Refresh
-              </button>
+                <button
+                  onClick={loadInventory}
+                  className="ml-auto md:ml-0 rounded-[7px] border border-[#DDD8CB] bg-white text-[#4B4638] text-[13px] px-3.5 py-2 cursor-pointer"
+                >
+                  Refresh
+                </button>
+              </div>
             </div>
 
-            {/* ── States ─────────────────────────────────────────────────── */}
+            {/* ── States ── */}
             {loading && <EmptyState text="Loading stock ledger…" />}
             {!loading && error && <EmptyState text={error} isError />}
             {!loading && !error && filtered.length === 0 && (
               <EmptyState text="Nothing matches these filters." />
             )}
 
-            {/* ── Table ──────────────────────────────────────────────────── */}
+            {/* ── MOBILE: card list ── */}
             {!loading && !error && filtered.length > 0 && (
-              <div
-                style={{
-                  background: "#FFFFFF",
-                  border: "1px solid #E7E3D9",
-                  borderRadius: 10,
-                  overflow: "hidden",
-                }}
-              >
+              <div className="md:hidden space-y-3">
+                {filtered.map((p) => {
+                  const tier = stockTier(p.quantity, threshold);
+                  const tone = TIER_STYLES[tier];
+                  const msg = rowMessage[p.id];
+
+                  return (
+                    <div key={p.id} className="bg-white border border-[#E7E3D9] rounded-[12px] p-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-[8px] bg-[#F1EEE5] border border-[#E7E3D9] shrink-0 overflow-hidden">
+                          {p.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
+                          ) : null}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-[14.5px] truncate">{p.productName}</div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-[11.5px] text-[#9A9484]">{p.productNo}</span>
+                            <span className="text-[11.5px] text-[#8A8375]">· {p.category}</span>
+                          </div>
+                        </div>
+                        <div
+                          className="font-mono font-bold text-lg shrink-0 tabular-nums"
+                          style={{ color: p.quantity < 0 ? "#C2402B" : "#181B20" }}
+                        >
+                          {p.quantity}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-3">
+                        <span
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold w-fit"
+                          style={{ color: tone.text, background: tone.bg }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ background: tone.dot }} />
+                          {tone.label}
+                          {!p.isActive && <span className="text-[#B0AA9A] font-normal">· inactive</span>}
+                        </span>
+                        <span className="font-mono text-[13px] tabular-nums text-[#5C5749]">
+                          DP ₹{p.dp.toFixed(2)}
+                        </span>
+                      </div>
+
+                      <div className="flex gap-2 mt-3">
+                        <input
+                          type="number"
+                          placeholder="±qty"
+                          value={stockDrafts[p.id] ?? ""}
+                          onChange={(e) => setStockDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
+                          onKeyDown={(e) => e.key === "Enter" && submitAddStock(p)}
+                          className="flex-1 min-w-0 rounded-[7px] border border-[#DDD8CB] bg-white text-[13.5px] outline-none px-3 py-2"
+                        />
+                        <button
+                          onClick={() => submitAddStock(p)}
+                          disabled={savingId === p.id}
+                          className="rounded-[7px] border border-[#181B20] bg-[#181B20] text-white text-[13px] font-semibold px-4 py-2 shrink-0"
+                          style={{ opacity: savingId === p.id ? 0.6 : 1 }}
+                        >
+                          {savingId === p.id ? "Saving…" : "Apply"}
+                        </button>
+                      </div>
+                      {msg && (
+                        <div className="mt-2 text-xs" style={{ color: msg.ok ? "#2F7D5B" : "#C2402B" }}>
+                          {msg.text}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── DESKTOP: table ── */}
+            {!loading && !error && filtered.length > 0 && (
+              <div className="hidden md:block bg-white border border-[#E7E3D9] rounded-[10px] overflow-hidden">
                 <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "2.4fr 1fr 0.9fr 1fr 1.3fr 1.6fr",
-                    padding: "12px 18px",
-                    fontSize: 11.5,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "#8A8375",
-                    borderBottom: "1px solid #EFEBE1",
-                  }}
+                  className="grid px-[18px] py-3 text-[11.5px] tracking-[0.08em] uppercase text-[#8A8375] border-b border-[#EFEBE1]"
+                  style={{ gridTemplateColumns: "2.4fr 1fr 0.9fr 1fr 1.3fr 1.6fr" }}
                 >
                   <span>Product</span>
                   <span>Category</span>
@@ -339,107 +378,65 @@ export default function InventoryManagementPage() {
                   return (
                     <div
                       key={p.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "2.4fr 1fr 0.9fr 1fr 1.3fr 1.6fr",
-                        alignItems: "center",
-                        padding: "14px 18px",
-                        borderBottom: "1px solid #F1EEE5",
-                        fontSize: 14,
-                      }}
+                      className="grid items-center px-[18px] py-3.5 border-b border-[#F1EEE5] text-sm"
+                      style={{ gridTemplateColumns: "2.4fr 1fr 0.9fr 1fr 1.3fr 1.6fr" }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-                        <div
-                          style={{
-                            width: 38,
-                            height: 38,
-                            borderRadius: 8,
-                            background: "#F1EEE5",
-                            flexShrink: 0,
-                            overflow: "hidden",
-                            border: "1px solid #E7E3D9",
-                          }}
-                        >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-[38px] h-[38px] rounded-[8px] bg-[#F1EEE5] shrink-0 overflow-hidden border border-[#E7E3D9]">
                           {p.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={p.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
                           ) : null}
                         </div>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 560, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {p.productName}
-                          </div>
-                          <div
-                            style={{
-                              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                              fontSize: 12,
-                              color: "#9A9484",
-                            }}
-                          >
-                            {p.productNo}
-                          </div>
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{p.productName}</div>
+                          <div className="font-mono text-xs text-[#9A9484]">{p.productNo}</div>
                         </div>
                       </div>
 
-                      <span style={{ color: "#5C5749" }}>{p.category}</span>
+                      <span className="text-[#5C5749]">{p.category}</span>
 
-                      <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontVariantNumeric: "tabular-nums" }}>
-                        ₹{p.dp.toFixed(2)}
-                      </span>
+                      <span className="font-mono tabular-nums">₹{p.dp.toFixed(2)}</span>
 
                       <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                          padding: "4px 10px",
-                          borderRadius: 999,
-                          fontSize: 12,
-                          fontWeight: 560,
-                          color: tone.text,
-                          background: tone.bg,
-                          width: "fit-content",
-                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold w-fit"
+                        style={{ color: tone.text, background: tone.bg }}
                       >
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: tone.dot }} />
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: tone.dot }} />
                         {tone.label}
                       </span>
 
                       <span
-                        style={{
-                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                          fontVariantNumeric: "tabular-nums",
-                          fontWeight: 650,
-                          fontSize: 16,
-                          color: p.quantity < 0 ? "#C2402B" : "#181B20",
-                        }}
+                        className="font-mono tabular-nums font-bold text-base"
+                        style={{ color: p.quantity < 0 ? "#C2402B" : "#181B20" }}
                       >
                         {p.quantity}
                         {!p.isActive && (
-                          <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 500, color: "#B0AA9A" }}>(inactive)</span>
+                          <span className="ml-2 text-[11px] font-normal text-[#B0AA9A]">(inactive)</span>
                         )}
                       </span>
 
                       <div>
-                        <div style={{ display: "flex", gap: 8 }}>
+                        <div className="flex gap-2">
                           <input
                             type="number"
                             placeholder="±qty"
                             value={stockDrafts[p.id] ?? ""}
                             onChange={(e) => setStockDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
                             onKeyDown={(e) => e.key === "Enter" && submitAddStock(p)}
-                            style={inputStyle({ width: 88, padding: "6px 10px" })}
+                            className="w-[88px] rounded-[7px] border border-[#DDD8CB] bg-white text-[13.5px] outline-none px-2.5 py-1.5"
                           />
                           <button
                             onClick={() => submitAddStock(p)}
                             disabled={savingId === p.id}
-                            style={primaryButtonStyle({ opacity: savingId === p.id ? 0.6 : 1 })}
+                            className="rounded-[7px] border border-[#181B20] bg-[#181B20] text-white text-[13px] font-semibold px-3.5 py-1.5"
+                            style={{ opacity: savingId === p.id ? 0.6 : 1 }}
                           >
                             {savingId === p.id ? "Saving…" : "Apply"}
                           </button>
                         </div>
                         {msg && (
-                          <div style={{ marginTop: 6, fontSize: 12, color: msg.ok ? "#2F7D5B" : "#C2402B" }}>
+                          <div className="mt-1.5 text-xs" style={{ color: msg.ok ? "#2F7D5B" : "#C2402B" }}>
                             {msg.text}
                           </div>
                         )}
@@ -465,23 +462,13 @@ function SummaryPill({ label, value, tone }: { label: string; value: number; ton
       : { bg: "#FFFFFF", text: "#181B20" };
   return (
     <div
-      style={{
-        background: colors.bg,
-        border: "1px solid #E7E3D9",
-        borderRadius: 10,
-        padding: "10px 16px",
-        minWidth: 108,
-      }}
+      className="flex-1 md:flex-none border border-[#E7E3D9] rounded-[10px] px-3 py-2 md:px-4 md:min-w-[108px]"
+      style={{ background: colors.bg }}
     >
-      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#8A8375" }}>{label}</div>
-      <div
-        style={{
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-          fontSize: 22,
-          fontWeight: 650,
-          color: colors.text,
-        }}
-      >
+      <div className="text-[10px] md:text-[11px] uppercase tracking-[0.08em] text-[#8A8375] whitespace-nowrap">
+        {label}
+      </div>
+      <div className="font-mono text-lg md:text-[22px] font-bold" style={{ color: colors.text }}>
         {value}
       </div>
     </div>
@@ -491,57 +478,13 @@ function SummaryPill({ label, value, tone }: { label: string; value: number; ton
 function EmptyState({ text, isError }: { text: string; isError?: boolean }) {
   return (
     <div
+      className="px-5 py-12 text-center text-sm bg-white border rounded-[10px]"
       style={{
-        padding: "48px 20px",
-        textAlign: "center",
         color: isError ? "#C2402B" : "#8A8375",
-        background: "#FFFFFF",
-        border: `1px solid ${isError ? "#F0CFC7" : "#E7E3D9"}`,
-        borderRadius: 10,
-        fontSize: 14.5,
+        borderColor: isError ? "#F0CFC7" : "#E7E3D9",
       }}
     >
       {text}
     </div>
   );
-}
-
-function inputStyle(extra: React.CSSProperties = {}): React.CSSProperties {
-  return {
-    padding: "8px 12px",
-    borderRadius: 7,
-    border: "1px solid #DDD8CB",
-    background: "#FFFFFF",
-    fontSize: 13.5,
-    color: "#181B20",
-    outline: "none",
-    ...extra,
-  };
-}
-
-function primaryButtonStyle(extra: React.CSSProperties = {}): React.CSSProperties {
-  return {
-    padding: "7px 14px",
-    borderRadius: 7,
-    border: "1px solid #181B20",
-    background: "#181B20",
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: 560,
-    cursor: "pointer",
-    ...extra,
-  };
-}
-
-function ghostButtonStyle(extra: React.CSSProperties = {}): React.CSSProperties {
-  return {
-    padding: "8px 14px",
-    borderRadius: 7,
-    border: "1px solid #DDD8CB",
-    background: "#FFFFFF",
-    color: "#4B4638",
-    fontSize: 13,
-    cursor: "pointer",
-    ...extra,
-  };
 }

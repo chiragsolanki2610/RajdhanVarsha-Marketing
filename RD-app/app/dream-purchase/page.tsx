@@ -78,34 +78,55 @@ function ProductImage({ imageUrl, name, className }: { imageUrl: string; name: s
   );
 }
 
+
+function Shell({
+  children,
+  gradient,
+}: {
+  children: React.ReactNode;
+  gradient?: boolean;
+}) {
+  return (
+    <div className={`flex h-screen overflow-hidden ${gradient ? "bg-gradient-to-br from-slate-50 via-[#eef1f8] to-indigo-50" : "bg-gray-50"}`}>
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="sticky top-0 z-20 shrink-0 bg-white">
+          <LoginTopBar pageTitle="Dream Purchase" />
+        </div>
+        <main className="flex-1 overflow-y-auto">{children}</main>
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DreamPurchasePage() {
   const router = useRouter();
-  const [products, setProducts]                 = useState<Product[]>([]);
-  const [loading, setLoading]                   = useState(true);
-  const [error, setError]                       = useState<string | null>(null);
-  const [cart, setCart]                         = useState<CartItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [step, setStep]                         = useState<PaymentStep>("sponsor");
-  const [showCart, setShowCart]                 = useState(false);
-  const [qrFailed, setQrFailed]                 = useState(false);
+  const [step, setStep] = useState<PaymentStep>("sponsor");
+  const [showCart, setShowCart] = useState(false);
+  const [qrFailed, setQrFailed] = useState(false);
 
   // ── Sponsor gate state
   const [checkingSponsor, setCheckingSponsor] = useState(true);
-  const [sponsorIdInput, setSponsorIdInput]   = useState("");
+  const [sponsorIdInput, setSponsorIdInput] = useState("");
   const [sponsorVerified, setSponsorVerified] = useState<{ sponsorId: string; name: string } | null>(null);
   const [sponsorLookupLoading, setSponsorLookupLoading] = useState(false);
-  const [sponsorLookupError, setSponsorLookupError]     = useState<string | null>(null);
-  const [sponsorSubmitting, setSponsorSubmitting]       = useState(false);
-  const [sponsorSubmitError, setSponsorSubmitError]     = useState<string | null>(null);
+  const [sponsorLookupError, setSponsorLookupError] = useState<string | null>(null);
+  const [sponsorSubmitting, setSponsorSubmitting] = useState(false);
+  const [sponsorSubmitError, setSponsorSubmitError] = useState<string | null>(null);
 
   // payment form
-  const [utrNumber, setUtrNumber]           = useState("");
-  const [screenshot, setScreenshot]         = useState<File | null>(null);
+  const [utrNumber, setUtrNumber] = useState("");
+  const [screenshot, setScreenshot] = useState<File | null>(null);
   const [screenshotPrev, setScreenshotPrev] = useState("");
-  const [submitting, setSubmitting]         = useState(false);
-  const [submitError, setSubmitError]       = useState<string | null>(null);
-  const [orderMsg, setOrderMsg]             = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [orderMsg, setOrderMsg] = useState("");
 
   // ── Step 1: check sponsor status on mount (before loading products)
   useEffect(() => {
@@ -181,14 +202,14 @@ export default function DreamPurchasePage() {
         const data = await res.json();
 
         const mapped: Product[] = data.map((p: any) => ({
-          id:          p.id,
-          name:        p.productName,
+          id: p.id,
+          name: p.productName,
           description: p.description ?? "",
-          price:       p.dp,
-          bv:          p.bv,
-          imageUrl:    p.imageUrl ?? "",
-          category:    p.category ?? "General",
-          inStock:     true,
+          price: p.dp,
+          bv: p.bv,
+          imageUrl: p.imageUrl ?? "",
+          category: p.category ?? "General",
+          inStock: true,
         }));
 
         setProducts(mapped);
@@ -287,11 +308,11 @@ export default function DreamPurchasePage() {
     setCart((prev) => prev.map((i) => (i.id === id ? { ...i, qty } : i)));
   };
 
-  const totalBV      = cart.reduce((sum, i) => sum + i.bv * i.qty, 0);
-  const totalPrice   = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
-  const cartCount    = cart.reduce((sum, i) => sum + i.qty, 0);
-  const bvProgress   = Math.min((totalBV / DREAM_PLAN_BV_TARGET) * 100, 100);
-  const bvMet        = totalBV >= DREAM_PLAN_BV_TARGET;
+  const totalBV = cart.reduce((sum, i) => sum + i.bv * i.qty, 0);
+  const totalPrice = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const cartCount = cart.reduce((sum, i) => sum + i.qty, 0);
+  const bvProgress = Math.min((totalBV / DREAM_PLAN_BV_TARGET) * 100, 100);
+  const bvMet = totalBV >= DREAM_PLAN_BV_TARGET;
 
   const filteredProducts =
     selectedCategory === "All" ? products : products.filter((p) => p.category === selectedCategory);
@@ -309,7 +330,7 @@ export default function DreamPurchasePage() {
   const handlePaymentSubmit = async () => {
     setSubmitError(null);
     if (!utrNumber.trim()) { setSubmitError("Please enter the UTR / Transaction ID."); return; }
-    if (!screenshot)       { setSubmitError("Please upload your payment screenshot."); return; }
+    if (!screenshot) { setSubmitError("Please upload your payment screenshot."); return; }
 
     setSubmitting(true);
     try {
@@ -369,19 +390,6 @@ export default function DreamPurchasePage() {
   };
 
   const handleCopyUpi = () => navigator.clipboard?.writeText(UPI_ID);
-
-  // ─── Shell wrapper ────────────────────────────────────────────────────────────
-  const Shell = ({ children, gradient }: { children: React.ReactNode; gradient?: boolean }) => (
-    <div className={`flex h-screen overflow-hidden ${gradient ? "bg-gradient-to-br from-slate-50 via-[#eef1f8] to-indigo-50" : "bg-gray-50"}`}>
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="sticky top-0 z-20 shrink-0 bg-white">
-          <LoginTopBar pageTitle="Dream Purchase" />
-        </div>
-        <main className="flex-1 overflow-y-auto">{children}</main>
-      </div>
-    </div>
-  );
 
   // ═══════════════════════════════════════════════════════════════════════════
   // INITIAL LOADING (checking sponsor status)
@@ -788,11 +796,10 @@ export default function DreamPurchasePage() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                selectedCategory === cat
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${selectedCategory === cat
                   ? "bg-[#3b5998] text-white border-[#3b5998]"
                   : "bg-white text-gray-600 border-gray-200 hover:border-[#8fa0ce]"
-              }`}
+                }`}
             >
               {cat}
             </button>
@@ -891,7 +898,7 @@ export default function DreamPurchasePage() {
 
         {/* Floating cart pill */}
         {cart.length > 0 && (
-          <div className="fixed bottom-6 right-6 z-40">
+          <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+76px)] left-1/2 -translate-x-1/2 z-40 md:bottom-6 md:left-auto md:right-6 md:translate-x-0">
             <button
               onClick={() => setShowCart(true)}
               className="flex items-center gap-3 bg-[#2f4677] hover:bg-[#253a63] text-white pl-4 pr-5 py-3 rounded-full shadow-2xl transition-all"
@@ -967,9 +974,8 @@ export default function DreamPurchasePage() {
                   <button
                     onClick={() => { if (bvMet) { setShowCart(false); setStep("checkout"); } }}
                     disabled={!bvMet}
-                    className={`w-full flex items-center justify-center gap-2 text-sm font-bold py-3 rounded-xl transition-colors ${
-                      bvMet ? "bg-[#2f4677] hover:bg-[#253a63] text-white" : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    }`}
+                    className={`w-full flex items-center justify-center gap-2 text-sm font-bold py-3 rounded-xl transition-colors ${bvMet ? "bg-[#2f4677] hover:bg-[#253a63] text-white" : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      }`}
                   >
                     <ArrowRight size={14} /> Proceed to Payment →
                   </button>

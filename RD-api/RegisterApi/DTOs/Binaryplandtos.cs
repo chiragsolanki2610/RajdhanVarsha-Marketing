@@ -60,6 +60,34 @@ public class BinaryTreeNodeDto
     public BinaryTreeNodeDto? RightChild { get; set; }
 }
 
+// ── Flat, paginated binary team listing ───────────────────────────────────────
+// Used by the Team Details page instead of the nested tree. A flat list has
+// no nesting depth at all, so it scales to any number of members / any tree
+// depth without ever hitting a JSON serializer depth limit or requiring a
+// bigger "depth" query param. Pagination + optional phone number keeps each
+// response small regardless of total downline size.
+
+public class BinaryMemberRowDto
+{
+    public string UserId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? Phone { get; set; }
+    public string? SponsorId { get; set; }
+    public string Position { get; set; } = string.Empty; // LEFT / RIGHT / ROOT
+    public int TreeLevel { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class BinaryMemberListDto
+{
+    public List<BinaryMemberRowDto> Items { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
+}
+
+
 public class BinaryWalletDto
 {
     public string UserId { get; set; } = string.Empty;

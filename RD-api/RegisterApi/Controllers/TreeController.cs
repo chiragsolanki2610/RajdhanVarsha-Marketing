@@ -123,13 +123,12 @@ namespace RegisterApi.Controllers
         {
             var directCount = await _db.Users.CountAsync(u => u.SponsorId == node.UserId);
 
-            // ✅ Real BV: sum of this specific user's own PAID purchases.
-            // Previously this was DirectCount * 600 (a placeholder), which showed
-            // BV/incentive even for users who never bought anything — just because
-            // they had downlines. Now it reflects actual purchase data.
-            var realBv = await _db.Plans
-                .Where(p => p.UserId == node.UserId && p.Status == PlanStatus.Paid)
-                .SumAsync(p => (decimal?)p.TotalBv) ?? 0;
+            // ✅ Real BV: read directly from Users.BusinessVolume.
+            // NOTE: The Plans table is not populated by the purchase flow (it stays
+            // empty), so summing Plans.TotalBv always returned 0 regardless of what
+            // a user actually purchased. BusinessVolume on the User row is updated
+            // at purchase time and is the real source of truth for BV.
+            var realBv = (decimal)node.BusinessVolume;
 
             var dto = new TreeResponseDto
             {
@@ -138,6 +137,7 @@ namespace RegisterApi.Controllers
                 SponsorId = node.SponsorId ?? string.Empty,
                 SponsorName = node.SponsorIdName ?? string.Empty,
                 IdStatus = node.IdStatus ?? "inactive",
+                ProfilePictureUrl = node.ProfilePictureUrl,
                 Level = level,
                 DirectCount = directCount,
                 CalculatedBv = (int)realBv,

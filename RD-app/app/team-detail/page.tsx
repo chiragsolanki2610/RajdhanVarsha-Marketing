@@ -8,27 +8,33 @@ import Sidebar from "@/components/Sidebar";
  * team-detail/page.tsx
  * -----------------------------------------------------------------------
  * Two toggle buttons at the top: "Dream Team" (default) and "Binary Team".
- * A search bar filters the currently-loaded list by name / userId / phone.
- * Each row shows: Name, User ID, Phone Number, Active/Inactive.
+ * Each row shows: Name, User ID, Sponsor ID, Phone Number, Active/Inactive.
  *
  * Data sources:
- *  - Dream Team  -> GET /api/Tree            (recursive sponsor tree, up to L12)
- *  - Binary Team -> GET /api/binary/tree      (left/right binary tree, up to depth 10)
+ *  - Dream Team  -> GET /api/Tree                (recursive sponsor tree,
+ *                    fetched whole and paginated/filtered client-side)
+ *  - Binary Team -> GET /api/binary/team          (FLAT, server-paginated
+ *                    listing — page/pageSize/search are query params, and
+ *                    the backend returns only that page's rows, never a
+ *                    nested tree). This is what lets Binary Team scale to
+ *                    any number of members or any tree depth: the response
+ *                    size only depends on pageSize, never on total team size.
  *
- * Neither endpoint returns a phone number, so each unique userId is
- * enriched with a call to GET /api/Auth/{userId} (returns mobileNo) run
- * in parallel and cached in-memory for the session.
- *
- * Adjust API_BASE_URL / token retrieval to match your project's setup.
+ * Dream Team's /api/Tree endpoint still returns the whole nested tree in one
+ * response, so if your sponsor tree ever grows very large the same
+ * flat/paginated approach used here for Binary Team should be applied to it
+ * too — ask if you'd like that endpoint added.
  * -----------------------------------------------------------------------
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
 
 type TeamType = "dream" | "binary";
+const PAGE_SIZE = 10;
 
 interface TeamMember {
   userId: string;
+  sponsorId: string;
   name: string;
   phone: string;
   isActive: boolean;
@@ -43,16 +49,27 @@ interface DreamTreeNode {
   idStatus: string;
   level: number;
   hasChildren: boolean;
+  sponsorId?: string;
+  parentId?: string;
   children: DreamTreeNode[];
 }
 
-interface BinaryTreeNode {
+interface BinaryMemberRow {
   userId: string;
   name: string;
-  idStatus: string;
+  phone: string | null;
+  position: string;
   treeLevel: number;
-  leftChild: BinaryTreeNode | null;
-  rightChild: BinaryTreeNode | null;
+  isActive: boolean;
+  sponsorId?: string;
+}
+
+interface BinaryMemberListResponse {
+  items: BinaryMemberRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 // ---- Helpers -------------------------------------------------------------
@@ -76,10 +93,19 @@ async function authFetch(path: string) {
   return res.json();
 }
 
-function flattenDreamTree(node: DreamTreeNode, out: TeamMember[], skipRoot = true) {
+function flattenDreamTree(
+  node: DreamTreeNode,
+  out: TeamMember[],
+  skipRoot = true,
+  parentId = ""
+) {
   if (!skipRoot) {
     out.push({
       userId: node.id,
+      // Prefer an explicit sponsorId from the API if present, otherwise
+      // fall back to the immediate parent in the tree (the node's sponsor
+      // IS its parent in a sponsor tree).
+      sponsorId: node.sponsorId || parentId || "—",
       name: node.name,
       phone: "",
       isActive: (node.idStatus || "").toLowerCase() === "active",
@@ -87,23 +113,8 @@ function flattenDreamTree(node: DreamTreeNode, out: TeamMember[], skipRoot = tru
     });
   }
   for (const child of node.children || []) {
-    flattenDreamTree(child, out, false);
+    flattenDreamTree(child, out, false, node.id);
   }
-}
-
-function flattenBinaryTree(node: BinaryTreeNode | null, out: TeamMember[], skipRoot = true) {
-  if (!node) return;
-  if (!skipRoot) {
-    out.push({
-      userId: node.userId,
-      name: node.name,
-      phone: "",
-      isActive: !!node.idStatus && node.idStatus.toLowerCase() === "active",
-      level: node.treeLevel,
-    });
-  }
-  flattenBinaryTree(node.leftChild, out, false);
-  flattenBinaryTree(node.rightChild, out, false);
 }
 
 // ---- Component -------------------------------------------------------
@@ -111,14 +122,13 @@ function flattenBinaryTree(node: BinaryTreeNode | null, out: TeamMember[], skipR
 export default function TeamDetailPage() {
   const [activeTeam, setActiveTeam] = useState<TeamType>("dream");
   const [search, setSearch] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 10;
-
-  const [dreamMembers, setDreamMembers] = useState<TeamMember[] | null>(null);
-  const [binaryMembers, setBinaryMembers] = useState<TeamMember[] | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ---- Dream Team: fetched whole, paginated/filtered client-side ----
+  const [dreamMembers, setDreamMembers] = useState<TeamMember[] | null>(null);
+  const [dreamPage, setDreamPage] = useState(1);
 
   // Simple in-memory cache so we don't re-fetch phone numbers repeatedly.
   const [phoneCache, setPhoneCache] = useState<Record<string, string>>({});
@@ -158,7 +168,7 @@ export default function TeamDetailPage() {
     try {
       const tree: DreamTreeNode = await authFetch("/api/Tree");
       const flat: TeamMember[] = [];
-      flattenDreamTree(tree, flat);
+      flattenDreamTree(tree, flat, true, tree.id);
       const enriched = await enrichWithPhones(flat);
       setDreamMembers(enriched);
     } catch (err: any) {
@@ -169,72 +179,128 @@ export default function TeamDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadBinaryTeam = useCallback(async () => {
+  const dreamFiltered = useMemo(() => {
+    if (!dreamMembers) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return dreamMembers;
+    return dreamMembers.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.userId.toLowerCase().includes(q) ||
+        m.sponsorId.toLowerCase().includes(q) ||
+        m.phone.toLowerCase().includes(q)
+    );
+  }, [dreamMembers, search]);
+
+  const dreamTotalPages = Math.max(1, Math.ceil(dreamFiltered.length / PAGE_SIZE));
+  const dreamPaginated = useMemo(() => {
+    const start = (dreamPage - 1) * PAGE_SIZE;
+    return dreamFiltered.slice(start, start + PAGE_SIZE);
+  }, [dreamFiltered, dreamPage]);
+
+  // ---- Binary Team: server-side paginated + searched, one page fetched at a time ----
+  // This is the part that scales to any team size / any tree depth: we never
+  // ask the backend for "everything", only for the current page, so the
+  // response is always small no matter how large the actual binary tree is.
+  const [binaryPage, setBinaryPage] = useState(1);
+  const [binaryData, setBinaryData] = useState<BinaryMemberListResponse | null>(null);
+  const [binaryLoaded, setBinaryLoaded] = useState(false);
+
+  const loadBinaryTeam = useCallback(async (page: number, searchTerm: string) => {
     setLoading(true);
     setError(null);
     try {
-      const tree: BinaryTreeNode = await authFetch("/api/binary/tree?depth=10");
-      const flat: TeamMember[] = [];
-      flattenBinaryTree(tree, flat);
-      const enriched = await enrichWithPhones(flat);
-      setBinaryMembers(enriched);
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(PAGE_SIZE),
+      });
+      if (searchTerm.trim()) params.set("search", searchTerm.trim());
+
+      const data: BinaryMemberListResponse = await authFetch(`/api/binary/team?${params.toString()}`);
+
+      // Phone numbers already come from the backend for Binary Team, no
+      // extra per-user enrichment calls needed here.
+      setBinaryData(data);
+      setBinaryLoaded(true);
     } catch (err: any) {
       setError(err?.message || "Failed to load Binary Team.");
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Debounce search so we don't fire a request on every keystroke.
+  useEffect(() => {
+    if (activeTeam !== "binary") return;
+    const handle = setTimeout(() => {
+      setBinaryPage(1);
+      loadBinaryTeam(1, search);
+    }, 350);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, activeTeam]);
 
   useEffect(() => {
     if (activeTeam === "dream" && dreamMembers === null) {
       loadDreamTeam();
-    } else if (activeTeam === "binary" && binaryMembers === null) {
-      loadBinaryTeam();
+    } else if (activeTeam === "binary" && !binaryLoaded) {
+      loadBinaryTeam(binaryPage, search);
     }
-  }, [activeTeam, dreamMembers, binaryMembers, loadDreamTeam, loadBinaryTeam]);
-
-  const currentMembers = activeTeam === "dream" ? dreamMembers : binaryMembers;
-
-  const filteredMembers = useMemo(() => {
-    if (!currentMembers) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return currentMembers;
-    return currentMembers.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.userId.toLowerCase().includes(q) ||
-        m.phone.toLowerCase().includes(q)
-    );
-  }, [currentMembers, search]);
-
-  // Reset to page 1 whenever the active team or search query changes.
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeTeam, search]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredMembers.length / PAGE_SIZE));
-
-  const paginatedMembers = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredMembers.slice(start, start + PAGE_SIZE);
-  }, [filteredMembers, currentPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTeam, dreamMembers, binaryLoaded]);
 
   function goToNextPage() {
-    setCurrentPage((p) => Math.min(p + 1, totalPages));
+    if (activeTeam === "dream") {
+      setDreamPage((p) => Math.min(p + 1, dreamTotalPages));
+    } else {
+      const next = Math.min(binaryPage + 1, binaryData?.totalPages || 1);
+      setBinaryPage(next);
+      loadBinaryTeam(next, search);
+    }
   }
 
   function goToPrevPage() {
-    setCurrentPage((p) => Math.max(p - 1, 1));
+    if (activeTeam === "dream") {
+      setDreamPage((p) => Math.max(p - 1, 1));
+    } else {
+      const prev = Math.max(binaryPage - 1, 1);
+      setBinaryPage(prev);
+      loadBinaryTeam(prev, search);
+    }
   }
 
   function handleRefresh() {
     if (activeTeam === "dream") {
       setDreamMembers(null);
+      setDreamPage(1);
     } else {
-      setBinaryMembers(null);
+      setBinaryPage(1);
+      loadBinaryTeam(1, search);
     }
   }
+
+  function handleTeamSwitch(team: TeamType) {
+    setActiveTeam(team);
+    setSearch("");
+  }
+
+  // ---- Unified view for rendering ----
+  const rows: TeamMember[] =
+    activeTeam === "dream"
+      ? dreamPaginated
+      : (binaryData?.items || []).map((m) => ({
+          userId: m.userId,
+          sponsorId: m.sponsorId || "—",
+          name: m.name,
+          phone: m.phone || "—",
+          isActive: m.isActive,
+          level: m.treeLevel,
+        }));
+
+  const currentPage = activeTeam === "dream" ? dreamPage : binaryPage;
+  const totalPages = activeTeam === "dream" ? dreamTotalPages : binaryData?.totalPages || 1;
+  const totalCount = activeTeam === "dream" ? dreamFiltered.length : binaryData?.totalCount || 0;
+  const hasData = activeTeam === "dream" ? dreamMembers !== null : binaryData !== null;
 
   return (
     <div className="flex min-h-screen w-full overflow-x-hidden bg-gray-50">
@@ -248,12 +314,10 @@ export default function TeamDetailPage() {
 
         <div className="min-w-0 px-4 py-6 sm:px-8">
           <div className="mx-auto max-w-4xl">
-            {/* <h1 className="mb-6 text-2xl font-bold text-gray-900">Team Details</h1> */}
-
             {/* Toggle buttons */}
             <div className="mb-6 flex w-full max-w-full rounded-xl bg-gray-100 p-1.5 shadow-[0_0_12px_rgba(37,99,235,0.2)]">
               <button
-                onClick={() => setActiveTeam("dream")}
+                onClick={() => handleTeamSwitch("dream")}
                 className={`flex-1 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all ${
                   activeTeam === "dream"
                     ? "bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)]"
@@ -263,7 +327,7 @@ export default function TeamDetailPage() {
                 Dream Team
               </button>
               <button
-                onClick={() => setActiveTeam("binary")}
+                onClick={() => handleTeamSwitch("binary")}
                 className={`flex-1 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all ${
                   activeTeam === "binary"
                     ? "bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)]"
@@ -294,7 +358,7 @@ export default function TeamDetailPage() {
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by name, user ID or phone..."
+                  placeholder="Search by name, user ID, sponsor ID or phone..."
                   className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
@@ -318,7 +382,11 @@ export default function TeamDetailPage() {
                 <div className="flex flex-col items-center gap-3 py-16 text-sm text-red-500">
                   <span>{error}</span>
                   <button
-                    onClick={activeTeam === "dream" ? loadDreamTeam : loadBinaryTeam}
+                    onClick={
+                      activeTeam === "dream"
+                        ? loadDreamTeam
+                        : () => loadBinaryTeam(binaryPage, search)
+                    }
                     className="rounded-lg bg-indigo-600 px-4 py-1.5 text-white hover:bg-indigo-700"
                   >
                     Try again
@@ -326,28 +394,30 @@ export default function TeamDetailPage() {
                 </div>
               )}
 
-              {!loading && !error && filteredMembers.length === 0 && (
+              {!loading && !error && rows.length === 0 && (
                 <div className="py-16 text-center text-sm text-gray-400">
                   No team members found.
                 </div>
               )}
 
-              {!loading && !error && filteredMembers.length > 0 && (
+              {!loading && !error && rows.length > 0 && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                       <tr>
                         <th className="px-4 py-3 font-semibold">Name</th>
                         <th className="px-4 py-3 font-semibold">User ID</th>
+                        <th className="px-4 py-3 font-semibold">Sponsor ID</th>
                         <th className="px-4 py-3 font-semibold">Phone Number</th>
                         <th className="px-4 py-3 font-semibold">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {paginatedMembers.map((m) => (
+                      {rows.map((m) => (
                         <tr key={`${activeTeam}-${m.userId}`} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium text-gray-900">{m.name}</td>
                           <td className="px-4 py-3 text-gray-600">{m.userId}</td>
+                          <td className="px-4 py-3 text-gray-600">{m.sponsorId}</td>
                           <td className="px-4 py-3 text-gray-600">{m.phone}</td>
                           <td className="px-4 py-3">
                             <span
@@ -368,7 +438,7 @@ export default function TeamDetailPage() {
               )}
 
               {/* Pagination controls */}
-              {!loading && !error && filteredMembers.length > PAGE_SIZE && (
+              {!loading && !error && totalPages > 1 && (
                 <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
                   <button
                     onClick={goToPrevPage}
@@ -393,12 +463,9 @@ export default function TeamDetailPage() {
               )}
             </div>
 
-            {!loading && !error && currentMembers && (
+            {!loading && !error && hasData && (
               <p className="mt-3 text-xs text-gray-400">
-                Showing {paginatedMembers.length} of {filteredMembers.length} members
-                {filteredMembers.length !== currentMembers.length
-                  ? ` (filtered from ${currentMembers.length})`
-                  : ""}
+                Showing {rows.length} of {totalCount} members
               </p>
             )}
           </div>

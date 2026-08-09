@@ -21,9 +21,8 @@ try
             policy.WithOrigins(
                     "http://localhost:3000",
                     "https://localhost:3000",
-                    "http://localhost:3001",
-                    "https://localhost:3001",
-                    "https://rd-app.onrender.com"
+                    "https://rd-app.onrender.com",
+                    "https://rd-app-piwd.onrender.com"
                   )
                   .AllowAnyHeader()
                   .AllowAnyMethod();
@@ -92,7 +91,18 @@ try
         });
 
     builder.Services.AddAuthorization();
-    builder.Services.AddControllers();
+
+    // MaxDepth raised from the System.Text.Json default of 32. A binary
+    // tree with a heavily skewed leg (e.g. many placements going all-left)
+    // can legitimately nest LeftChild.LeftChild.LeftChild... deeper than 32
+    // levels. Without this, the serializer mistakes that real, deep-but-
+    // acyclic tree for an object cycle and throws a JsonException, which
+    // surfaces to the frontend as a 500 on /api/binary/tree.
+    builder.Services.AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.MaxDepth = 256;
+        });
 
     // ── Swagger ───────────────────────────────────────────────────────────────
     builder.Services.AddEndpointsApiExplorer();
@@ -161,6 +171,20 @@ try
             Console.ResetColor();
         }
     }
+
+    // ── Global exception handler (must be FIRST, before CORS) ────────────────
+    // Ensures that if a request throws unhandled anywhere downstream, it still
+    // gets a clean JSON response with CORS headers attached, instead of the
+    // connection dying (which the browser reports as a phantom CORS error).
+    app.UseExceptionHandler(errApp =>
+    {
+        errApp.Run(async context =>
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new { message = "Server error. Please try again." });
+        });
+    });
 
     // ── Middleware Pipeline ───────────────────────────────────────────────────
     // ✅ CORS must be before everything else

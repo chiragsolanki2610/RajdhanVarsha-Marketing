@@ -105,14 +105,14 @@ export default function Home() {
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.6 }}
-                className="relative rounded-3xl overflow-hidden shadow-2xl lg:col-span-5 w-full max-w-xl mx-auto lg:max-w-none"
+                className="relative rounded-3xl overflow-hidden shadow-2xl lg:col-span-5 w-full max-w-xl mx-auto lg:max-w-none bg-white flex items-center justify-center"
               >
                 <Image
-                  src="/photos/all.jpg"
+                  src="/photos/15aug-offer.jpg"
                   alt="About Raj Dhan Varsha"
                   width={600}
                   height={450}
-                  className="w-full h-auto object-cover aspect-[4/3]"
+                  className="w-full h-auto object-contain"
                 />
               </motion.div>
 
@@ -443,7 +443,8 @@ export default function Home() {
                   transition={{ duration: 0.4 }}
                   className="text-lg sm:text-xl md:text-2xl font-black tracking-tight mb-4 leading-snug"
                 >
-                  Gali No.3 Near Tailor Market, Azad Nagar, Hisar
+                  Gali No.3 Near Tailor Market, Azad Nagar,
+                 Hisar
                 </motion.h4>
 
                 <motion.p

@@ -178,34 +178,145 @@ public class BinaryPlanService : IBinaryPlanService
     // ─────────────────────────────────────────────────────────────────────────
     public async Task<BinaryTreeNodeDto?> GetBinaryTreeAsync(string userId, int maxDepth = 10)
     {
-        var node = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == userId);
-        if (node == null) return null;
+        // Load every node/user/wallet ONCE instead of one query per node.
+        // The old version made 3 DB round-trips per node recursively (229
+        // users = 600+ sequential queries — slow) and had NO protection
+        // against a cycle in LeftChildId/RightChildId: if bad data ever
+        // caused a child link to point back up the tree, the old recursion
+        // would re-expand that branch every level down to maxDepth, which
+        // is fine at maxDepth=10 (bounded) but becomes an exponential
+        // blow-up / effective hang at maxDepth=50.
+        var allNodes = await _db.BinaryNodes.ToDictionaryAsync(n => n.UserId);
+        if (!allNodes.ContainsKey(userId)) return null;
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
-        var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == userId);
+        var allUsers = await _db.Users.ToDictionaryAsync(u => u.UserId);
+        var allWallets = await _db.BinaryWallets.ToDictionaryAsync(w => w.UserId);
 
-        var dto = new BinaryTreeNodeDto
+        var visited = new HashSet<string>();
+
+        BinaryTreeNodeDto? Build(string id, int depthRemaining)
         {
-            UserId = node.UserId,
-            Name = user?.Name ?? node.UserId,
-            ParentId = node.ParentId,
-            Position = node.ParentId == null ? "ROOT" : node.Position,
-            TreeLevel = node.TreeLevel,
-            IsActive = node.IsActive,
-            IdStatus = node.IsActive ? "active" : "inactive",
-            TotalBv = node.TotalBv,
-            PairsCount = wallet?.PairsCount ?? 0
+            // Guard against cycles/duplicate links in the data — without
+            // this, a corrupted LeftChildId/RightChildId pointing back to
+            // an ancestor would cause infinite/exponential recursion.
+            if (!visited.Add(id)) return null;
+            if (!allNodes.TryGetValue(id, out var node)) return null;
+
+            allUsers.TryGetValue(id, out var user);
+            allWallets.TryGetValue(id, out var wallet);
+
+            var dto = new BinaryTreeNodeDto
+            {
+                UserId = node.UserId,
+                Name = user?.Name ?? node.UserId,
+                ParentId = node.ParentId,
+                Position = node.ParentId == null ? "ROOT" : node.Position,
+                TreeLevel = node.TreeLevel,
+                IsActive = node.IsActive,
+                IdStatus = node.IsActive ? "active" : "inactive",
+                TotalBv = node.TotalBv,
+                PairsCount = wallet?.PairsCount ?? 0
+            };
+
+            if (depthRemaining <= 0) return dto;
+
+            if (!string.IsNullOrEmpty(node.LeftChildId))
+                dto.LeftChild = Build(node.LeftChildId, depthRemaining - 1);
+
+            if (!string.IsNullOrEmpty(node.RightChildId))
+                dto.RightChild = Build(node.RightChildId, depthRemaining - 1);
+
+            return dto;
+        }
+
+        return Build(userId, maxDepth);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 3b. GET BINARY TEAM — FLAT, PAGINATED (scales to any size / any depth)
+    // ─────────────────────────────────────────────────────────────────────────
+    // Unlike GetBinaryTreeAsync, this never builds a nested LeftChild/RightChild
+    // structure and never recurses — it walks the tree iteratively with an
+    // explicit queue (not the call stack) and returns a flat list. That means:
+    //   - no JSON serializer depth limit can ever be hit (flat arrays have no
+    //     nesting to count),
+    //   - no call-stack depth limit can ever be hit (no recursion at all),
+    //   - the response size is controlled by page/pageSize, not by how deep
+    //     or how large the tree is.
+    // This is the version the Team Details page should call, since it only
+    // needs a flat table (Name / UserId / Phone / Status), not a visual tree.
+    public async Task<BinaryMemberListDto> GetBinaryTeamFlatAsync(string userId, int page, int pageSize, string? search = null)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 200);
+
+        var allNodes = await _db.BinaryNodes.ToDictionaryAsync(n => n.UserId);
+        if (!allNodes.ContainsKey(userId))
+            return new BinaryMemberListDto { Page = page, PageSize = pageSize };
+
+        var allUsers = await _db.Users.ToDictionaryAsync(u => u.UserId);
+
+        var flat = new List<BinaryMemberRowDto>();
+        var visited = new HashSet<string> { userId };
+        var queue = new Queue<string>();
+        queue.Enqueue(userId);
+
+        while (queue.Count > 0)
+        {
+            var currentId = queue.Dequeue();
+            if (!allNodes.TryGetValue(currentId, out var node)) continue;
+
+            // Don't include the logged-in user's own row — only descendants.
+            if (currentId != userId)
+            {
+                allUsers.TryGetValue(currentId, out var user);
+                flat.Add(new BinaryMemberRowDto
+                {
+                    UserId = node.UserId,
+                    Name = user?.Name ?? node.UserId,
+                    Phone = user?.MobileNo,
+                    SponsorId = node.SponsorId,
+                    Position = node.Position,
+                    TreeLevel = node.TreeLevel,
+                    IsActive = node.IsActive
+                });
+            }
+
+            if (!string.IsNullOrEmpty(node.LeftChildId) && visited.Add(node.LeftChildId))
+                queue.Enqueue(node.LeftChildId);
+
+            if (!string.IsNullOrEmpty(node.RightChildId) && visited.Add(node.RightChildId))
+                queue.Enqueue(node.RightChildId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var q = search.Trim().ToLowerInvariant();
+            flat = flat.Where(m =>
+                    m.Name.ToLowerInvariant().Contains(q) ||
+                    m.UserId.ToLowerInvariant().Contains(q) ||
+                    (m.Phone != null && m.Phone.Contains(q)))
+                .ToList();
+        }
+
+        var totalCount = flat.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+
+        var pageItems = flat
+            .OrderBy(m => m.TreeLevel)
+            .ThenBy(m => m.UserId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        return new BinaryMemberListDto
+        {
+            Items = pageItems,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            TotalPages = totalPages
         };
-
-        if (maxDepth <= 0) return dto;
-
-        if (!string.IsNullOrEmpty(node.LeftChildId))
-            dto.LeftChild = await GetBinaryTreeAsync(node.LeftChildId, maxDepth - 1);
-
-        if (!string.IsNullOrEmpty(node.RightChildId))
-            dto.RightChild = await GetBinaryTreeAsync(node.RightChildId, maxDepth - 1);
-
-        return dto;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

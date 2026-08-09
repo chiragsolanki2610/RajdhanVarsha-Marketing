@@ -120,14 +120,8 @@ export default function Navbar({ transparent = false }: NavbarProps) {
                   : "bg-white/20 backdrop-blur-xl border-white/40 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.6),_0_12px_24px_rgba(0,0,0,0.15)]"
                 }`}
               >
-                {/* <Link
-                  href="/overview"
-                  onClick={() => setAboutDropdownOpen(false)}
-                  className={dropdownItemStyles}
-                >
-                  Overview
-                </Link> */}
-                
+                {/* Overview link removed per request */}
+
                 {/* Redirecting to Our Team page */}
                 <Link
                   href="/our-team"
@@ -212,13 +206,7 @@ export default function Navbar({ transparent = false }: NavbarProps) {
             <span className="text-left text-xs font-bold uppercase tracking-wider p-2 text-gray-400">
               About Us
             </span>
-            <Link
-              href="/overview"
-              onClick={() => setMobileOpen(false)}
-              className="text-left text-sm font-medium p-2 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors no-underline"
-            >
-              Overview
-            </Link>
+            {/* Overview link removed per request */}
             {/* Mobile Redirect to Our Team page */}
             <Link
               href="/our-team"

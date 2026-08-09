@@ -43,7 +43,6 @@ export default function KycVerificationPage() {
   useEffect(() => {
     const fetchProfileToSeed = async () => {
       try {
-        // CHANGED: Reading from 'authToken' instead of 'token' based on local storage log
         const token = localStorage.getItem('authToken');
         
         const response = await fetch('https://rd-api-j7zj.onrender.com/api/Auth/profile', {
@@ -109,8 +108,14 @@ export default function KycVerificationPage() {
     try {
       setSubmitting(true);
       setError(null);
-      // CHANGED: Reading from 'authToken' here as well
       const token = localStorage.getItem('authToken');
+
+      // DEBUG: log file sizes so we can see if mobile photos are huge
+      console.log("=== FILE SIZES BEFORE UPLOAD ===");
+      console.log("Aadhaar Front:", (aadharFront.size / 1024 / 1024).toFixed(2), "MB", aadharFront.type);
+      console.log("Aadhaar Back:", (aadharBack.size / 1024 / 1024).toFixed(2), "MB", aadharBack.type);
+      console.log("PAN Card:", (panCardImg.size / 1024 / 1024).toFixed(2), "MB", panCardImg.type);
+      console.log("Bank Proof:", (bankProofImg.size / 1024 / 1024).toFixed(2), "MB", bankProofImg.type);
 
       // Convert all loaded imagery files concurrently to base64
       const [aadharFrontBase64, aadharBackBase64, panCardBase64, bankProofBase64] = await Promise.all([
@@ -140,25 +145,49 @@ export default function KycVerificationPage() {
         isKycCompleted: true
       };
 
+      const bodyString = JSON.stringify(kycPayload);
+
+      // DEBUG: log total payload size being sent
+      console.log("=== TOTAL PAYLOAD SIZE ===");
+      console.log((new Blob([bodyString]).size / 1024 / 1024).toFixed(2), "MB");
+
       const response = await fetch('https://rd-api-j7zj.onrender.com/api/Kyc/submit', {
         method: 'POST', 
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` })
         },
-        body: JSON.stringify(kycPayload)
+        body: bodyString
       });
 
+      // DEBUG: log full response details regardless of success/failure
+      console.log("=== SERVER RESPONSE ===");
+      console.log("Status:", response.status, response.statusText);
+
       if (!response.ok) {
-        throw new Error(`API submission failed with status server code: ${response.status}`);
+        let responseText = '';
+        try {
+          responseText = await response.text();
+        } catch (readErr) {
+          responseText = '(could not read response body)';
+        }
+        console.error("Server error response body:", responseText);
+        throw new Error(`API submission failed: ${response.status} ${response.statusText} - ${responseText}`);
       }
 
       setSuccess(true);
       setTimeout(() => { router.push('/profile'); }, 2500);
 
     } catch (err: any) {
-      console.error("KYC Submission Exception Error:", err);
-      setError("Failed to sync structural compliance checks to database server node.");
+      // DEBUG: log the full error object, not just a generic message
+      console.error("=== KYC SUBMISSION EXCEPTION ===");
+      console.error("Error name:", err?.name);
+      console.error("Error message:", err?.message);
+      console.error("Full error object:", err);
+
+      // TEMPORARY: show the real error on screen so we can see it on mobile too
+      // (revert this to the generic message once we've diagnosed the issue)
+      setError(`DEBUG INFO: ${err?.message || 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }

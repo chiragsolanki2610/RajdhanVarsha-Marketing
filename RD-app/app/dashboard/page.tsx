@@ -504,7 +504,7 @@ function LevelBvBreakdown({ levels }: { levels: TreeLevel[] }) {
 
 function BinaryTeamOverviewSkeleton() {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+    <div className="grid grid-cols-2 gap-3 md:gap-6">
       {[...Array(4)].map((_, i) => (
         <div
           key={i}
@@ -534,6 +534,14 @@ function BinaryTeamOverview({ data }: { data: BinaryPlanData }) {
       borderColor: 'border-t-indigo-500',
     },
     {
+      title: 'Left / Right Team',
+      value: `${data.leftTeam ?? 0} / ${data.rightTeam ?? 0}`,
+      icon: Users,
+      iconBg: 'bg-blue-50',
+      iconColor: 'text-blue-500',
+      borderColor: 'border-t-blue-500',
+    },
+    {
       title: 'Total Active Team',
       value: `${data.totalActiveTeam ?? 0}`,
       icon: UserCheck,
@@ -543,20 +551,8 @@ function BinaryTeamOverview({ data }: { data: BinaryPlanData }) {
       highlight: true,
     },
     {
-      title: 'Left Team',
-      value: `${data.leftTeam ?? 0}`,
-      subtext: `${data.leftActiveTeam ?? 0} active`,
-      subtextPositive: true,
-      icon: Users,
-      iconBg: 'bg-blue-50',
-      iconColor: 'text-blue-500',
-      borderColor: 'border-t-blue-500',
-    },
-    {
-      title: 'Right Team',
-      value: `${data.rightTeam ?? 0}`,
-      subtext: `${data.rightActiveTeam ?? 0} active`,
-      subtextPositive: true,
+      title: 'Active Left / Right',
+      value: `${data.leftActiveTeam ?? 0} / ${data.rightActiveTeam ?? 0}`,
       icon: Users,
       iconBg: 'bg-orange-50',
       iconColor: 'text-orange-500',
@@ -565,13 +561,14 @@ function BinaryTeamOverview({ data }: { data: BinaryPlanData }) {
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+    <div className="grid grid-cols-2 gap-3 md:gap-6">
       {cards.map((card, idx) => (
         <StatCard key={idx} card={card} />
       ))}
     </div>
   );
 }
+
 
 // ─── Today's Activations (Left / Right) ────────────────────────────────────────
 
@@ -795,22 +792,6 @@ function BinaryPlanPanel({
       borderColor: 'border-t-blue-500',
     },
     {
-      title: 'Total Sponsor',
-      value: `${data.totalSponsor ?? 0}`,
-      icon: Users,
-      iconBg: 'bg-indigo-50',
-      iconColor: 'text-indigo-500',
-      borderColor: 'border-t-indigo-500',
-    },
-    {
-      title: 'Left / Right Team',
-      value: `${data.leftSponsoredCount ?? 0} / ${data.rightSponsoredCount ?? 0}`,
-      icon: ArrowLeftRight,
-      iconBg: 'bg-orange-50',
-      iconColor: 'text-orange-500',
-      borderColor: 'border-t-orange-400',
-    },
-    {
       title: 'Total Payout',
       value: `₹${money(data.totalPayout)}`,
       icon: Wallet,
@@ -830,6 +811,22 @@ function BinaryPlanPanel({
       title: 'Total Balance',
       value: `₹${money(data.totalBalance)}`,
       icon: Coins,
+      iconBg: 'bg-indigo-50',
+      iconColor: 'text-indigo-500',
+      borderColor: 'border-t-indigo-500',
+    },
+    {
+      title: 'Total Sponsor',
+      value: `${data.totalSponsor ?? 0}`,
+      icon: Users,
+      iconBg: 'bg-orange-50',
+      iconColor: 'text-orange-500',
+      borderColor: 'border-t-orange-400',
+    },
+    {
+      title: 'Left / Right Team',
+      value: `${data.leftSponsoredCount ?? 0} / ${data.rightSponsoredCount ?? 0}`,
+      icon: ArrowLeftRight,
       iconBg: 'bg-blue-50',
       iconColor: 'text-blue-600',
       borderColor: 'border-t-blue-600',

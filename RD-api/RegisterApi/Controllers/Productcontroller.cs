@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
@@ -100,7 +100,18 @@ namespace RegisterApi.Controllers
             };
 
             _db.Products.Add(product);
-            await _db.SaveChangesAsync();
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Database error while saving product.",
+                    detail = ex.InnerException?.Message ?? ex.Message
+                });
+            }
 
             return Ok(new
             {

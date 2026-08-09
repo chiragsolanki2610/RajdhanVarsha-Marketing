@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
     const router = useRouter();
-    
+
     const [formData, setFormData] = useState({
         name: "",
         mobile: "",
@@ -20,7 +20,7 @@ export default function RegisterPage() {
     const [isLoggingIn, setIsLoggingIn] = useState(false); // Traces background login status
     const [apiError, setApiError] = useState<string | null>(null);
     const [isFetchingSponsor, setIsFetchingSponsor] = useState(false); // UI state for sponsor checking
-    
+
     // Popup Modal States
     const [showPopup, setShowPopup] = useState(false);
     const [generatedCredentials, setGeneratedCredentials] = useState({
@@ -116,12 +116,12 @@ export default function RegisterPage() {
             }
 
             const data = await response.json();
-            
+
             setGeneratedCredentials({
                 userId: data.userId || "Generated ID Unavailable",
                 password: data.generatedPassword || "Automatically Assigned"
             });
-            
+
             setShowPopup(true);
         } catch (error: any) {
             console.error("API Fetch Error:", error);
@@ -213,13 +213,13 @@ export default function RegisterPage() {
                         <span className="text-red-500">MARKETING</span>
                     </div>
 
-                    <div className="space-y-3 flex flex-col items-center">
+                    <div className="space-y-3 flex-col items-center hidden md:flex">
                         <p className="text-gray-500 text-xs md:text-sm max-w-sm leading-relaxed font-normal pt-1">
                             Start earning with India's fastest-growing wellness marketing brand.
                         </p>
                     </div>
 
-                    <ul className="space-y-3 text-xs text-gray-600 font-medium text-left self-center">
+                    <ul className="space-y-3 text-xs text-gray-600 font-medium text-left self-center hidden md:block">
                         <li className="flex items-center gap-3">
                             <span className="flex-shrink-0 w-4 h-4 rounded-full border border-red-500/20 flex items-center justify-center text-[9px] text-[#E23434] bg-red-50">✓</span>
                             Premium healthcare & wellness products
@@ -241,6 +241,24 @@ export default function RegisterPage() {
 
                 {/* Right Side Card Panel */}
                 <div className="lg:col-span-7 bg-white p-6 md:p-9 rounded-2xl border border-gray-100 shadow-xl max-w-xl lg:max-w-none w-full ml-auto">
+                    {/* Signup / Login Toggle Buttons */}
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                        <button
+                            type="button"
+                            disabled
+                            className="w-full bg-[#E23434] text-white font-bold tracking-wider uppercase rounded-xl py-2.5 text-xs shadow-md shadow-red-500/10 cursor-default"
+                        >
+                            Signup
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => router.push("/login")}
+                            className="w-full bg-white border border-gray-300 text-gray-600 font-bold tracking-wider uppercase rounded-xl py-2.5 text-xs hover:bg-gray-50 transition-all duration-200"
+                        >
+                            Login
+                        </button>
+                    </div>
+
                     <div className="mb-6">
                         <h3 className="text-xl font-bold text-gray-900 tracking-wide">Create Account</h3>
                         <p className="text-xs text-gray-400 mt-0.5">Fill in your details to register a free member profile</p>
@@ -401,7 +419,7 @@ export default function RegisterPage() {
                         </div>
                         <h4 className="text-lg font-bold text-gray-900 mb-1">Registration Successful!</h4>
                         <p className="text-xs text-gray-400 mb-5">Save your automatically assigned profile credentials below.</p>
-                        
+
                         <div className="bg-[#f8fafc] border border-gray-100 rounded-xl p-4 text-left space-y-3 mb-6">
                             <div>
                                 <span className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-0.5">User ID</span>

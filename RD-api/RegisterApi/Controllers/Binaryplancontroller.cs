@@ -281,6 +281,26 @@ public class BinaryPlanController : ControllerBase
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/team
+    // Flat, paginated listing of the current user's ENTIRE binary downline
+    // (used by the Team Details page). Unlike /tree, this has no nesting and
+    // no depth parameter — it scales to any number of members or any tree
+    // depth, since the response is just a page of rows, not a nested object.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("team")]
+    public async Task<IActionResult> GetMyBinaryTeamFlat(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var result = await _binaryService.GetBinaryTeamFlatAsync(userId, page, pageSize, search);
+        return Ok(result);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // GET /api/binary/tree
     // Returns the FULL binary tree rooted at the current user — every
     // descendant, however deep. The recursion in GetBinaryTreeAsync already

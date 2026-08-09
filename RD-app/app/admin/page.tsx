@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckSquare, Banknote, MapPin, ShieldCheck, ChevronRight, PackagePlus, UserSearch, ShoppingCart } from 'lucide-react';
+import { CheckSquare, Banknote, MapPin, ShieldCheck, ChevronRight, PackagePlus, UserSearch, ShoppingCart, Boxes } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import LoginTopbar from '@/components/loginTopbar';
 
@@ -42,6 +42,13 @@ const adminOptions = [
     description: 'Search and view detailed information of any registered user.',
     path: '/admin/search-user-info',
   },
+  {
+    icon: Boxes,
+    label: 'Inventory Management',
+    description: 'Track and manage stock levels across pickup centers.',
+    path: '/admin/inventory-management',
+    mobileOnly: true,
+  },
 ];
 
 export default function AdminPanelPage() {
@@ -69,11 +76,13 @@ export default function AdminPanelPage() {
           {/* ── Options List ── */}
           <div className="px-5 md:px-8 -mt-5">
             <div className="space-y-3 max-w-2xl mx-auto">
-              {adminOptions.map(({ icon: Icon, label, description, path }) => (
+              {adminOptions.map(({ icon: Icon, label, description, path, mobileOnly }) => (
                 <Link
                   key={path}
                   href={path}
-                  className="flex items-center gap-4 bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:border-red-200 hover:shadow-md active:scale-[0.99] transition-all duration-150 group"
+                  className={`flex items-center gap-4 bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:border-red-200 hover:shadow-md active:scale-[0.99] transition-all duration-150 group ${
+                    mobileOnly ? 'md:hidden' : ''
+                  }`}
                 >
                   <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center shrink-0 group-hover:bg-red-100 transition-colors">
                     <Icon size={20} className="text-red-600" />

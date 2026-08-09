@@ -34,6 +34,11 @@ namespace RegisterApi.Models
         public string IdStatus { get; set; }
 
         /// <summary>
+        /// Base64 data URI of the distributor's profile picture (User.ProfilePictureUrl), if set.
+        /// </summary>
+        public string? ProfilePictureUrl { get; set; }
+
+        /// <summary>
         /// The depth tracking index within the organization matrix layout (Levels 0 through 12)
         /// </summary>
         public int Level { get; set; }

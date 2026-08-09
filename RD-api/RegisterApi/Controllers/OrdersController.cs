@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RegisterApi.Data;
@@ -559,7 +559,23 @@ public class OrdersController : ControllerBase
             Console.WriteLine($"[Receipt Error] Failed to generate receipt draft for order {order.Id}: {ex.Message}");
         }
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Approve SaveChanges Error] order={order.Id} {ex.Message}");
+            Console.WriteLine($"[Approve SaveChanges Inner] {ex.InnerException?.Message}");
+            // TEMP DEBUG: this endpoint is Admin-only, so it's safe to surface the
+            // real exception message here while we track down the root cause.
+            // Revert to a generic message once fixed.
+            var realError = ex.InnerException?.Message ?? ex.Message;
+            return StatusCode(500, new
+            {
+                message = $"Failed to save approval: {realError}"
+            });
+        }
 
         return Ok(new
         {

@@ -8,7 +8,8 @@ import {
   User, Landmark, Edit, Lock, Download, AlertCircle,
   ShieldAlert, CheckCircle, FileText, MapPin, Hash, MoveRight,
   CircleCheck, CircleX, X, Loader2, Eye, EyeOff,
-  Camera, Image as ImageIcon, Trash2, Pencil, ChevronLeft, ChevronRight, ArrowLeft
+  Camera, Image as ImageIcon, Trash2, Pencil, ChevronLeft, ChevronRight, ArrowLeft,
+  LogOut
 } from 'lucide-react';
 
 interface UserProfileData {
@@ -24,7 +25,7 @@ interface UserProfileData {
   email?: string;
   joinDate: string;
   status: string;
-  idStatus: string; // ✅ NEW: active or inactive
+  idStatus: string; 
   membershipLevel: string;
   bvPoints: number;
   referrals: number;
@@ -37,7 +38,6 @@ interface UserProfileData {
   ifscCode?: string;
   accountType?: string;
   profilePictureUrl?: string | null;
-  // ✅ NEW: KYC document images
   aadharFrontImageUrl?: string | null;
   aadharBackImageUrl?: string | null;
   panCardImageUrl?: string | null;
@@ -52,7 +52,6 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Change Password modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -63,15 +62,13 @@ export default function ProfilePage() {
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [changingPassword, setChangingPassword] = useState(false);
 
-  // ✅ Profile picture upload state
   const [showAvatarSheet, setShowAvatarSheet] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
-  // ✅ Live in-app camera capture (works consistently on desktop + mobile,
-  // unlike the OS camera handoff which only fires on real mobile browsers)
+
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -79,10 +76,12 @@ export default function ProfilePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // ✅ NEW: Show Documents modal state
   const [showDocumentsModal, setShowDocumentsModal] = useState(false);
   const [activeDocTab, setActiveDocTab] = useState<'list' | 'aadhar' | 'pan' | 'bank'>('list');
-  const [aadharSlideIndex, setAadharSlideIndex] = useState(0); // 0 for front, 1 for back
+  const [aadharSlideIndex, setAadharSlideIndex] = useState(0); 
+
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -132,7 +131,7 @@ export default function ProfilePage() {
           email: apiData.email || 'Not Provided',
           joinDate: apiData.joinDate || '17-06-2026',
           status: apiData.status || 'ACTIVE',
-          idStatus: apiData.idStatus || 'inactive', // ✅ NEW
+          idStatus: apiData.idStatus || 'inactive',
           membershipLevel: apiData.membershipLevel || 'Registered Member',
           bvPoints: Number(apiData.bvPoints) || 0,
           referrals: Number(apiData.referrals) || 0,
@@ -145,7 +144,6 @@ export default function ProfilePage() {
           ifscCode: apiData.ifscCode || '',
           accountType: apiData.accountType || 'Savings',
           profilePictureUrl: apiData.profilePictureUrl || null,
-          // ✅ NEW: KYC document images
           aadharFrontImageUrl: apiData.aadharFrontImageUrl || null,
           aadharBackImageUrl: apiData.aadharBackImageUrl || null,
           panCardImageUrl: apiData.panCardImageUrl || null,
@@ -172,7 +170,7 @@ export default function ProfilePage() {
               email: parsed.email || 'Not Provided',
               joinDate: parsed.joinDate || '17-Jun-2026',
               status: parsed.status || 'ACTIVE',
-              idStatus: parsed.idStatus || 'inactive', // ✅ NEW
+              idStatus: parsed.idStatus || 'inactive', 
               membershipLevel: parsed.membershipLevel || 'Registered Member',
               bvPoints: Number(parsed.bvPoints) || 0,
               referrals: Number(parsed.referrals) || 0,
@@ -185,7 +183,6 @@ export default function ProfilePage() {
               ifscCode: parsed.ifscCode || '',
               accountType: parsed.accountType || 'Savings',
               profilePictureUrl: parsed.profilePictureUrl || null,
-              // ✅ NEW: KYC document images
               aadharFrontImageUrl: parsed.aadharFrontImageUrl || null,
               aadharBackImageUrl: parsed.aadharBackImageUrl || null,
               panCardImageUrl: parsed.panCardImageUrl || null,
@@ -204,7 +201,7 @@ export default function ProfilePage() {
               email: "N/A",
               joinDate: "17-Jun-2026",
               status: "ACTIVE",
-              idStatus: "inactive", // ✅ NEW
+              idStatus: "inactive", 
               membershipLevel: "Registered Member",
               bvPoints: 0,
               referrals: 0,
@@ -232,7 +229,7 @@ export default function ProfilePage() {
             email: "N/A",
             joinDate: "17-Jun-2026",
             status: "ACTIVE",
-            idStatus: "inactive", // ✅ NEW
+            idStatus: "inactive", 
             membershipLevel: "Registered Member",
             bvPoints: 0,
             referrals: 0,
@@ -259,7 +256,6 @@ export default function ProfilePage() {
     router.push('/dashboard/kyc');
   };
 
-  // ── Persist a fresh profilePictureUrl into both state + the cached localStorage copy ──
   const applyProfilePicture = (url: string | null) => {
     setProfile((prev) => (prev ? { ...prev, profilePictureUrl: url } : prev));
     try {
@@ -270,11 +266,9 @@ export default function ProfilePage() {
         localStorage.setItem('userProfile', JSON.stringify(parsed));
       }
     } catch {
-      // non-fatal — cache is just a fallback for the profile page
     }
   };
 
-  // ── Avatar action sheet handlers ──
   const openAvatarSheet = () => {
     setAvatarError(null);
     setShowAvatarSheet(true);
@@ -289,7 +283,6 @@ export default function ProfilePage() {
     galleryInputRef.current?.click();
   };
 
-  // ── Live camera modal: start stream, capture a frame, or fall back ──
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -318,7 +311,6 @@ export default function ProfilePage() {
         await videoRef.current.play();
       }
     } catch (err: any) {
-      // Permission denied, no camera device, or an insecure (non-HTTPS) context
       const message =
         err?.name === 'NotAllowedError'
           ? 'Camera access was blocked. Allow camera permission and try again, or choose from gallery instead.'
@@ -341,7 +333,6 @@ export default function ProfilePage() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Mirror horizontally so the captured photo matches what the user saw (selfie view)
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -365,7 +356,6 @@ export default function ProfilePage() {
     return null;
   };
 
-  // Make sure the camera is always released if the component unmounts mid-stream
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -394,7 +384,7 @@ export default function ProfilePage() {
       const response = await fetch(`${API_BASE}/api/Auth/profile-picture`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`, // no Content-Type — browser sets multipart boundary
+          Authorization: `Bearer ${token}`, 
         },
         body: formData,
       });
@@ -450,11 +440,10 @@ export default function ProfilePage() {
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-selecting the same file next time
+    e.target.value = ''; 
     if (file) uploadAvatar(file);
   };
 
-  // ✅ Open the Change Password modal (resets any previous state)
   const openPasswordModal = () => {
     setOldPassword('');
     setNewPassword('');
@@ -465,11 +454,10 @@ export default function ProfilePage() {
   };
 
   const closePasswordModal = () => {
-    if (changingPassword) return; // don't allow closing mid-request
+    if (changingPassword) return; 
     setShowPasswordModal(false);
   };
 
-  // ✅ Submit new password to the backend
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
@@ -529,7 +517,6 @@ export default function ProfilePage() {
       setNewPassword('');
       setConfirmPassword('');
 
-      // Close the modal shortly after showing the success message
       setTimeout(() => {
         setShowPasswordModal(false);
         setPasswordSuccess(null);
@@ -543,7 +530,6 @@ export default function ProfilePage() {
     }
   };
 
-  // ✅ NEW: Show Documents modal handlers
   const openDocumentsModal = () => {
     setActiveDocTab('list');
     setAadharSlideIndex(0);
@@ -552,6 +538,25 @@ export default function ProfilePage() {
 
   const closeDocumentsModal = () => {
     setShowDocumentsModal(false);
+  };
+
+  const openLogoutModal = () => {
+    setShowLogoutModal(true);
+  };
+
+  const closeLogoutModal = () => {
+    if (loggingOut) return;
+    setShowLogoutModal(false);
+  };
+
+  const handleLogout = () => {
+    setLoggingOut(true);
+    try {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userProfile');
+    } finally {
+      router.push('/login');
+    }
   };
 
   return (
@@ -630,7 +635,7 @@ export default function ProfilePage() {
                           <User size={12} /> ID: <span className="font-mono font-bold text-gray-700">{profile.memberId}</span>
                         </span>
 
-                        {/* ✅ ID STATUS BADGE — active or inactive */}
+                        {/*  ID STATUS BADGE — active or inactive */}
                         {profile.idStatus === 'active' ? (
                           <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold tracking-wide bg-emerald-50 text-emerald-600 border border-emerald-200 whitespace-nowrap">
                             <CircleCheck size={11} className="mr-1" /> ID Active
@@ -807,7 +812,7 @@ export default function ProfilePage() {
                   <Lock size={14} /> Change Password
                 </button>
 
-                {/* ✅ REPLACED: "Print Identity Badge" -> "Show Documents" */}
+                {/*   REPLACED: "Print Identity Badge" -> "Show Documents" */}
                 <button
                   onClick={openDocumentsModal}
                   disabled={!profile.isKycCompleted}
@@ -815,6 +820,16 @@ export default function ProfilePage() {
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 text-xs font-bold uppercase tracking-wider rounded-xl transition sm:ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
                 >
                   <FileText size={14} /> Show Documents
+                </button>
+              </div>
+
+              {/*   NEW: LOGOUT BUTTON (bottom of page) */}
+              <div className="pt-1">
+                <button
+                  onClick={openLogoutModal}
+                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold uppercase tracking-wider rounded-xl transition"
+                >
+                  <LogOut size={14} /> Log Out
                 </button>
               </div>
 
@@ -842,7 +857,7 @@ export default function ProfilePage() {
       {/* Hidden canvas used to grab a still frame from the live camera preview */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* ✅ AVATAR ACTION SHEET */}
+      {/*   AVATAR ACTION SHEET */}
       {showAvatarSheet && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4"
@@ -911,7 +926,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ✅ LIVE CAMERA CAPTURE MODAL */}
+      {/*   LIVE CAMERA CAPTURE MODAL */}
       {showCameraModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
@@ -984,7 +999,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ✅ CHANGE PASSWORD MODAL */}
+      {/*   CHANGE PASSWORD MODAL */}
       {showPasswordModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
@@ -1113,7 +1128,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ✅ NEW: SHOW DOCUMENTS MODAL WITH OPTION LIST & NAVIGATION BACK BUTTON */}
+      {/*   NEW: SHOW DOCUMENTS MODAL WITH OPTION LIST & NAVIGATION BACK BUTTON */}
       {showDocumentsModal && profile && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
@@ -1331,6 +1346,58 @@ export default function ProfilePage() {
                 <p className="text-xs text-gray-400 max-w-xs">Complete your KYC verification to submit and view your identity and bank documents here.</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/*   NEW: LOGOUT CONFIRMATION MODAL */}
+      {showLogoutModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={closeLogoutModal}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 relative animate-fadeIn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={closeLogoutModal}
+              disabled={loggingOut}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition disabled:opacity-40"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex flex-col items-center text-center gap-3 pt-2">
+              <div className="p-3 bg-red-50 text-red-500 rounded-xl">
+                <LogOut size={22} />
+              </div>
+              <h2 className="text-base font-bold text-[#1E293B]">Log out of your account?</h2>
+              <p className="text-xs text-gray-400 max-w-xs">
+                You'll need to sign in again with your mobile number and password to access your dashboard.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-6">
+              <button
+                type="button"
+                onClick={closeLogoutModal}
+                disabled={loggingOut}
+                className="flex-1 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl bg-red-600 hover:bg-red-700 text-white transition disabled:opacity-60"
+              >
+                {loggingOut && <Loader2 size={14} className="animate-spin" />}
+                {loggingOut ? 'Logging out...' : 'Log Out'}
+              </button>
+            </div>
           </div>
         </div>
       )}

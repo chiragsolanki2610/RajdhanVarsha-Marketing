@@ -31,6 +31,14 @@ public interface IBinaryPlanService
     /// <summary>Fetches the binary tree rooted at userId (up to maxDepth levels).</summary>
     Task<BinaryTreeNodeDto?> GetBinaryTreeAsync(string userId, int maxDepth = 10);
 
+    /// <summary>
+    /// Returns the ENTIRE binary downline of userId as a flat, paginated list
+    /// (no nesting, so it scales to any tree depth or member count without
+    /// ever hitting a JSON serializer depth limit). Optionally filters by
+    /// name/userId substring (case-insensitive) before paginating.
+    /// </summary>
+    Task<BinaryMemberListDto> GetBinaryTeamFlatAsync(string userId, int page, int pageSize, string? search = null);
+
     /// <summary>Gets the user's binary wallet summary.</summary>
     Task<BinaryWalletDto> GetBinaryWalletAsync(string userId);
 

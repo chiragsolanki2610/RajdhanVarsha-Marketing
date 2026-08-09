@@ -69,13 +69,12 @@ public class User
     // Profile picture stored as a Base64 data URI directly in the DB
     // (same pattern as PaymentOrder.ScreenshotUrl) -- no file bucket needed.
     public string? ProfilePictureUrl { get; set; }
+
     // KYC uploaded document images — copied over from KycRequest on approval
-    [NotMapped]
+    // (must NOT be [NotMapped] — these need real columns in the Users table
+    // or they're silently discarded on every SaveChangesAsync call)
     public string? AadharFrontImageUrl { get; set; }
-    [NotMapped]
     public string? AadharBackImageUrl { get; set; }
-    [NotMapped]
     public string? PanCardImageUrl { get; set; }
-    [NotMapped]
     public string? BankProofImageUrl { get; set; }
 }
