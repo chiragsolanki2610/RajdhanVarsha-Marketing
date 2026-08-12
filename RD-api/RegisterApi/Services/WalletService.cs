@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -73,6 +73,18 @@ public class WalletService : IWalletService
         RequestedAt = r.RequestedAt,
         ProcessedAt = r.ProcessedAt,
         AdminRemarks = r.AdminRemarks
+    };
+
+    private static BinaryWithdrawalRequestDto ToDto(BinaryWithdrawalRequest r, string userName) => new()
+    {
+        Id = r.Id,
+        UserId = r.UserId,
+        UserName = userName,
+        Amount = r.Amount,
+        Status = r.Status,
+        RequestedAt = r.RequestedAt,
+        ProcessedAt = r.ProcessedAt,
+        AdminNote = r.AdminNote
     };
 
     // ---------- Wallet reads ----------
@@ -152,7 +164,7 @@ public class WalletService : IWalletService
         return transaction;
     }
 
-    // ---------- Withdrawals ----------
+    // ---------- Withdrawals (Dream Plan / regular) ----------
 
     public async Task<WithdrawalRequestDto> RequestWithdrawalAsync(string userId, string planType, decimal amount)
     {
@@ -317,6 +329,113 @@ public class WalletService : IWalletService
                     ReferenceId = request.Id.ToString()
                 };
                 _db.WalletTransactions.Add(refundTxn);
+
+                await _db.SaveChangesAsync();
+                await dbTransaction.CommitAsync();
+
+                var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == request.UserId);
+                result = ToDto(request, user?.Name ?? request.UserId);
+            }
+            catch
+            {
+                await dbTransaction.RollbackAsync();
+                throw;
+            }
+        });
+
+        return result!;
+    }
+
+    // ---------- Withdrawals (Binary Plan) ----------
+
+    public async Task<List<BinaryWithdrawalRequestDto>> GetBinaryWithdrawalRequestsAsync(string? status = null)
+    {
+        var query = _db.BinaryWithdrawalRequests.AsQueryable();
+
+        if (!string.IsNullOrEmpty(status))
+            query = query.Where(r => r.Status == status);
+
+        var requests = await query
+            .OrderByDescending(r => r.RequestedAt)
+            .ToListAsync();
+
+        var userIds = requests.Select(r => r.UserId).Distinct().ToList();
+        var userNames = await _db.Users
+            .Where(u => userIds.Contains(u.UserId))
+            .ToDictionaryAsync(u => u.UserId, u => u.Name);
+
+        return requests
+            .Select(r => ToDto(r, userNames.TryGetValue(r.UserId, out var name) ? name : r.UserId))
+            .ToList();
+    }
+
+    public async Task<BinaryWithdrawalRequestDto> ApproveBinaryWithdrawalAsync(int requestId, string adminUserId, string? remarks = null)
+    {
+        var request = await _db.BinaryWithdrawalRequests.FirstOrDefaultAsync(r => r.Id == requestId);
+        if (request == null)
+            throw new KeyNotFoundException("Binary withdrawal request not found.");
+        if (request.Status != "Pending")
+            throw new InvalidOperationException("This request has already been processed.");
+
+        // Funds were already reserved (deducted) at request time, so the wallet
+        // balance doesn't change here — we just finalize the request and bump
+        // TotalWithdrawn so the user's lifetime stats stay accurate.
+        request.Status = "Approved";
+        request.ProcessedAt = DateTime.UtcNow;
+        request.AdminNote = remarks;
+
+        var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == request.UserId);
+        if (wallet != null)
+        {
+            wallet.TotalWithdrawn += request.Amount;
+            wallet.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == request.UserId);
+        return ToDto(request, user?.Name ?? request.UserId);
+    }
+
+    public async Task<BinaryWithdrawalRequestDto> RejectBinaryWithdrawalAsync(int requestId, string adminUserId, string? remarks = null)
+    {
+        var request = await _db.BinaryWithdrawalRequests.FirstOrDefaultAsync(r => r.Id == requestId);
+        if (request == null)
+            throw new KeyNotFoundException("Binary withdrawal request not found.");
+        if (request.Status != "Pending")
+            throw new InvalidOperationException("This request has already been processed.");
+
+        BinaryWithdrawalRequestDto? result = null;
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var dbTransaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // Refund the reserved amount back into the binary wallet.
+                var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == request.UserId);
+                if (wallet != null)
+                {
+                    wallet.Balance += request.Amount;
+                    wallet.UpdatedAt = DateTime.UtcNow;
+
+                    var refundTxn = new BinaryWalletTransaction
+                    {
+                        UserId = request.UserId,
+                        Type = BinaryTxnType.Credit,
+                        Amount = request.Amount,
+                        BalanceAfter = wallet.Balance,
+                        Source = "Withdrawal Rejected",
+                        Description = "Refund - binary withdrawal request rejected by admin",
+                        ReferenceId = request.Id.ToString()
+                    };
+                    _db.BinaryWalletTransactions.Add(refundTxn);
+                }
+
+                request.Status = "Rejected";
+                request.ProcessedAt = DateTime.UtcNow;
+                request.AdminNote = remarks;
 
                 await _db.SaveChangesAsync();
                 await dbTransaction.CommitAsync();
