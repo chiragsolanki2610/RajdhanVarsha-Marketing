@@ -1,4 +1,5 @@
 using RegisterApi.DTOs;
+using RegisterApi.Models;
 
 namespace RegisterApi.Services;
 
@@ -46,7 +47,7 @@ public interface IBinaryPlanService
     /// Requests a withdrawal from the binary wallet.
     /// Fails if WithdrawalUnlocked = false (less than 3 downlines).
     /// </summary>
-    Task<(bool success, string message)> RequestWithdrawalAsync(string userId, decimal amount);
+    Task<(bool success, string message, BinaryWithdrawalRequest? request)> RequestWithdrawalAsync(string userId, decimal amount);
 
     /// <summary>Admin: approve or reject a binary withdrawal request.</summary>
     Task<(bool success, string message)> ProcessWithdrawalAsync(int requestId, bool approve, string adminNote);
