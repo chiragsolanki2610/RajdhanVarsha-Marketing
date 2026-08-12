@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -25,6 +25,10 @@ public class AdminWalletController : ControllerBase
         User.FindFirst("userId")?.Value
         ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
         ?? throw new UnauthorizedAccessException("userId claim missing from token.");
+
+    // =========================================================
+    // Dream Plan / regular withdrawals
+    // =========================================================
 
     // GET /api/admin/withdrawals?status=Pending  (omit status to see all)
     [HttpGet]
@@ -60,6 +64,56 @@ public class AdminWalletController : ControllerBase
         try
         {
             var result = await _walletService.RejectWithdrawalAsync(id, CurrentAdminId, dto.AdminRemarks);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================================================
+    // Binary Plan withdrawals
+    // =========================================================
+
+    // GET /api/admin/withdrawals/binary?status=Pending  (omit status to see all)
+    [HttpGet("binary")]
+    public async Task<IActionResult> GetBinaryWithdrawals([FromQuery] string? status = null)
+    {
+        var requests = await _walletService.GetBinaryWithdrawalRequestsAsync(status);
+        return Ok(requests);
+    }
+
+    // POST /api/admin/withdrawals/binary/5/approve
+    [HttpPost("binary/{id}/approve")]
+    public async Task<IActionResult> ApproveBinary(int id, [FromBody] ProcessWithdrawalDto dto)
+    {
+        try
+        {
+            var result = await _walletService.ApproveBinaryWithdrawalAsync(id, CurrentAdminId, dto.AdminRemarks);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // POST /api/admin/withdrawals/binary/5/reject
+    [HttpPost("binary/{id}/reject")]
+    public async Task<IActionResult> RejectBinary(int id, [FromBody] ProcessWithdrawalDto dto)
+    {
+        try
+        {
+            var result = await _walletService.RejectBinaryWithdrawalAsync(id, CurrentAdminId, dto.AdminRemarks);
             return Ok(result);
         }
         catch (KeyNotFoundException ex)
