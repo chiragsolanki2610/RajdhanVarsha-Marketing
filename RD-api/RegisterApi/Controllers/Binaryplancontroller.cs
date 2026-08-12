@@ -417,17 +417,39 @@ public class BinaryPlanController : ControllerBase
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
 
-        var (success, message) = await _binaryService.RequestWithdrawalAsync(userId, dto.Amount);
+        var (success, message, request) = await _binaryService.RequestWithdrawalAsync(userId, dto.Amount);
 
-        if (!success) return BadRequest(new { message });
-        return Ok(new { message });
+        if (!success || request == null) return BadRequest(new { message });
+
+        const decimal serviceTaxRate = 0.05m;
+        const decimal tdsRate = 0.05m;
+        var serviceTaxAmount = Math.Round(request.Amount * serviceTaxRate, 2);
+        var tdsAmount = Math.Round(request.Amount * tdsRate, 2);
+        var netPayableAmount = Math.Round(request.Amount - serviceTaxAmount - tdsAmount, 2);
+
+        return Ok(new
+        {
+            id = request.Id,
+            userId = request.UserId,
+            userName = User.Identity?.Name ?? "",
+            planType = "BINARY",
+            amount = request.Amount,
+            serviceTaxAmount,
+            tdsAmount,
+            netPayableAmount,
+            status = request.Status,
+            requestedAt = request.RequestedAt,
+            processedAt = request.ProcessedAt,
+            adminRemarks = request.AdminNote,
+            message
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────
     // ADMIN: GET /api/binary/admin/pending-withdrawals
     // ─────────────────────────────────────────────────────────────────────
     [HttpGet("admin/pending-withdrawals")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,SuperAdmin")]
     public async Task<IActionResult> GetPendingWithdrawals()
     {
         var pending = await _db.BinaryWithdrawalRequests
@@ -442,7 +464,7 @@ public class BinaryPlanController : ControllerBase
     // ADMIN: POST /api/binary/admin/process-withdrawal/{id}
     // ─────────────────────────────────────────────────────────────────────
     [HttpPost("admin/process-withdrawal/{id:int}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,SuperAdmin")]
     public async Task<IActionResult> ProcessWithdrawal(int id, [FromBody] ProcessBinaryWithdrawalDto dto)
     {
         var (success, message) = await _binaryService.ProcessWithdrawalAsync(id, dto.Approve, dto.AdminNote);
@@ -457,7 +479,7 @@ public class BinaryPlanController : ControllerBase
     // product purchase. Useful for admin overrides or special cases.
     // ─────────────────────────────────────────────────────────────────────
     [HttpPost("admin/approve-activation/{userId}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,SuperAdmin")]
     public async Task<IActionResult> AdminApproveBinaryActivation(string userId)
     {
         if (string.IsNullOrWhiteSpace(userId))
