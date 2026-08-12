@@ -412,7 +412,7 @@ public class BinaryPlanController : ControllerBase
     // Request a withdrawal from the binary wallet.
     // ─────────────────────────────────────────────────────────────────────
     [HttpPost("withdraw")]
-    public async Task<IActionResult> RequestWithdrawal([FromBody] BinaryWithdrawalRequestDto dto)
+    public async Task<IActionResult> RequestWithdrawal([FromBody] SubmitBinaryWithdrawalDto dto)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
