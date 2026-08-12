@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using RegisterApi.DTOs;
 using RegisterApi.Models;
@@ -15,9 +15,14 @@ public interface IWalletService
     // referral bonus, BV matching, a scheduled job, etc.) ---
     Task<WalletTransaction> CreditAsync(string userId, string planType, decimal amount, string source, string? description = null, string? referenceId = null);
 
-    // --- Withdrawals ---
+    // --- Withdrawals (Dream Plan / regular) ---
     Task<WithdrawalRequestDto> RequestWithdrawalAsync(string userId, string planType, decimal amount);
     Task<List<WithdrawalRequestDto>> GetWithdrawalRequestsAsync(WithdrawalStatus? status = null);
     Task<WithdrawalRequestDto> ApproveWithdrawalAsync(int requestId, string adminUserId, string? remarks = null);
     Task<WithdrawalRequestDto> RejectWithdrawalAsync(int requestId, string adminUserId, string? remarks = null);
+
+    // --- Withdrawals (Binary Plan) ---
+    Task<List<BinaryWithdrawalRequestDto>> GetBinaryWithdrawalRequestsAsync(string? status = null);
+    Task<BinaryWithdrawalRequestDto> ApproveBinaryWithdrawalAsync(int requestId, string adminUserId, string? remarks = null);
+    Task<BinaryWithdrawalRequestDto> RejectBinaryWithdrawalAsync(int requestId, string adminUserId, string? remarks = null);
 }
