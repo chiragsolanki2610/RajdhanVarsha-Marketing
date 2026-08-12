@@ -16,6 +16,14 @@ public class UserService : IUserService
     private readonly IPasswordService _passwordService;
     private readonly IConfiguration _config;
 
+    // Guards the entire "generate next user ID -> save new user row" critical
+    // section in RegisterAsync. Must be held across BOTH steps, not just the
+    // ID calculation, otherwise two concurrent registrations can compute the
+    // same next ID and the second SaveChangesAsync will fail with a Postgres
+    // unique-key violation (PK_Users). Static so it's shared across all
+    // requests/instances of UserService within this process.
+    private static readonly SemaphoreSlim _registerLock = new(1, 1);
+
     public UserService(
         AppDbContext db,
         IUserIdGenerator idGenerator,
@@ -38,116 +46,132 @@ public class UserService : IUserService
         if (await _db.Users.AnyAsync(u => u.AadharNo == dto.AadharNo.Trim()))
             return (false, "Identification number is already registered.", null);
 
-        // 3. Generate unique user ID beforehand to see if it is the first ID
-        var userId = await _idGenerator.GenerateNextUserIdAsync();
-
-        bool isSuperAdmin = (userId == "RD0001");
-
-        string finalSponsorId = "";
-        string finalSponsorName = "";
-
-        // Tracking fields for the binary tree structure
-        string? calculatedParentId = null;
-        int calculatedTreeLevel = 0;
-        string calculatedLeftLineage = string.Empty;
-        string calculatedRightLineage = string.Empty;
-
-        // 4. Validate Sponsor & Determine Tree Placement rules
-        if (isSuperAdmin)
+        // 3-6. Critical section: ID generation MUST be locked together with the
+        // save that consumes it. If the lock were released between generating
+        // the ID and saving the row (as it previously was, inside
+        // UserIdGenerator itself), two concurrent registrations could compute
+        // the same next ID and the second insert would fail with a Postgres
+        // unique-key violation on PK_Users.
+        await _registerLock.WaitAsync();
+        try
         {
-            // First user registration bypasses SponsorId requirements completely
-            finalSponsorId = "SYSTEM";
-            finalSponsorName = "Super Admin";
+            // 3. Generate unique user ID beforehand to see if it is the first ID
+            var userId = await _idGenerator.GenerateNextUserIdAsync();
 
-            // Root user has no parent or lineages
-            calculatedParentId = null;
-            calculatedTreeLevel = 0;
+            bool isSuperAdmin = (userId == "RD0001");
+
+            string finalSponsorId = "";
+            string finalSponsorName = "";
+
+            // Tracking fields for the binary tree structure
+            string? calculatedParentId = null;
+            int calculatedTreeLevel = 0;
+            string calculatedLeftLineage = string.Empty;
+            string calculatedRightLineage = string.Empty;
+
+            // 4. Validate Sponsor & Determine Tree Placement rules
+            if (isSuperAdmin)
+            {
+                // First user registration bypasses SponsorId requirements completely
+                finalSponsorId = "SYSTEM";
+                finalSponsorName = "Super Admin";
+
+                // Root user has no parent or lineages
+                calculatedParentId = null;
+                calculatedTreeLevel = 0;
+            }
+            else
+            {
+                // Regular users MUST provide a valid Sponsor ID
+                if (string.IsNullOrWhiteSpace(dto.SponsorId))
+                {
+                    return (false, "Sponsor ID is required for registration.", null);
+                }
+
+                var sponsor = await _db.Users.FirstOrDefaultAsync(u => u.UserId == dto.SponsorId.Trim());
+                if (sponsor is null)
+                {
+                    return (false, "Sponsor ID does not exist. Please enter a valid Sponsor ID.", null);
+                }
+
+                finalSponsorId = sponsor.UserId;
+                finalSponsorName = sponsor.Name;
+
+                // 🌳 BINARY TREE PLACEMENT ALGORITHM 🌳
+                // Find the extreme down-line leaf node along the chosen side (Left/Right)
+                var targetParent = await FindExtremeLeafNodeAsync(sponsor.UserId, dto.Position.Trim());
+
+                calculatedParentId = targetParent.UserId;
+                calculatedTreeLevel = targetParent.TreeLevel + 1;
+
+                // Build structural lineages to allow easy downline counting/visuals later
+                if (dto.Position.Trim() == "Left")
+                {
+                    calculatedLeftLineage = string.IsNullOrEmpty(targetParent.LeftLineage)
+                        ? targetParent.UserId
+                        : $"{targetParent.LeftLineage},{targetParent.UserId}";
+                    calculatedRightLineage = targetParent.RightLineage;
+                }
+                else // Right
+                {
+                    calculatedLeftLineage = targetParent.LeftLineage;
+                    calculatedRightLineage = string.IsNullOrEmpty(targetParent.RightLineage)
+                        ? targetParent.UserId
+                        : $"{targetParent.RightLineage},{targetParent.UserId}";
+                }
+            }
+
+            // 5. Generate security credentials
+            var plainPassword = _passwordService.GeneratePassword();
+            var hashedPassword = _passwordService.HashPassword(plainPassword);
+
+            var user = new User
+            {
+                UserId = userId,
+                Name = dto.Name.Trim(),
+                MobileNo = dto.MobileNo.Trim(),
+                AadharNo = dto.AadharNo.Trim(),
+                SponsorId = finalSponsorId,
+                SponsorIdName = finalSponsorName,
+                Position = dto.Position.Trim(),
+                Address = dto.Address.Trim(),
+                Password = plainPassword,
+                PasswordHash = hashedPassword,
+
+                // Automatically make RD0001 the Admin, everyone else a standard User
+                Role = isSuperAdmin ? UserRole.Admin : UserRole.User,
+
+                // Tree node linkage fields
+                ParentId = calculatedParentId,
+                TreeLevel = calculatedTreeLevel,
+                LeftLineage = calculatedLeftLineage,
+                RightLineage = calculatedRightLineage,
+
+                CreatedAt = DateTime.UtcNow
+            };
+
+            // 6. Persist — still inside the lock, so no other request can
+            // generate/reuse this same userId until this save has completed.
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync();
+
+            return (true, string.Empty, new RegisterResponseDto
+            {
+                UserId = userId,
+                GeneratedPassword = plainPassword,
+                Name = user.Name,
+                MobileNo = user.MobileNo,
+                SponsorId = finalSponsorId,
+                SponsorIdName = finalSponsorName,
+                Message = isSuperAdmin
+                    ? "Super Admin Registration successful! Save your User ID and Password!"
+                    : "Registration successful. Save your User ID and Password!"
+            });
         }
-        else
+        finally
         {
-            // Regular users MUST provide a valid Sponsor ID
-            if (string.IsNullOrWhiteSpace(dto.SponsorId))
-            {
-                return (false, "Sponsor ID is required for registration.", null);
-            }
-
-            var sponsor = await _db.Users.FirstOrDefaultAsync(u => u.UserId == dto.SponsorId.Trim());
-            if (sponsor is null)
-            {
-                return (false, "Sponsor ID does not exist. Please enter a valid Sponsor ID.", null);
-            }
-
-            finalSponsorId = sponsor.UserId;
-            finalSponsorName = sponsor.Name;
-
-            // 🌳 BINARY TREE PLACEMENT ALGORITHM 🌳
-            // Find the extreme down-line leaf node along the chosen side (Left/Right)
-            var targetParent = await FindExtremeLeafNodeAsync(sponsor.UserId, dto.Position.Trim());
-
-            calculatedParentId = targetParent.UserId;
-            calculatedTreeLevel = targetParent.TreeLevel + 1;
-
-            // Build structural lineages to allow easy downline counting/visuals later
-            if (dto.Position.Trim() == "Left")
-            {
-                calculatedLeftLineage = string.IsNullOrEmpty(targetParent.LeftLineage)
-                    ? targetParent.UserId
-                    : $"{targetParent.LeftLineage},{targetParent.UserId}";
-                calculatedRightLineage = targetParent.RightLineage;
-            }
-            else // Right
-            {
-                calculatedLeftLineage = targetParent.LeftLineage;
-                calculatedRightLineage = string.IsNullOrEmpty(targetParent.RightLineage)
-                    ? targetParent.UserId
-                    : $"{targetParent.RightLineage},{targetParent.UserId}";
-            }
+            _registerLock.Release();
         }
-
-        // 5. Generate security credentials
-        var plainPassword = _passwordService.GeneratePassword();
-        var hashedPassword = _passwordService.HashPassword(plainPassword);
-
-        var user = new User
-        {
-            UserId = userId,
-            Name = dto.Name.Trim(),
-            MobileNo = dto.MobileNo.Trim(),
-            AadharNo = dto.AadharNo.Trim(),
-            SponsorId = finalSponsorId,
-            SponsorIdName = finalSponsorName,
-            Position = dto.Position.Trim(),
-            Address = dto.Address.Trim(),
-            Password = plainPassword,
-            PasswordHash = hashedPassword,
-
-            // Automatically make RD0001 the Admin, everyone else a standard User
-            Role = isSuperAdmin ? UserRole.Admin : UserRole.User,
-
-            // Tree node linkage fields
-            ParentId = calculatedParentId,
-            TreeLevel = calculatedTreeLevel,
-            LeftLineage = calculatedLeftLineage,
-            RightLineage = calculatedRightLineage,
-
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _db.Users.Add(user);
-        await _db.SaveChangesAsync();
-
-        return (true, string.Empty, new RegisterResponseDto
-        {
-            UserId = userId,
-            GeneratedPassword = plainPassword,
-            Name = user.Name,
-            MobileNo = user.MobileNo,
-            SponsorId = finalSponsorId,
-            SponsorIdName = finalSponsorName,
-            Message = isSuperAdmin
-                ? "Super Admin Registration successful! Save your User ID and Password!"
-                : "Registration successful. Save your User ID and Password!"
-        });
     }
 
     public async Task<(bool Success, string Error, LoginResponseDto? Data)> LoginAsync(LoginRequestDto dto)
