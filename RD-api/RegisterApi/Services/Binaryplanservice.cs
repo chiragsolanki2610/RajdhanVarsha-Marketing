@@ -371,30 +371,30 @@ public class BinaryPlanService : IBinaryPlanService
     // ─────────────────────────────────────────────────────────────────────────
     // 5. REQUEST WITHDRAWAL
     // ─────────────────────────────────────────────────────────────────────────
-    public async Task<(bool success, string message)> RequestWithdrawalAsync(string userId, decimal amount)
+    public async Task<(bool success, string message, BinaryWithdrawalRequest? request)> RequestWithdrawalAsync(string userId, decimal amount)
     {
         var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == userId);
         if (wallet == null)
-            return (false, "Binary wallet not found. Join the Binary Plan first.");
+            return (false, "Binary wallet not found. Join the Binary Plan first.", null);
 
         if (!wallet.WithdrawalUnlocked)
-            return (false, "Withdrawal is locked. You need an active LEFT child, an active RIGHT child, and at least 1 active grandchild before your first withdrawal.");
+            return (false, "Withdrawal is locked. You need an active LEFT child, an active RIGHT child, and at least 1 active grandchild before your first withdrawal.", null);
 
         if (amount <= 0)
-            return (false, "Amount must be greater than 0.");
+            return (false, "Amount must be greater than 0.", null);
 
         if (amount > wallet.Balance)
-            return (false, $"Insufficient balance. Available: ₹{wallet.Balance:F2}");
+            return (false, $"Insufficient balance. Available: ₹{wallet.Balance:F2}", null);
 
         const decimal minWithdrawal = 0m;
         if (amount < minWithdrawal)
-            return (false, $"Minimum withdrawal amount is ₹{minWithdrawal}.");
+            return (false, $"Minimum withdrawal amount is ₹{minWithdrawal}.", null);
 
         // Check for existing pending request
         var hasPending = await _db.BinaryWithdrawalRequests
             .AnyAsync(r => r.UserId == userId && r.Status == "Pending");
         if (hasPending)
-            return (false, "You already have a pending withdrawal request.");
+            return (false, "You already have a pending withdrawal request.", null);
 
         var request = new BinaryWithdrawalRequest
         {
@@ -406,7 +406,7 @@ public class BinaryPlanService : IBinaryPlanService
         _db.BinaryWithdrawalRequests.Add(request);
         await _db.SaveChangesAsync();
 
-        return (true, $"Withdrawal request of ₹{amount:F2} submitted successfully.");
+        return (true, $"Withdrawal request of ₹{amount:F2} submitted successfully.", request);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
