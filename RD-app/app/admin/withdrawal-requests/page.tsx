@@ -10,15 +10,19 @@ interface BankDetails {
   ifscCode: string;
 }
 
+type RequestType = "regular" | "binary";
+
 interface WithdrawalRequest {
   id: string;
+  type: RequestType;
   userId: string;
   userName: string;
   amount: number;
   status: string;
   createdAt: string;
   plan?: string;
-  bankDetails: BankDetails;
+  bankDetails?: BankDetails;
+  adminNote?: string;
 }
 
 export default function AdminWithdrawalPage() {
@@ -26,6 +30,7 @@ export default function AdminWithdrawalPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<WithdrawalRequest | null>(null);
+  const [activeTab, setActiveTab] = useState<"all" | RequestType>("all");
 
   const API = "https://rd-api-j7zj.onrender.com";
 
@@ -44,40 +49,83 @@ export default function AdminWithdrawalPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API}/api/admin/withdrawals`, {
-        method: "GET",
-        headers: getAuthHeaders() as HeadersInit,
-      });
 
-      if (!response.ok) {
-        if (response.status === 401) throw new Error("Unauthorized! Please log in first.");
-        throw new Error(`Failed to fetch requests (Status: ${response.status}).`);
+      const [regularRes, binaryRes] = await Promise.all([
+        fetch(`${API}/api/admin/withdrawals?status=Pending`, {
+          method: "GET",
+          headers: getAuthHeaders() as HeadersInit,
+        }),
+        fetch(`${API}/api/admin/withdrawals/binary?status=Pending`, {
+          method: "GET",
+          headers: getAuthHeaders() as HeadersInit,
+        }),
+      ]);
+
+      if (!regularRes.ok && !binaryRes.ok) {
+        if (regularRes.status === 401 || binaryRes.status === 401) {
+          throw new Error("Unauthorized! Please log in first.");
+        }
+        throw new Error(
+          `Failed to fetch requests (Status: ${regularRes.status}/${binaryRes.status}).`
+        );
       }
 
-      const data = await response.json();
+      let regularData: any[] = [];
+      if (regularRes.ok) {
+        regularData = await regularRes.json();
+      } else {
+        console.error("Regular withdrawals fetch failed:", regularRes.status);
+      }
 
-      // Normalize PascalCase fields from backend
-      const normalized: WithdrawalRequest[] = data.map((r: any) => ({
-        id: r.id ?? r.Id,
+      let binaryData: any[] = [];
+      if (binaryRes.ok) {
+        binaryData = await binaryRes.json();
+      } else {
+        console.error("Binary withdrawals fetch failed:", binaryRes.status);
+      }
+
+      // Normalize regular ("Dream Plan") withdrawal requests
+      const normalizedRegular: WithdrawalRequest[] = (regularData || []).map((r: any) => ({
+        id: String(r.id ?? r.Id),
+        type: "regular",
         userName: r.userName ?? r.UserName ?? "Unknown",
         userId: r.userId ?? r.UserId ?? "—",
         amount: r.amount ?? r.Amount ?? 0,
         status: r.status ?? r.Status ?? "",
         createdAt: r.createdAt ?? r.CreatedAt ?? null,
-        plan: r.plan ?? r.Plan ?? null,
+        plan: r.plan ?? r.Plan ?? "Dream Plan",
         bankDetails: {
-          bankName: r.bankDetails?.bankName ?? r.BankDetails?.BankName ?? r.bankDetails?.BankName ?? "N/A",
-          accountNumber: r.bankDetails?.accountNumber ?? r.BankDetails?.AccountNumber ?? r.bankDetails?.AccountNumber ?? "N/A",
-          ifscCode: r.bankDetails?.ifscCode ?? r.BankDetails?.IfscCode ?? r.bankDetails?.IfscCode ?? "N/A",
+          bankName:
+            r.bankDetails?.bankName ?? r.BankDetails?.BankName ?? r.bankDetails?.BankName ?? "N/A",
+          accountNumber:
+            r.bankDetails?.accountNumber ??
+            r.BankDetails?.AccountNumber ??
+            r.bankDetails?.AccountNumber ??
+            "N/A",
+          ifscCode:
+            r.bankDetails?.ifscCode ?? r.BankDetails?.IfscCode ?? r.bankDetails?.IfscCode ?? "N/A",
         },
       }));
 
-      // Only show Pending requests, sorted by date descending
-      const pendingOnly = normalized
+      // Normalize binary plan withdrawal requests
+      // Note: BinaryWithdrawalRequestDto has no BankDetails field, uses RequestedAt, AdminNote
+      const normalizedBinary: WithdrawalRequest[] = (binaryData || []).map((r: any) => ({
+        id: String(r.id ?? r.Id),
+        type: "binary",
+        userName: r.userName ?? r.UserName ?? "Unknown",
+        userId: r.userId ?? r.UserId ?? "—",
+        amount: r.amount ?? r.Amount ?? 0,
+        status: r.status ?? r.Status ?? "",
+        createdAt: r.requestedAt ?? r.RequestedAt ?? r.createdAt ?? r.CreatedAt ?? null,
+        plan: "Binary Plan",
+        adminNote: r.adminNote ?? r.AdminNote ?? undefined,
+      }));
+
+      const combined = [...normalizedRegular, ...normalizedBinary]
         .filter((r) => r.status?.toUpperCase() === "PENDING")
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      setRequests(pendingOnly);
+      setRequests(combined);
     } catch (err: any) {
       setError(err.message || "Something went wrong");
     } finally {
@@ -89,10 +137,15 @@ export default function AdminWithdrawalPage() {
     fetchWithdrawals();
   }, []);
 
-  const handleApprove = async (id: string) => {
+  const handleApprove = async (req: WithdrawalRequest) => {
     if (!confirm("Are you sure you want to approve this withdrawal?")) return;
     try {
-      const response = await fetch(`${API}/api/admin/withdrawals/${id}/approve`, {
+      const endpoint =
+        req.type === "binary"
+          ? `${API}/api/admin/withdrawals/binary/${req.id}/approve`
+          : `${API}/api/admin/withdrawals/${req.id}/approve`;
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: getAuthHeaders() as HeadersInit,
         body: JSON.stringify({}),
@@ -111,10 +164,15 @@ export default function AdminWithdrawalPage() {
     }
   };
 
-  const handleReject = async (id: string) => {
+  const handleReject = async (req: WithdrawalRequest) => {
     if (!confirm("Are you sure you want to reject this withdrawal?")) return;
     try {
-      const response = await fetch(`${API}/api/admin/withdrawals/${id}/reject`, {
+      const endpoint =
+        req.type === "binary"
+          ? `${API}/api/admin/withdrawals/binary/${req.id}/reject`
+          : `${API}/api/admin/withdrawals/${req.id}/reject`;
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: getAuthHeaders() as HeadersInit,
         body: JSON.stringify({}),
@@ -143,8 +201,21 @@ export default function AdminWithdrawalPage() {
     </div>
   );
 
-  if (loading) return renderLayoutContent(<div className="text-gray-600 font-medium">Loading withdrawal requests...</div>);
+  if (loading)
+    return renderLayoutContent(
+      <div className="text-gray-600 font-medium">Loading withdrawal requests...</div>
+    );
   if (error) return renderLayoutContent(<div className="text-red-500 font-medium">Error: {error}</div>);
+
+  const filteredRequests =
+    activeTab === "all" ? requests : requests.filter((r) => r.type === activeTab);
+
+  const tabClasses = (tab: "all" | RequestType) =>
+    `px-4 py-2 text-xs font-semibold rounded-t-md transition ${
+      activeTab === tab
+        ? "bg-white text-gray-900 border border-gray-200 border-b-white -mb-px"
+        : "bg-gray-100 text-gray-500 hover:text-gray-700 border border-transparent"
+    }`;
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -159,7 +230,9 @@ export default function AdminWithdrawalPage() {
               <h1 className="text-2xl font-bold text-gray-800">Admin Withdrawal Requests</h1>
               <p className="text-gray-600 text-sm">
                 Pending requests —{" "}
-                <span className="text-yellow-700 font-semibold">{requests.length} pending</span>
+                <span className="text-yellow-700 font-semibold">
+                  {filteredRequests.length} pending
+                </span>
               </p>
             </div>
             <button
@@ -170,29 +243,53 @@ export default function AdminWithdrawalPage() {
             </button>
           </div>
 
+          <div className="flex space-x-1 border-b border-gray-200 mb-0">
+            <button className={tabClasses("all")} onClick={() => setActiveTab("all")}>
+              All ({requests.length})
+            </button>
+            <button className={tabClasses("regular")} onClick={() => setActiveTab("regular")}>
+              Dream Plan ({requests.filter((r) => r.type === "regular").length})
+            </button>
+            <button className={tabClasses("binary")} onClick={() => setActiveTab("binary")}>
+              Binary Plan ({requests.filter((r) => r.type === "binary").length})
+            </button>
+          </div>
+
           <div className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200">
             <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
               <thead className="bg-gray-50 text-gray-700 uppercase text-xs font-semibold">
                 <tr>
                   <th className="px-6 py-3">User Details</th>
+                  <th className="px-6 py-3">Type</th>
                   <th className="px-6 py-3">Amount</th>
                   <th className="px-6 py-3">Date</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white text-gray-900">
-                {requests.length === 0 ? (
+                {filteredRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
                       No pending withdrawal requests.
                     </td>
                   </tr>
                 ) : (
-                  requests.map((req) => (
-                    <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                  filteredRequests.map((req) => (
+                    <tr key={`${req.type}-${req.id}`} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="font-medium text-gray-900">{req.userName}</div>
                         <div className="text-xs text-gray-500">ID: {req.userId}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                            req.type === "binary"
+                              ? "bg-purple-100 text-purple-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {req.type === "binary" ? "Binary" : "Dream Plan"}
+                        </span>
                       </td>
                       <td className="px-6 py-4 font-semibold text-gray-800">
                         ₹{req.amount?.toLocaleString()}
@@ -245,7 +342,9 @@ export default function AdminWithdrawalPage() {
                 <span className="text-gray-900 font-mono">{selectedRequest.userId}</span>
 
                 <span className="text-gray-500 font-medium">Active Plan:</span>
-                <span className="text-blue-700 font-semibold">{selectedRequest.plan || "Standard Plan"}</span>
+                <span className="text-blue-700 font-semibold">
+                  {selectedRequest.plan || "Standard Plan"}
+                </span>
 
                 <span className="text-gray-500 font-medium">Amount Requested:</span>
                 <span className="text-emerald-700 font-bold text-base">
@@ -262,25 +361,43 @@ export default function AdminWithdrawalPage() {
 
               <hr className="border-gray-200 my-2" />
 
-              <div>
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  KYC / Settlement Bank Info
-                </h4>
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Bank Name:</span>
-                    <span className="text-gray-900 font-medium">{selectedRequest.bankDetails?.bankName || "N/A"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Account No:</span>
-                    <span className="text-gray-900 font-mono font-medium">{selectedRequest.bankDetails?.accountNumber || "N/A"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">IFSC Code:</span>
-                    <span className="text-gray-900 font-mono font-medium">{selectedRequest.bankDetails?.ifscCode || "N/A"}</span>
+              {selectedRequest.type === "regular" ? (
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                    KYC / Settlement Bank Info
+                  </h4>
+                  <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Bank Name:</span>
+                      <span className="text-gray-900 font-medium">
+                        {selectedRequest.bankDetails?.bankName || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Account No:</span>
+                      <span className="text-gray-900 font-mono font-medium">
+                        {selectedRequest.bankDetails?.accountNumber || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">IFSC Code:</span>
+                      <span className="text-gray-900 font-mono font-medium">
+                        {selectedRequest.bankDetails?.ifscCode || "N/A"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                    Binary Plan Note
+                  </h4>
+                  <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-sm text-gray-700">
+                    {selectedRequest.adminNote ||
+                      "No bank details on this request — check the user's KYC record separately."}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
@@ -291,13 +408,13 @@ export default function AdminWithdrawalPage() {
                 Close
               </button>
               <button
-                onClick={() => handleReject(selectedRequest.id)}
+                onClick={() => handleReject(selectedRequest)}
                 className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-4 py-2 rounded transition shadow-sm"
               >
                 Reject
               </button>
               <button
-                onClick={() => handleApprove(selectedRequest.id)}
+                onClick={() => handleApprove(selectedRequest)}
                 className="bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-4 py-2 rounded transition shadow-sm"
               >
                 Approve
