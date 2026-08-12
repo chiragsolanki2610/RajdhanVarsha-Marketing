@@ -1,4 +1,4 @@
-﻿namespace RegisterApi.DTOs;
+namespace RegisterApi.DTOs;
 
 // ── Shared Item DTO (used by both Dream Plan and Binary Plan) ─────────────────
 
@@ -21,7 +21,7 @@ public class BinaryActivationDto
     public List<PlanItemDto> Items { get; set; } = new();
 }
 
-public class BinaryWithdrawalRequestDto
+public class SubmitBinaryWithdrawalDto
 {
     public decimal Amount { get; set; }
 }
