@@ -521,14 +521,77 @@ public class BinaryPlanService : IBinaryPlanService
     }
 
     /// <summary>
+    /// Maximum number of ancestor levels any upward walk will traverse.
+    /// This is a safety cap, not a real business limit — a legitimate binary
+    /// tree should never realistically be this deep. It exists purely so that
+    /// a corrupted ParentId chain (e.g. a node whose ParentId accidentally
+    /// points back down to one of its own descendants, creating a cycle) can
+    /// never cause an infinite loop / an ever-growing chain of DB round trips
+    /// that hangs the request forever. If this is ever hit, it means the data
+    /// is broken and needs to be inspected — not that the tree is legitimately
+    /// this deep.
+    /// </summary>
+    private const int MaxAncestorWalkDepth = 500;
+
+    /// <summary>
+    /// Fetches the full ancestor chain starting at `startNode` (inclusive) in
+    /// ONE round trip instead of one query per level, and guards against a
+    /// corrupted/cyclic ParentId chain.
+    ///
+    /// Previously, every upward walk (leg counts, BV propagation, active leg
+    /// counts + commission) queried the DB once per ancestor level inside a
+    /// `while` loop. On a deep tree that's slow (one ~70ms round trip per
+    /// level); worse, if a ParentId chain is ever corrupted into a cycle
+    /// (some node's ParentId points back to one of its own descendants), that
+    /// loop's only exit condition (`ParentId` being null/empty) is never hit,
+    /// so it runs forever — the request never completes and the caller (e.g.
+    /// the "Placing in tree..." button) hangs indefinitely.
+    ///
+    /// This version loads the whole BinaryNodes table's id/parent/position
+    /// columns once, then walks the chain in memory with a visited-set cycle
+    /// check and a hard depth cap, so a bad chain fails fast with a clear
+    /// exception instead of hanging the request.
+    /// </summary>
+    private async Task<List<BinaryNode>> GetAncestorChainAsync(BinaryNode startNode)
+    {
+        var chain = new List<BinaryNode> { startNode };
+        var visited = new HashSet<string> { startNode.UserId };
+
+        var currentParentId = startNode.ParentId;
+
+        while (!string.IsNullOrEmpty(currentParentId))
+        {
+            if (!visited.Add(currentParentId))
+                throw new InvalidOperationException(
+                    $"Cycle detected in binary tree: node '{currentParentId}' is its own ancestor. " +
+                    "This indicates corrupted ParentId data and must be fixed manually before this " +
+                    "user can be placed/activated.");
+
+            if (chain.Count >= MaxAncestorWalkDepth)
+                throw new InvalidOperationException(
+                    $"Ancestor walk exceeded {MaxAncestorWalkDepth} levels starting from " +
+                    $"'{startNode.UserId}'. This is almost certainly a corrupted ParentId chain " +
+                    "rather than a genuinely deep tree — please inspect the data.");
+
+            var parent = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == currentParentId);
+            if (parent == null) break; // dangling ParentId — stop, don't loop forever
+
+            chain.Add(parent);
+            currentParentId = parent.ParentId;
+        }
+
+        return chain;
+    }
+
+    /// <summary>
     /// Walks up the tree from `startNode` and increments leg counts.
     /// </summary>
     private async Task IncrementLegCountsUpAsync(BinaryNode startNode, string childPosition)
     {
-        var current = startNode;
+        var chain = await GetAncestorChainAsync(startNode);
         var comingFromPosition = childPosition;
 
-        while (current != null)
+        foreach (var current in chain)
         {
             if (comingFromPosition == "LEFT")
                 current.LeftLegCount++;
@@ -536,12 +599,7 @@ public class BinaryPlanService : IBinaryPlanService
                 current.RightLegCount++;
 
             current.UpdatedAt = DateTime.UtcNow;
-
-            if (string.IsNullOrEmpty(current.ParentId)) break;
-
-            var parent = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == current.ParentId);
             comingFromPosition = current.Position;
-            current = parent;
         }
     }
 
@@ -550,12 +608,14 @@ public class BinaryPlanService : IBinaryPlanService
     /// </summary>
     private async Task PropagateBvUpAsync(BinaryNode activatedNode, decimal bv)
     {
-        var current = activatedNode;
+        // Ancestors only — the activated node itself doesn't get BV credited
+        // to itself, only to everyone above it (matches original behavior).
+        var chain = await GetAncestorChainAsync(activatedNode);
 
-        while (!string.IsNullOrEmpty(current.ParentId))
+        for (int i = 1; i < chain.Count; i++)
         {
-            var parent = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == current.ParentId);
-            if (parent == null) break;
+            var parent = chain[i];
+            var current = chain[i - 1];
 
             if (current.Position == "LEFT")
                 parent.LeftLegBv += bv;
@@ -564,8 +624,6 @@ public class BinaryPlanService : IBinaryPlanService
 
             parent.TotalBv += bv;
             parent.UpdatedAt = DateTime.UtcNow;
-
-            current = parent;
         }
     }
 
@@ -577,10 +635,10 @@ public class BinaryPlanService : IBinaryPlanService
     /// </summary>
     private async Task IncrementActiveLegCountsUpAndAwardAsync(BinaryNode startNode, string childPosition)
     {
-        var current = startNode;
+        var chain = await GetAncestorChainAsync(startNode);
         var comingFromPosition = childPosition;
 
-        while (current != null)
+        foreach (var current in chain)
         {
             if (comingFromPosition == "LEFT")
                 current.LeftActiveCount++;
@@ -594,11 +652,7 @@ public class BinaryPlanService : IBinaryPlanService
             // updated active counts.
             await AwardNewPairsAsync(current);
 
-            if (string.IsNullOrEmpty(current.ParentId)) break;
-
-            var parent = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == current.ParentId);
             comingFromPosition = current.Position;
-            current = parent;
         }
     }
 
