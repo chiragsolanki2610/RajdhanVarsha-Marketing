@@ -404,6 +404,23 @@ public class BinaryPlanService : IBinaryPlanService
             RequestedAt = DateTime.UtcNow
         };
         _db.BinaryWithdrawalRequests.Add(request);
+
+        // Reserve the funds immediately so the pending amount can't be spent
+        // or withdrawn twice. Approval finalizes this; rejection refunds it.
+        wallet.Balance -= amount;
+        wallet.UpdatedAt = DateTime.UtcNow;
+
+        var reserveTxn = new BinaryWalletTransaction
+        {
+            UserId = userId,
+            Type = BinaryTxnType.Debit,
+            Amount = amount,
+            BalanceAfter = wallet.Balance,
+            Source = "Withdrawal Requested",
+            Description = "Reserved pending withdrawal approval",
+        };
+        _db.BinaryWalletTransactions.Add(reserveTxn);
+
         await _db.SaveChangesAsync();
 
         return (true, $"Withdrawal request of ₹{amount:F2} submitted successfully.", request);
