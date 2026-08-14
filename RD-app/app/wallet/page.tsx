@@ -178,7 +178,7 @@ function requestBinaryWithdrawal(amount: number): Promise<WithdrawalRequestDto> 
 // COMPONENT METADATA & HELPER FUNCTIONS
 // ==========================================
 
-const WALLET_META: Record
+const WALLET_META: Record<
   PlanKey,
   { title: string; description: string; accent: string; iconBg: string; iconColor: string }
 > = {
