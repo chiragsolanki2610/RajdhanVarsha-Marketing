@@ -28,10 +28,9 @@ import LoginTopbar from '@/components/loginTopbar';
 // INTEGRATED WALLET API CONFIG & UTILITIES
 // ==========================================
 
-// UPDATED: Corrected port to 56187 as shown in your Swagger UI
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
 
-// NEW: Tax rates used for the client-side live estimate shown while typing.
+// Tax rates used for the client-side live estimate shown while typing.
 // The authoritative numbers always come back from the API response after
 // submit (ServiceTaxAmount / TdsAmount / NetPayableAmount) — these constants
 // are only for the instant on-screen preview so the user isn't surprised.
@@ -65,9 +64,7 @@ export type WalletTransactionDto = {
   createdAt: string;
 };
 
-// UPDATED: now includes the tax breakdown fields added to WithdrawalRequest
-// (ServiceTaxAmount, TdsAmount, NetPayableAmount) so the UI can show exactly
-// what was deducted and what will actually be paid out.
+// Matches the tax breakdown fields on WithdrawalRequest / BinaryWithdrawalRequest
 export type WithdrawalRequestDto = {
   id: number;
   userId: string;
@@ -83,7 +80,7 @@ export type WithdrawalRequestDto = {
   adminRemarks: string | null;
 };
 
-// NEW: matches BinaryNodeStatusDto from GET /api/binary/status
+// matches BinaryNodeStatusDto from GET /api/binary/status
 export type BinaryStatusDto = {
   isInBinaryPlan: boolean;
   isActive: boolean;
@@ -137,9 +134,21 @@ function getWallets(): Promise<WalletDto[]> {
   return apiFetch<WalletDto[]>('/api/wallet');
 }
 
-function getTransactionHistory(planType?: string): Promise<WalletTransactionDto[]> {
-  const query = planType ? `?planType=${encodeURIComponent(planType)}` : '';
-  return apiFetch<WalletTransactionDto[]>(`/api/wallet/transactions${query}`);
+// ── UPDATED: routed per plan ────────────────────────────────────────────
+// Dream Plan transactions live in `WalletTransactions` and are served by
+// GET /api/wallet/transactions?planType=...
+// Binary Plan transactions live in a SEPARATE table (`BinaryWalletTransactions`)
+// and must be served by its own endpoint — GET /api/binary/transactions.
+// Previously both plans hit the Dream endpoint, which is why Binary history
+// was always empty/wrong. If your backend route names differ, update the
+// two paths below to match.
+function getTransactionHistory(planKey: PlanKey): Promise<WalletTransactionDto[]> {
+  if (planKey === 'BINARY') {
+    return apiFetch<WalletTransactionDto[]>('/api/binary/transactions');
+  }
+  return apiFetch<WalletTransactionDto[]>(
+    `/api/wallet/transactions?planType=${encodeURIComponent(PLAN_TYPES.DREAM)}`
+  );
 }
 
 // Swagger lists this as POST /api/wallet/withdraw (used for Dream Plan only — see requestBinaryWithdrawal below)
@@ -150,16 +159,14 @@ function requestWithdrawal(planType: string, amount: number): Promise<Withdrawal
   });
 }
 
-// NEW: binary-tree eligibility status (left child + right child + grandchild rule)
+// binary-tree eligibility status (left child + right child + grandchild rule)
 function getBinaryStatus(): Promise<BinaryStatusDto> {
   return apiFetch<BinaryStatusDto>('/api/binary/status');
 }
 
-// UPDATED: Binary Plan withdrawals go through the binary controller, which enforces
+// Binary Plan withdrawals go through the binary controller, which enforces
 // the 3-node unlock rule server-side (the generic /api/wallet/withdraw has no
 // idea this rule exists, so Binary Plan must use this endpoint instead).
-// Return type widened to WithdrawalRequestDto now that the backend also
-// returns the tax breakdown for binary withdrawals.
 function requestBinaryWithdrawal(amount: number): Promise<WithdrawalRequestDto> {
   return apiFetch<WithdrawalRequestDto>('/api/binary/withdraw', {
     method: 'POST',
@@ -171,7 +178,7 @@ function requestBinaryWithdrawal(amount: number): Promise<WithdrawalRequestDto> 
 // COMPONENT METADATA & HELPER FUNCTIONS
 // ==========================================
 
-const WALLET_META: Record<
+const WALLET_META: Record
   PlanKey,
   { title: string; description: string; accent: string; iconBg: string; iconColor: string }
 > = {
@@ -208,7 +215,7 @@ function formatDateTime(iso: string) {
   };
 }
 
-// NEW: computes the live client-side tax preview shown under the amount
+// computes the live client-side tax preview shown under the amount
 // input. Purely informational — the server recalculates and returns the
 // authoritative figures in the API response.
 function estimateTaxBreakdown(amount: number) {
@@ -216,6 +223,16 @@ function estimateTaxBreakdown(amount: number) {
   const tds = Math.round(amount * TDS_RATE * 100) / 100;
   const net = Math.round((amount - serviceTax - tds) * 100) / 100;
   return { serviceTax, tds, net };
+}
+
+// ── NEW: withdrawal-only filter ─────────────────────────────────────────
+// History tab should show ONLY withdrawal activity (Requested / Approved /
+// Rejected), not commission/BV credit entries. We filter on `source` since
+// that's what your backend writes ("Withdrawal Requested", "Withdrawal
+// Rejected", etc.). Adjust the match string if your backend uses different
+// wording, or better: filter server-side once you add a dedicated endpoint.
+function isWithdrawalTransaction(tx: WalletTransactionDto) {
+  return tx.source?.toLowerCase().includes('withdraw');
 }
 
 // ==========================================
@@ -242,11 +259,11 @@ export default function WalletPage() {
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
 
-  // NEW: holds the authoritative tax breakdown returned by the API after a
+  // holds the authoritative tax breakdown returned by the API after a
   // successful withdrawal submission, so we can show it in the success card.
   const [lastWithdrawal, setLastWithdrawal] = useState<WithdrawalRequestDto | null>(null);
 
-  // NEW: Binary Plan team-eligibility state (left child + right child + grandchild)
+  // Binary Plan team-eligibility state (left child + right child + grandchild)
   const [binaryStatus, setBinaryStatus] = useState<BinaryStatusDto | null>(null);
   const [binaryStatusLoading, setBinaryStatusLoading] = useState(false);
   const [binaryStatusError, setBinaryStatusError] = useState<string | null>(null);
@@ -302,7 +319,7 @@ export default function WalletPage() {
     loadWallets();
   }, [loadWallets]);
 
-  // NEW: only relevant for the Binary Plan wallet — fetches left/right child +
+  // only relevant for the Binary Plan wallet — fetches left/right child +
   // grandchild eligibility so we can lock/unlock the withdrawal form correctly.
   const loadBinaryStatus = useCallback(async () => {
     setBinaryStatusLoading(true);
@@ -324,14 +341,17 @@ export default function WalletPage() {
     }
   }, [selectedWallet, loadBinaryStatus]);
 
+  // ── UPDATED: loads history from the correct table per plan, then filters
+  // down to withdrawal-only entries so commission/BV credits don't show up
+  // in what's meant to be a withdrawal statement log.
   const loadHistory = useCallback(async (key: PlanKey) => {
     setHistoryLoading(true);
     setHistoryError(null);
     try {
-      const data = await getTransactionHistory(PLAN_TYPES[key]);
-      setHistory(data);
+      const data = await getTransactionHistory(key);
+      setHistory(data.filter(isWithdrawalTransaction));
     } catch (err) {
-      setHistoryError(err instanceof Error ? err.message : 'Could not load transaction history.');
+      setHistoryError(err instanceof Error ? err.message : 'Could not load withdrawal history.');
     } finally {
       setHistoryLoading(false);
     }
@@ -350,7 +370,7 @@ export default function WalletPage() {
   const isBinary = selectedWallet === 'BINARY';
   const binaryUnlocked = !isBinary || !!binaryStatus?.withdrawalUnlocked;
 
-  // NEW: live tax preview recalculated on every keystroke, shown under the
+  // live tax preview recalculated on every keystroke, shown under the
   // amount field so the user knows roughly what they'll net before submitting.
   const parsedAmount = parseFloat(withdrawAmount);
   const showTaxPreview = withdrawAmount !== '' && !isNaN(parsedAmount) && parsedAmount > 0;
@@ -552,7 +572,7 @@ export default function WalletPage() {
                         <InfoBox label="Lifetime Withdrawn" value={formatINR(currentWallet.totalWithdrawn)} />
                       </div>
 
-                      {/* NEW: Tax rate disclosure so users understand deductions up front */}
+                      {/* Tax rate disclosure so users understand deductions up front */}
                       <div className="flex items-start gap-2 bg-blue-50/60 border border-blue-100 rounded-xl px-3 sm:px-4 py-3">
                         <Receipt className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                         <p className="text-[11px] sm:text-xs text-blue-700 leading-relaxed">
@@ -561,7 +581,7 @@ export default function WalletPage() {
                         </p>
                       </div>
 
-                      {/* NEW: Binary tree eligibility snapshot, visible even outside the withdrawal tab */}
+                      {/* Binary tree eligibility snapshot, visible even outside the withdrawal tab */}
                       {isBinary && (
                         <div className="pt-2">
                           <h5 className="text-[11px] sm:text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">Team Eligibility</h5>
@@ -639,7 +659,7 @@ export default function WalletPage() {
                             <span className="text-[11px] sm:text-xs font-semibold text-green-700">KYC Verified — Withdrawals Unlocked</span>
                           </div>
 
-                          {/* NEW: Binary Plan team check — still loading */}
+                          {/* Binary Plan team check — still loading */}
                           {isBinary && binaryStatusLoading && (
                             <div className="flex items-center gap-2 text-gray-400 py-6">
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -647,7 +667,7 @@ export default function WalletPage() {
                             </div>
                           )}
 
-                          {/* NEW: Binary Plan locked — team requirement not met */}
+                          {/* Binary Plan locked — team requirement not met */}
                           {isBinary && !binaryStatusLoading && !binaryUnlocked && (
                             <div className="flex flex-col items-center text-center gap-4 sm:gap-5 py-4 sm:py-6">
                               <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-amber-50 flex items-center justify-center">
@@ -699,7 +719,7 @@ export default function WalletPage() {
                                   />
                                 </div>
 
-                                {/* NEW: live tax breakdown preview, updates as the user types */}
+                                {/* live tax breakdown preview, updates as the user types */}
                                 {taxPreview && (
                                   <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 space-y-1.5">
                                     <div className="flex items-center gap-1.5 mb-1">
@@ -760,14 +780,14 @@ export default function WalletPage() {
                     </div>
                   )}
 
-                  {/* History */}
+                  {/* History — now WITHDRAWAL-ONLY, sourced from the correct table per plan */}
                   {activePanel === 'history' && (
                     <div>
-                      <h4 className="text-sm sm:text-base font-bold text-gray-800 mb-4">Statement Log</h4>
+                      <h4 className="text-sm sm:text-base font-bold text-gray-800 mb-4">Withdrawal Statement Log</h4>
 
                       {historyLoading && (
                         <p className="text-sm text-gray-400 flex items-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin" /> Loading transactions…
+                          <Loader2 className="w-4 h-4 animate-spin" /> Loading withdrawal history…
                         </p>
                       )}
 
@@ -785,7 +805,7 @@ export default function WalletPage() {
                       )}
 
                       {!historyLoading && !historyError && history.length === 0 && (
-                        <p className="text-sm text-gray-400">No transactions yet for this wallet.</p>
+                        <p className="text-sm text-gray-400">No withdrawal history yet for this wallet.</p>
                       )}
 
                       {!historyLoading && !historyError && history.length > 0 && (
@@ -865,10 +885,9 @@ function StatCard({
   );
 }
 
-// UPDATED: tabs now sit in a fixed 3-column grid on mobile (icon on top, label
-// below) so they always fit on screen instead of overflowing/wrapping like
-// they did in the flex-row layout. From `sm:` up it goes back to the original
-// horizontal pill layout.
+// tabs sit in a fixed 3-column grid on mobile (icon on top, label below) so
+// they always fit on screen. From `sm:` up it goes back to the horizontal
+// pill layout.
 function TabButton({
   active,
   onClick,
@@ -912,7 +931,7 @@ function InfoBox({ label, value }: { label: string; value: string }) {
   );
 }
 
-// NEW: small checklist row used for the binary-tree eligibility rule
+// small checklist row used for the binary-tree eligibility rule
 function EligibilityRow({ done, label }: { done: boolean; label: string }) {
   return (
     <div className="flex items-start gap-2 text-xs sm:text-sm">
@@ -926,7 +945,7 @@ function EligibilityRow({ done, label }: { done: boolean; label: string }) {
   );
 }
 
-// NEW: single line item used in the tax breakdown preview and success card
+// single line item used in the tax breakdown preview and success card
 function TaxRow({
   label,
   value,
