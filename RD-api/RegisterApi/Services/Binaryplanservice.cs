@@ -322,6 +322,32 @@ public class BinaryPlanService : IBinaryPlanService
     // ─────────────────────────────────────────────────────────────────────────
     // 4. GET BINARY WALLET
     // ─────────────────────────────────────────────────────────────────────────
+    public async Task<List<WalletTransactionDto>> GetTransactionHistoryAsync(string userId)
+    {
+        var transactions = await _db.BinaryWalletTransactions
+            .Where(t => t.UserId == userId)
+            .OrderByDescending(t => t.CreatedAt)
+            .ToListAsync();
+
+        return transactions.Select(t => new WalletTransactionDto
+        {
+            Id = t.Id,
+            PlanType = "Binary Plan",
+            Type = t.Type.ToString(),
+            Amount = t.Amount,
+            BalanceAfter = t.BalanceAfter,
+            Source = t.Source,
+            Description = t.Description,
+            // Binary wallet transactions don't carry a per-row tax split like
+            // Dream Plan withdrawal rows do — the tax breakdown for binary
+            // withdrawals is returned separately by POST /api/binary/withdraw.
+            ServiceTaxAmount = 0,
+            TdsAmount = 0,
+            NetPayableAmount = t.Amount,
+            CreatedAt = t.CreatedAt
+        }).ToList();
+    }
+
     public async Task<BinaryWalletDto> GetBinaryWalletAsync(string userId)
     {
         var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == userId);
