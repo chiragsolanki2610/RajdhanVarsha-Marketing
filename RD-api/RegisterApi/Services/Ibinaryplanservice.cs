@@ -43,6 +43,9 @@ public interface IBinaryPlanService
     /// <summary>Gets the user's binary wallet summary.</summary>
     Task<BinaryWalletDto> GetBinaryWalletAsync(string userId);
 
+    /// <summary>Full binary wallet transaction history for userId, newest first (no cap).</summary>
+    Task<List<WalletTransactionDto>> GetTransactionHistoryAsync(string userId);
+
     /// <summary>
     /// Requests a withdrawal from the binary wallet.
     /// Fails if WithdrawalUnlocked = false (less than 3 downlines).
