@@ -408,6 +408,23 @@ public class BinaryPlanController : ControllerBase
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/transactions
+    // Full Binary Plan transaction history (not capped at 20 like the
+    // RecentTransactions list embedded in GET /api/binary/wallet).
+    // Shaped to match WalletTransactionDto so the frontend can reuse the
+    // same table/mapping code it already has for the Dream Plan.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("transactions")]
+    public async Task<IActionResult> GetTransactionHistory()
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var history = await _binaryService.GetTransactionHistoryAsync(userId);
+        return Ok(history);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // POST /api/binary/withdraw
     // Request a withdrawal from the binary wallet.
     // ─────────────────────────────────────────────────────────────────────
