@@ -69,6 +69,11 @@ try
     builder.Services.AddScoped<IReceiptService, ReceiptService>();
     builder.Services.AddScoped<IBinaryPlanService, BinaryPlanService>();  // ← ADDED
 
+    // Auto-runs pair reconciliation on startup + every 6h afterwards, so
+    // stuck/incorrect MatchedPairs counts (like the "1 pair" bug) get fixed
+    // automatically without anyone having to trigger it by hand.
+    builder.Services.AddHostedService<PairReconciliationHostedService>();
+
     // ── JWT Auth ─────────────────────────────────────────────────────────────
     var jwtKey = builder.Configuration["Jwt:Key"]
         ?? throw new InvalidOperationException(
