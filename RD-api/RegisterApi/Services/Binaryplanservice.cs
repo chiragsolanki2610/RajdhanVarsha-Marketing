@@ -685,17 +685,16 @@ public class BinaryPlanService : IBinaryPlanService
     /// <summary>
     /// Awards ₹150 for every newly-completed pair on `node`.
     ///
-    /// First commission gate: requires 2L+1R OR 1L+2R to fire the first ₹150.
-    /// At that moment, LeftActiveCount and RightActiveCount are snapshotted into
-    /// FirstCommissionLeftCount / FirstCommissionRightCount.
+    /// GATE: the very first pair only unlocks once there are at least 2 active
+    /// on one side and 1 on the other (2L+1R or 1L+2R) — a bare 1×1 does NOT
+    /// pay. This prevents two people who both happen to activate once from
+    /// instantly earning a pair with no real leg depth.
     ///
-    /// Subsequent commissions: every 1 new LEFT + 1 new RIGHT (measured as
-    /// growth from the snapshot) = 1 more pair = ₹150.
-    ///
-    /// Formula:
-    ///   totalEligiblePairs = 1 + min(leftGrowth, rightGrowth)
-    ///   where leftGrowth  = LeftActiveCount  - FirstCommissionLeftCount
-    ///         rightGrowth = RightActiveCount - FirstCommissionRightCount
+    /// Once the gate is open, pairs = min(LeftActiveCount, RightActiveCount)
+    /// directly — no separate "growth since first pair" tracking. E.g.:
+    ///   100 left + 1 right  → gate open (100≥2,1≥1) → min(100,1) = 1 pair
+    ///   100 left + 2 right  → min(100,2) = 2 pairs  (1 new pair awarded)
+    ///   15 right  + 5 left  → gate open → min(15,5) = 5 pairs = ₹750
     ///
     /// newPairs = totalEligiblePairs - MatchedPairs  (delta only, never re-paid)
     /// </summary>
@@ -704,27 +703,11 @@ public class BinaryPlanService : IBinaryPlanService
         int L = node.LeftActiveCount;
         int R = node.RightActiveCount;
 
-        // ── GATE: first commission requires 2L+1R or 1L+2R ──
+        // ── GATE: first pair requires 2L+1R or 1L+2R (blocks bare 1×1) ──
         bool gateOpen = (L >= 2 && R >= 1) || (L >= 1 && R >= 2);
         if (!gateOpen) return;
 
-        int totalEligiblePairs;
-
-        if (node.MatchedPairs == 0)
-        {
-            // First commission hasn't fired yet — always exactly 1 pair.
-            // Snapshot will be saved inside the loop below.
-            totalEligiblePairs = 1;
-        }
-        else
-        {
-            // First commission already fired — calculate growth from snapshot.
-            int leftGrowth = L - node.FirstCommissionLeftCount;
-            int rightGrowth = R - node.FirstCommissionRightCount;
-            int pairsAfterFirst = Math.Min(leftGrowth, rightGrowth);
-
-            totalEligiblePairs = 1 + pairsAfterFirst;
-        }
+        int totalEligiblePairs = Math.Min(L, R);
 
         int newPairs = totalEligiblePairs - node.MatchedPairs;
         if (newPairs <= 0) return;
@@ -739,13 +722,6 @@ public class BinaryPlanService : IBinaryPlanService
         for (int i = 0; i < newPairs; i++)
         {
             node.MatchedPairs += 1;
-
-            // Save snapshot at the exact moment the first commission fires
-            if (node.MatchedPairs == 1)
-            {
-                node.FirstCommissionLeftCount = L;
-                node.FirstCommissionRightCount = R;
-            }
 
             var pair = new BinaryPair
             {
@@ -947,11 +923,16 @@ public class BinaryPlanService : IBinaryPlanService
     // ─────────────────────────────────────────────────────────────────────────
     /// <summary>
     /// Walks every BinaryNode, recomputes the correct MatchedPairs count under
-    /// the current rule, and if a node was overpaid reverses exactly that excess:
-    /// debits the wallet, reduces TotalEarned/PairsCount, deletes the excess
-    /// BinaryPair rows, and logs a Debit transaction explaining the correction.
+    /// the CURRENT rule (correctPairs = min(LeftActiveCount, RightActiveCount)),
+    /// and reconciles in BOTH directions:
+    ///   - Overpaid nodes (paid too many pairs under the old gated rule):
+    ///     reverses the excess — debits the wallet, deletes the excess
+    ///     BinaryPair rows, logs a Debit transaction.
+    ///   - Underpaid nodes (blocked by the old gate even though min(L,R)
+    ///     already supported more pairs — this is the "1 pair" bug you saw):
+    ///     pays the shortfall — credits the wallet, adds BinaryPair rows,
+    ///     logs a Credit transaction.
     ///
-    /// Does NOT touch nodes that are correctly paid or under-paid.
     /// Safe to re-run — running it twice in a row is a no-op the second time.
     /// </summary>
     public async Task<List<string>> CorrectOverpaidPairsAsync()
@@ -961,82 +942,105 @@ public class BinaryPlanService : IBinaryPlanService
 
         foreach (var node in nodes)
         {
-            // ── Recompute correct pairs using the NEW rule ──
+            // ── Correct rule: gate (2x1 or 1x2 to unlock first pair), then
+            //    correctPairs = min(left, right) directly, no growth-since-
+            //    snapshot tracking. ──
             bool gateOpen = (node.LeftActiveCount >= 2 && node.RightActiveCount >= 1)
                          || (node.LeftActiveCount >= 1 && node.RightActiveCount >= 2);
-
-            int correctPairs;
-            if (!gateOpen)
-            {
-                correctPairs = 0;
-            }
-            else if (node.FirstCommissionLeftCount == 0 && node.FirstCommissionRightCount == 0)
-            {
-                // Snapshot not yet saved (node was paid under old rule before
-                // this field existed) — the most it could correctly owe is 1.
-                correctPairs = 1;
-            }
-            else
-            {
-                int leftGrowth = node.LeftActiveCount - node.FirstCommissionLeftCount;
-                int rightGrowth = node.RightActiveCount - node.FirstCommissionRightCount;
-                correctPairs = 1 + Math.Min(leftGrowth, rightGrowth);
-            }
-
-            int excess = node.MatchedPairs - correctPairs;
-            if (excess <= 0)
-                continue; // correctly paid or under-paid — nothing to claw back
-
-            decimal reverseAmount = excess * PairCommission;
+            int correctPairs = gateOpen ? Math.Min(node.LeftActiveCount, node.RightActiveCount) : 0;
+            int diff = correctPairs - node.MatchedPairs;
+            if (diff == 0)
+                continue; // already correct
 
             var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == node.UserId);
             if (wallet == null)
             {
-                log.Add($"{node.UserId}: had MatchedPairs={node.MatchedPairs} but no wallet found — skipped.");
-                continue;
+                wallet = new BinaryWallet { UserId = node.UserId, CreatedAt = DateTime.UtcNow };
+                _db.BinaryWallets.Add(wallet);
             }
 
-            // Remove the most recently credited excess pair rows for this user
-            var pairsToRemove = await _db.BinaryPairs
-                .Where(p => p.UserId == node.UserId)
-                .OrderByDescending(p => p.CreditedAt)
-                .Take(excess)
-                .ToListAsync();
-            _db.BinaryPairs.RemoveRange(pairsToRemove);
-
-            wallet.Balance -= reverseAmount;
-            wallet.TotalEarned -= reverseAmount;
-            wallet.PairsCount = Math.Max(wallet.PairsCount - excess, 0);
-            wallet.UpdatedAt = DateTime.UtcNow;
-
-            bool wentNegative = wallet.Balance < 0;
-            if (wentNegative)
+            if (diff < 0)
             {
-                log.Add($"{node.UserId}: WARNING — correction of -₹{reverseAmount} would make balance negative " +
-                        $"(was ₹{wallet.Balance + reverseAmount}, already withdrawn ₹{wallet.TotalWithdrawn}). " +
-                        $"Balance clamped to ₹0; manual follow-up needed for the shortfall.");
-                wallet.Balance = 0;
+                // ── OVERPAID: claw back the excess ──
+                int excess = -diff;
+                decimal reverseAmount = excess * PairCommission;
+
+                var pairsToRemove = await _db.BinaryPairs
+                    .Where(p => p.UserId == node.UserId)
+                    .OrderByDescending(p => p.CreditedAt)
+                    .Take(excess)
+                    .ToListAsync();
+                _db.BinaryPairs.RemoveRange(pairsToRemove);
+
+                wallet.Balance -= reverseAmount;
+                wallet.TotalEarned -= reverseAmount;
+                wallet.PairsCount = Math.Max(wallet.PairsCount - excess, 0);
+                wallet.UpdatedAt = DateTime.UtcNow;
+
+                if (wallet.Balance < 0)
+                {
+                    log.Add($"{node.UserId}: WARNING — correction of -₹{reverseAmount} would make balance negative " +
+                            $"(already withdrawn ₹{wallet.TotalWithdrawn}). Balance clamped to ₹0; manual follow-up needed.");
+                    wallet.Balance = 0;
+                }
+
+                node.MatchedPairs = correctPairs;
+                node.UpdatedAt = DateTime.UtcNow;
+
+                _db.BinaryWalletTransactions.Add(new BinaryWalletTransaction
+                {
+                    UserId = node.UserId,
+                    Type = BinaryTxnType.Debit,
+                    Amount = reverseAmount,
+                    BalanceAfter = wallet.Balance,
+                    Source = "Pair Commission Correction",
+                    Description = $"System correction: reversed {excess} overpaid pair(s) under old rule " +
+                                   $"(L={node.LeftActiveCount}, R={node.RightActiveCount}). MatchedPairs {node.MatchedPairs + excess} → {correctPairs}.",
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                log.Add($"{node.UserId}: OVERPAID — MatchedPairs {node.MatchedPairs + excess} → {correctPairs}, reversed ₹{reverseAmount}.");
             }
-
-            node.MatchedPairs = correctPairs;
-            node.UpdatedAt = DateTime.UtcNow;
-
-            var txn = new BinaryWalletTransaction
+            else
             {
-                UserId = node.UserId,
-                Type = BinaryTxnType.Debit,
-                Amount = reverseAmount,
-                BalanceAfter = wallet.Balance,
-                Source = "Pair Commission Correction",
-                Description = $"System correction: reversed {excess} overpaid pair(s) " +
-                               $"under old commission rule (L={node.LeftActiveCount}, R={node.RightActiveCount}). " +
-                               $"MatchedPairs corrected from {node.MatchedPairs + excess} to {correctPairs}.",
-                CreatedAt = DateTime.UtcNow
-            };
-            _db.BinaryWalletTransactions.Add(txn);
+                // ── UNDERPAID: top up the shortfall (this is the "1 pair" bug) ──
+                int shortfall = diff;
+                decimal payAmount = shortfall * PairCommission;
 
-            log.Add($"{node.UserId}: corrected MatchedPairs {node.MatchedPairs + excess} → {correctPairs}, " +
-                    $"reversed ₹{reverseAmount} (L={node.LeftActiveCount}, R={node.RightActiveCount}).");
+                for (int i = 0; i < shortfall; i++)
+                {
+                    node.MatchedPairs += 1;
+                    var pair = new BinaryPair
+                    {
+                        UserId = node.UserId,
+                        LeftChildId = node.LeftChildId ?? "",
+                        RightChildId = node.RightChildId ?? "",
+                        CommissionAmt = PairCommission,
+                        CreditedAt = DateTime.UtcNow
+                    };
+                    _db.BinaryPairs.Add(pair);
+                }
+
+                wallet.Balance += payAmount;
+                wallet.TotalEarned += payAmount;
+                wallet.PairsCount += shortfall;
+                wallet.UpdatedAt = DateTime.UtcNow;
+                node.UpdatedAt = DateTime.UtcNow;
+
+                _db.BinaryWalletTransactions.Add(new BinaryWalletTransaction
+                {
+                    UserId = node.UserId,
+                    Type = BinaryTxnType.Credit,
+                    Amount = payAmount,
+                    BalanceAfter = wallet.Balance,
+                    Source = "Pair Commission Correction",
+                    Description = $"System correction: paid {shortfall} previously-blocked pair(s) " +
+                                   $"(L={node.LeftActiveCount}, R={node.RightActiveCount}). MatchedPairs {node.MatchedPairs - shortfall} → {node.MatchedPairs}.",
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                log.Add($"{node.UserId}: UNDERPAID — MatchedPairs {node.MatchedPairs - shortfall} → {node.MatchedPairs}, paid ₹{payAmount}.");
+            }
         }
 
         await _db.SaveChangesAsync();
@@ -1050,7 +1054,7 @@ public class BinaryPlanService : IBinaryPlanService
         await _db.SaveChangesAsync();
 
         if (log.Count == 0)
-            log.Add("No overpaid nodes found — all MatchedPairs counts are already correct.");
+            log.Add("No mismatched nodes found — all MatchedPairs counts are already correct.");
 
         return log;
     }
