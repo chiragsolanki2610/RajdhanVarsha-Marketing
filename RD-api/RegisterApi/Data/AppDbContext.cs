@@ -256,8 +256,13 @@ public class AppDbContext : DbContext
             entity.Property(e => e.CommissionAmt).HasColumnType("decimal(18,2)");
             entity.Property(e => e.CreditedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasIndex(e => e.UserId);
-            // Prevents double-crediting the same pair (matches AnyAsync check in service)
-            entity.HasIndex(e => new { e.UserId, e.LeftChildId, e.RightChildId }).IsUnique();
+            // NOTE: previously unique on (UserId, LeftChildId, RightChildId), but that was
+            // wrong — a node's LeftChildId/RightChildId stay the same as more people activate
+            // beneath it, so every new pair for that node legitimately reuses the same
+            // LeftChildId/RightChildId. Double-crediting is prevented by node.MatchedPairs
+            // (see BinaryPlanService.AwardNewPairsAsync), not by DB uniqueness. Kept as a
+            // plain index for fast lookups. See migration FixBinaryPairsUniqueConstraint.
+            entity.HasIndex(e => new { e.UserId, e.LeftChildId, e.RightChildId });
         });
     }
 }
