@@ -473,12 +473,15 @@ public class BinaryPlanService : IBinaryPlanService
         request.ProcessedAt = DateTime.UtcNow;
         request.AdminNote = adminNote;
 
+        // IMPORTANT: RequestWithdrawalAsync already deducted wallet.Balance
+        // at request time (funds are "reserved" the moment the request is
+        // submitted, not at approval time). This method must NOT touch
+        // Balance again on approve — the old code did `wallet.Balance -=
+        // request.Amount` here too, silently double-charging the user's
+        // wallet for every approved withdrawal. Approval only needs to bump
+        // TotalWithdrawn (the lifetime stat) and log the finalized txn.
         if (approve)
         {
-            if (request.Amount > wallet.Balance)
-                return (false, "Insufficient wallet balance.");
-
-            wallet.Balance -= request.Amount;
             wallet.TotalWithdrawn += request.Amount;
             wallet.UpdatedAt = DateTime.UtcNow;
 
@@ -494,6 +497,27 @@ public class BinaryPlanService : IBinaryPlanService
                 CreatedAt = DateTime.UtcNow
             };
             _db.BinaryWalletTransactions.Add(txn);
+        }
+        else
+        {
+            // REJECT: the old code never refunded the amount that was
+            // reserved (deducted) at request time, so a rejected withdrawal
+            // permanently vanished from the user's balance. Refund it here.
+            wallet.Balance += request.Amount;
+            wallet.UpdatedAt = DateTime.UtcNow;
+
+            var refundTxn = new BinaryWalletTransaction
+            {
+                UserId = request.UserId,
+                Type = BinaryTxnType.Credit,
+                Amount = request.Amount,
+                BalanceAfter = wallet.Balance,
+                Source = "Withdrawal Rejected",
+                Description = $"Refund - withdrawal rejected. Ref: WR-{requestId}",
+                ReferenceId = $"WR-{requestId}",
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.BinaryWalletTransactions.Add(refundTxn);
         }
 
         await _db.SaveChangesAsync();
@@ -658,6 +682,24 @@ public class BinaryPlanService : IBinaryPlanService
     /// (mirrors IncrementLegCountsUpAsync, but only counts active members).
     /// After incrementing each ancestor, checks whether new pairs have formed
     /// for that ancestor and awards commission for them.
+    ///
+    /// CONCURRENCY: a shared ancestor (e.g. the account near the top of a
+    /// large tree) gets this increment fired for EVERY activation anywhere
+    /// in its subtree. Multiple activations happening close together race
+    /// on the same BinaryNode row. Without a concurrency check, EF's default
+    /// "last write wins" behavior means one of the concurrent increments is
+    /// silently discarded — the counter ends up too low, and because
+    /// AwardNewPairsAsync's pair math is a pure function of whatever value
+    /// happens to be in memory at that moment, a pair that should have been
+    /// unlocked by the lost increment is skipped and never paid. This is
+    /// exactly the "1 pair when it should be 3" bug.
+    ///
+    /// Fix: BinaryNode now has an xmin concurrency token (see AppDbContext).
+    /// SaveChangesAsync throws DbUpdateConcurrencyException when another
+    /// request updated the same row first. We catch that, reload the node's
+    /// current (post-conflict) values from the DB, re-apply our increment
+    /// and the pair-award check on top of the fresh data, and retry — so no
+    /// increment and no pair is ever silently dropped.
     /// </summary>
     private async Task IncrementActiveLegCountsUpAndAwardAsync(BinaryNode startNode, string childPosition)
     {
@@ -666,19 +708,44 @@ public class BinaryPlanService : IBinaryPlanService
 
         foreach (var current in chain)
         {
-            if (comingFromPosition == "LEFT")
-                current.LeftActiveCount++;
-            else
-                current.RightActiveCount++;
+            var incomingPosition = comingFromPosition; // capture for the retry closure
+            var node = current;
 
-            current.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
+            const int maxRetries = 5;
+            for (int attempt = 1; ; attempt++)
+            {
+                if (incomingPosition == "LEFT")
+                    node.LeftActiveCount++;
+                else
+                    node.RightActiveCount++;
+
+                node.UpdatedAt = DateTime.UtcNow;
+
+                try
+                {
+                    await _db.SaveChangesAsync();
+                    break; // success — move on to awarding pairs for this ancestor
+                }
+                catch (DbUpdateConcurrencyException ex) when (attempt < maxRetries)
+                {
+                    // Another activation updated this exact node between our
+                    // read and our write. Reload the current DB values (this
+                    // also resets the entity's tracked xmin token) and retry
+                    // the increment on top of the up-to-date data instead of
+                    // giving up and losing the +1.
+                    var entry = ex.Entries.Single();
+                    await entry.ReloadAsync();
+                    node = (BinaryNode)entry.Entity;
+                }
+            }
 
             // Award any newly-formed pairs for this ancestor based on the
-            // updated active counts.
-            await AwardNewPairsAsync(current);
+            // updated active counts. AwardNewPairsAsync computes the delta
+            // against node.MatchedPairs itself, so it's safe even if a
+            // retry above changed how many increments landed here.
+            await AwardNewPairsAsync(node);
 
-            comingFromPosition = current.Position;
+            comingFromPosition = node.Position;
         }
     }
 
@@ -738,7 +805,44 @@ public class BinaryPlanService : IBinaryPlanService
             wallet.PairsCount += 1;
             wallet.UpdatedAt = DateTime.UtcNow;
 
-            await _db.SaveChangesAsync(); // save now so pair.Id is available for the transaction
+            // CONCURRENCY: node and wallet both now carry xmin tokens. If a
+            // concurrent request touched either row since we read it (e.g.
+            // an admin withdrawal approval touching the same wallet, or a
+            // parallel activation touching the same node further up the
+            // chain), retry on top of the fresh values instead of throwing
+            // away this pair's commission or crashing the activation.
+            const int maxRetries = 5;
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await _db.SaveChangesAsync(); // save now so pair.Id is available for the transaction
+                    break;
+                }
+                catch (DbUpdateConcurrencyException ex) when (attempt < maxRetries)
+                {
+                    foreach (var entry in ex.Entries)
+                    {
+                        // Reload the conflicting row(s), then re-apply this
+                        // pair's numbers on top of the current DB state.
+                        var current = entry.Entity;
+                        await entry.ReloadAsync();
+
+                        if (current is BinaryWallet)
+                        {
+                            wallet.Balance += PairCommission;
+                            wallet.TotalEarned += PairCommission;
+                            wallet.PairsCount += 1;
+                            wallet.UpdatedAt = DateTime.UtcNow;
+                        }
+                        else if (current is BinaryNode)
+                        {
+                            node.MatchedPairs += 1;
+                            node.UpdatedAt = DateTime.UtcNow;
+                        }
+                    }
+                }
+            }
 
             var txn = new BinaryWalletTransaction
             {
