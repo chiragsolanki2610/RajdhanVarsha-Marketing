@@ -44,6 +44,10 @@ namespace RegisterApi.Migrations
                 b.Property<int>("FirstCommissionRightCount")
                     .HasColumnType("integer");
 
+                b.Property<string>("GateMajoritySide")
+                    .HasMaxLength(10)
+                    .HasColumnType("character varying(10)");
+
                 b.Property<bool>("IsActive")
                     .HasColumnType("boolean");
 
