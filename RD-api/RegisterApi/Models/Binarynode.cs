@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace RegisterApi.Models;
 
@@ -68,6 +68,18 @@ public class BinaryNode
     /// Remains 0 until the first commission fires.
     /// </summary>
     public int FirstCommissionRightCount { get; set; } = 0;
+
+    /// <summary>
+    /// Which side (LEFT or RIGHT) was the MAJORITY side at the moment the
+    /// gate first opened (the 2:1 / 1:2 event that unlocked pair #1).
+    /// That side permanently "spent" 1 extra active member to open the gate
+    /// and that member never becomes pair-eligible again — every pair after
+    /// the first costs exactly 1 more active member on EACH side, not
+    /// min(Left, Right) computed fresh. This field records which side to
+    /// discount by 1 forever, so pairs = min(majoritySide - 1, minoritySide).
+    /// Null until the gate opens for this node.
+    /// </summary>
+    public string? GateMajoritySide { get; set; }
 
     public decimal LeftLegBv { get; set; } = 0;
     public decimal RightLegBv { get; set; } = 0;
