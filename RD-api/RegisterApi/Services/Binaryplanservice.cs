@@ -757,11 +757,22 @@ public class BinaryPlanService : IBinaryPlanService
     /// pay. This prevents two people who both happen to activate once from
     /// instantly earning a pair with no real leg depth.
     ///
-    /// Once the gate is open, pairs = min(LeftActiveCount, RightActiveCount)
-    /// directly — no separate "growth since first pair" tracking. E.g.:
-    ///   100 left + 1 right  → gate open (100≥2,1≥1) → min(100,1) = 1 pair
-    ///   100 left + 2 right  → min(100,2) = 2 pairs  (1 new pair awarded)
-    ///   15 right  + 5 left  → gate open → min(15,5) = 5 pairs = ₹750
+    /// IMPORTANT — the extra member spent to OPEN the gate never becomes
+    /// pair-eligible again. Once the gate is open, the side that had 2
+    /// members at that moment (the "majority" side) permanently owes 1
+    /// member for every pair after the first:
+    ///
+    ///     pairs = min(majoritySide - 1, minoritySide)
+    ///
+    /// GateMajoritySide records which side (LEFT/RIGHT) was ahead at the
+    /// instant the gate opened, because once L and R become equal you can
+    /// no longer tell which side owes the -1 just by comparing the numbers.
+    /// Examples (majority = LEFT, set once at 2-1):
+    ///   2-1  → min(2-1, 1) = 1 pair              (gate just opened)
+    ///   2-5  → min(2-1, 5) = 1 pair              (only right grew — stays 1)
+    ///   3-2  → min(3-1, 2) = 2 pairs
+    ///   3-3  → min(3-1, 3) = 2 pairs
+    ///   4-3  → min(4-1, 3) = 3 pairs
     ///
     /// newPairs = totalEligiblePairs - MatchedPairs  (delta only, never re-paid)
     /// </summary>
@@ -771,10 +782,31 @@ public class BinaryPlanService : IBinaryPlanService
         int R = node.RightActiveCount;
 
         // ── GATE: first pair requires 2L+1R or 1L+2R (blocks bare 1×1) ──
-        bool gateOpen = (L >= 2 && R >= 1) || (L >= 1 && R >= 2);
-        if (!gateOpen) return;
+        bool gateJustOpening = node.GateMajoritySide == null &&
+                                ((L >= 2 && R >= 1) || (L >= 1 && R >= 2));
 
-        int totalEligiblePairs = Math.Min(L, R);
+        if (gateJustOpening)
+        {
+            // Record which side was ahead the instant the gate opened — that
+            // side's extra member is spent permanently and never re-enters
+            // the pairing pool. If L == R somehow at gate-open (shouldn't
+            // normally happen given the 2:1/1:2 requirement), default to
+            // LEFT so the discount still applies to exactly one side.
+            node.GateMajoritySide = L >= R ? "LEFT" : "RIGHT";
+            node.UpdatedAt = DateTime.UtcNow;
+            // Persist immediately — this flag must survive even if the
+            // newPairs check below turns out to be <=0, since it's read on
+            // every future activation to know which side owes the -1.
+            await _db.SaveChangesAsync();
+        }
+
+        if (node.GateMajoritySide == null) return; // gate still closed
+
+        int effectiveLeft = node.GateMajoritySide == "LEFT" ? L - 1 : L;
+        int effectiveRight = node.GateMajoritySide == "RIGHT" ? R - 1 : R;
+
+        int totalEligiblePairs = Math.Min(effectiveLeft, effectiveRight);
+        if (totalEligiblePairs < 0) totalEligiblePairs = 0;
 
         int newPairs = totalEligiblePairs - node.MatchedPairs;
         if (newPairs <= 0) return;
@@ -1046,12 +1078,42 @@ public class BinaryPlanService : IBinaryPlanService
 
         foreach (var node in nodes)
         {
+            int L = node.LeftActiveCount;
+            int R = node.RightActiveCount;
+
             // ── Correct rule: gate (2x1 or 1x2 to unlock first pair), then
-            //    correctPairs = min(left, right) directly, no growth-since-
-            //    snapshot tracking. ──
-            bool gateOpen = (node.LeftActiveCount >= 2 && node.RightActiveCount >= 1)
-                         || (node.LeftActiveCount >= 1 && node.RightActiveCount >= 2);
-            int correctPairs = gateOpen ? Math.Min(node.LeftActiveCount, node.RightActiveCount) : 0;
+            //    the side that was AHEAD at gate-open permanently loses 1
+            //    member from the pairing pool — correctPairs =
+            //    min(majoritySide - 1, minoritySide). See AwardNewPairsAsync
+            //    for the full explanation. ──
+            bool gateOpen = (L >= 2 && R >= 1) || (L >= 1 && R >= 2);
+
+            if (gateOpen && node.GateMajoritySide == null)
+            {
+                // Backfill for nodes that earned pairs before this field
+                // existed. We can't recover the exact historical moment the
+                // gate opened, so this assumes today's larger side was also
+                // the majority side at gate-open — true for the vast
+                // majority of trees since the majority side rarely flips.
+                // Flagged in the log so it can be spot-checked manually.
+                node.GateMajoritySide = L >= R ? "LEFT" : "RIGHT";
+                log.Add($"{node.UserId}: BACKFILLED GateMajoritySide = {node.GateMajoritySide} " +
+                        $"(inferred from current L={L}, R={R} — verify manually if this node's " +
+                        "majority side ever flipped).");
+            }
+
+            int correctPairs;
+            if (!gateOpen)
+            {
+                correctPairs = 0;
+            }
+            else
+            {
+                int effectiveLeft = node.GateMajoritySide == "LEFT" ? L - 1 : L;
+                int effectiveRight = node.GateMajoritySide == "RIGHT" ? R - 1 : R;
+                correctPairs = Math.Max(0, Math.Min(effectiveLeft, effectiveRight));
+            }
+
             int diff = correctPairs - node.MatchedPairs;
             if (diff == 0)
                 continue; // already correct
