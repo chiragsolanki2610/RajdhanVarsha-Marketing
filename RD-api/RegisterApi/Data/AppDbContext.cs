@@ -204,6 +204,15 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.UserId).IsUnique();
             entity.HasIndex(e => e.ParentId);
             entity.HasIndex(e => e.SponsorId);
+
+            // CONCURRENCY FIX: multiple activations under the same ancestor
+            // (e.g. many downline members activating close together) were
+            // racing on LeftActiveCount/RightActiveCount/MatchedPairs with
+            // no concurrency check — a classic lost-update bug that silently
+            // dropped pair commissions ("1 pair" instead of the true count).
+            // xmin is Postgres's built-in row-version system column, so this
+            // needs no migration/schema change — EF just starts checking it.
+            entity.UseXminAsConcurrencyToken();
         });
 
         modelBuilder.Entity<BinaryWallet>(entity =>
@@ -216,6 +225,10 @@ public class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasIndex(e => e.UserId).IsUnique();
+
+            // Same lost-update risk applies to wallet Balance/TotalEarned
+            // when two award events for the same user overlap.
+            entity.UseXminAsConcurrencyToken();
         });
 
         modelBuilder.Entity<BinaryWalletTransaction>(entity =>
