@@ -498,7 +498,23 @@ public class OrdersController : ControllerBase
             }
             else
             {
-                await _binaryService.ActivateBinaryNodeAsync(order.UserId, order.TotalBv, awardPairs: true);
+                try
+                {
+                    await _binaryService.ActivateBinaryNodeAsync(order.UserId, order.TotalBv, awardPairs: true);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Binary Activation Error] order={order.Id} user={order.UserId} {ex.Message}");
+                    Console.WriteLine($"[Binary Activation Inner] {ex.InnerException?.Message}");
+                    // TEMP DEBUG: surface the real cause instead of letting it
+                    // hit the global exception handler and return a generic
+                    // "Server error" message. Revert to silent catch once fixed.
+                    var realError = ex.InnerException?.Message ?? ex.Message;
+                    return StatusCode(500, new
+                    {
+                        message = $"Failed to activate binary node: {realError}"
+                    });
+                }
 
                 if (buyer != null)
                 {
