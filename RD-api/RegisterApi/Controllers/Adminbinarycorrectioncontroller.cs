@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using RegisterApi.Data;
 using RegisterApi.Services;
 
 namespace RegisterApi.Controllers;
@@ -16,10 +18,12 @@ namespace RegisterApi.Controllers;
 public class AdminBinaryCorrectionController : ControllerBase
 {
     private readonly IBinaryPlanService _binaryPlanService;
+    private readonly AppDbContext _db;
 
-    public AdminBinaryCorrectionController(IBinaryPlanService binaryPlanService)
+    public AdminBinaryCorrectionController(IBinaryPlanService binaryPlanService, AppDbContext db)
     {
         _binaryPlanService = binaryPlanService;
+        _db = db;
     }
 
     // POST /api/admin/binary/correct-pairs
@@ -34,6 +38,39 @@ public class AdminBinaryCorrectionController : ControllerBase
             message = "Correction run complete.",
             affectedCount = log.Count(l => !l.StartsWith("No overpaid")),
             details = log
+        });
+    }
+
+    // POST /api/admin/binary/fix-pairs-index
+    // ONE-TIME production hotfix: the original unique index on
+    // BinaryPairs(UserId, LeftChildId, RightChildId) is wrong — a node's
+    // LeftChildId/RightChildId stay the same as more pairs form under it,
+    // so every 2nd+ pair legitimately reuses those same values, and the
+    // unique index blocks the insert with a 23505 duplicate-key error.
+    // Migration 20260817000000_FixBinaryPairsUniqueConstraint already
+    // fixes this going forward, but if that migration hasn't taken effect
+    // on THIS database yet (e.g. it predates the current deploy), this
+    // endpoint applies the exact same fix directly via raw SQL so it can
+    // be run once from the browser/Postman without DB console access.
+    // Safe to call more than once.
+    [HttpPost("fix-pairs-index")]
+    public async Task<IActionResult> FixBinaryPairsIndex()
+    {
+        await _db.Database.ExecuteSqlRawAsync(
+            "DROP INDEX IF EXISTS \"IX_BinaryPairs_UserId_LeftChildId_RightChildId\";");
+
+        await _db.Database.ExecuteSqlRawAsync(
+            "CREATE INDEX IF NOT EXISTS \"IX_BinaryPairs_UserId_LeftChildId_RightChildId\" " +
+            "ON \"BinaryPairs\" (\"UserId\", \"LeftChildId\", \"RightChildId\");");
+
+        await _db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") " +
+            "VALUES ('20260817000000_FixBinaryPairsUniqueConstraint', '8.0.0') " +
+            "ON CONFLICT (\"MigrationId\") DO NOTHING;");
+
+        return Ok(new
+        {
+            message = "BinaryPairs index fixed. It is now non-unique, so pair activations will no longer fail with a duplicate-key error."
         });
     }
 }
