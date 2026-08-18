@@ -1224,4 +1224,116 @@ public class BinaryPlanService : IBinaryPlanService
 
         return log;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 10. ONE-TIME ADMIN CORRECTION FOR DRIFTED LeftActiveCount/RightActiveCount
+    // ─────────────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// LeftActiveCount/RightActiveCount are stored counters incremented once,
+    /// at the moment each descendant activates (see
+    /// IncrementActiveLegCountsUpAndAwardAsync). If that increment was ever
+    /// lost — e.g. to the race condition described in that method's comments,
+    /// before the xmin concurrency fix existed — the counter is permanently
+    /// wrong from then on, because nothing else ever recalculates it from the
+    /// real tree. The Binary Tree View page shows the true live state (it
+    /// reads node.IsActive directly), so a drifted counter shows up as the
+    /// Dashboard/pair numbers disagreeing with what's visibly in the tree.
+    ///
+    /// This walks the tree ONCE, bottom-up, and counts the REAL number of
+    /// active nodes in every subtree directly from IsActive flags — the
+    /// ground truth — then overwrites LeftActiveCount/RightActiveCount with
+    /// those real counts wherever they differ from what was stored.
+    ///
+    /// For every node whose counts change, GateMajoritySide is reset to null
+    /// so the next AwardNewPairsAsync/CorrectOverpaidPairsAsync run re-infers
+    /// it from the corrected numbers instead of keeping a majority-side
+    /// decision that was based on wrong data.
+    ///
+    /// IMPORTANT: run CorrectOverpaidPairsAsync AFTER this, in a second call —
+    /// this method only fixes the counters; it does not touch MatchedPairs,
+    /// wallet balances, or BinaryPair rows. Those still need the pair
+    /// reconciliation pass to catch up to the corrected counts.
+    ///
+    /// Safe to re-run — a second run is a no-op once counts match reality.
+    /// </summary>
+    public async Task<List<string>> RecomputeActiveCountsAsync()
+    {
+        var log = new List<string>();
+
+        var nodes = await _db.BinaryNodes.ToListAsync();
+        var byId = nodes.ToDictionary(n => n.UserId);
+
+        var root = nodes.FirstOrDefault(n => n.ParentId == null);
+        if (root == null)
+        {
+            log.Add("No root node found — nothing to recompute.");
+            return log;
+        }
+
+        // ── Iterative (non-recursive) post-order traversal ──
+        // Computes, for every node, the count of ACTIVE nodes in the subtree
+        // rooted at that node (the node itself included). Iterative with an
+        // explicit stack so a deep/large tree can never blow the call stack,
+        // and a visited-set guards against a corrupted cyclic child pointer.
+        var activeSubtreeCount = new Dictionary<string, int>();
+        var visited = new HashSet<string>();
+        var stack = new Stack<(string id, bool expanded)>();
+        stack.Push((root.UserId, false));
+
+        while (stack.Count > 0)
+        {
+            var (id, expanded) = stack.Pop();
+            if (!byId.TryGetValue(id, out var node)) continue;
+
+            if (expanded)
+            {
+                int count = node.IsActive ? 1 : 0;
+                if (!string.IsNullOrEmpty(node.LeftChildId) &&
+                    activeSubtreeCount.TryGetValue(node.LeftChildId, out var lc))
+                    count += lc;
+                if (!string.IsNullOrEmpty(node.RightChildId) &&
+                    activeSubtreeCount.TryGetValue(node.RightChildId, out var rc))
+                    count += rc;
+
+                activeSubtreeCount[id] = count;
+            }
+            else
+            {
+                if (!visited.Add(id)) continue; // cycle guard — already processed
+                stack.Push((id, true));
+                if (!string.IsNullOrEmpty(node.RightChildId))
+                    stack.Push((node.RightChildId, false));
+                if (!string.IsNullOrEmpty(node.LeftChildId))
+                    stack.Push((node.LeftChildId, false));
+            }
+        }
+
+        // ── Compare stored counts against the real subtree counts ──
+        foreach (var node in nodes)
+        {
+            int realLeft = !string.IsNullOrEmpty(node.LeftChildId) &&
+                            activeSubtreeCount.TryGetValue(node.LeftChildId, out var lc) ? lc : 0;
+            int realRight = !string.IsNullOrEmpty(node.RightChildId) &&
+                             activeSubtreeCount.TryGetValue(node.RightChildId, out var rc) ? rc : 0;
+
+            if (realLeft == node.LeftActiveCount && realRight == node.RightActiveCount)
+                continue; // already correct
+
+            log.Add($"{node.UserId}: DRIFTED COUNTS — LeftActiveCount {node.LeftActiveCount} → {realLeft}, " +
+                    $"RightActiveCount {node.RightActiveCount} → {realRight}. " +
+                    "GateMajoritySide reset — re-run correct-pairs next.");
+
+            node.LeftActiveCount = realLeft;
+            node.RightActiveCount = realRight;
+            node.GateMajoritySide = null; // let the next pair-correction pass re-infer this from real data
+            node.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        if (log.Count == 0)
+            log.Add("No drifted counts found — LeftActiveCount/RightActiveCount already match the real tree.");
+
+        return log;
+    }
 }
