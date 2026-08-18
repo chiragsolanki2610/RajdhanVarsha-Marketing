@@ -71,6 +71,18 @@ public interface IBinaryPlanService
     Task<List<string>> CorrectOverpaidPairsAsync();
 
     /// <summary>
+    /// ONE-TIME ADMIN CORRECTION: Recomputes LeftActiveCount/RightActiveCount
+    /// for every node from the REAL current tree state (actual IsActive flags
+    /// of every descendant), instead of trusting the stored counters — which
+    /// can drift permanently out of sync if an increment was ever lost to a
+    /// race condition (see IncrementActiveLegCountsUpAndAwardAsync comments).
+    /// After fixing the counts, also re-runs the pair/commission reconciliation
+    /// (same logic as CorrectOverpaidPairsAsync) so pairs and commission are
+    /// recalculated from the now-correct counts. Safe to run multiple times.
+    /// </summary>
+    Task<List<string>> RecomputeActiveCountsAsync();
+
+    /// <summary>
     /// Walks the current user's entire binary downline (both legs) and returns
     /// the IDs that got their Binary Plan ID activated today, split by which
     /// side (LEFT/RIGHT) of the current user they fall under.
