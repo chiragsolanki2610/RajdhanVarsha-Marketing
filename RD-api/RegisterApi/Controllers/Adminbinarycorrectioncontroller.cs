@@ -41,6 +41,26 @@ public class AdminBinaryCorrectionController : ControllerBase
         });
     }
 
+    // POST /api/admin/binary/recompute-active-counts
+    // ONE-TIME FIX for LeftActiveCount/RightActiveCount drift caused by lost
+    // increments (old race condition, before the xmin concurrency fix).
+    // Recalculates both counters for every node from the REAL tree (actual
+    // IsActive flags), overwriting whatever was stored. Run this FIRST, then
+    // call POST /api/admin/binary/correct-pairs right after — that second
+    // call is what actually recalculates MatchedPairs/commission/wallets
+    // from the now-correct counts this endpoint produces. Safe to re-run.
+    [HttpPost("recompute-active-counts")]
+    public async Task<IActionResult> RecomputeActiveCounts()
+    {
+        var log = await _binaryPlanService.RecomputeActiveCountsAsync();
+        return Ok(new
+        {
+            message = "Active count recomputation complete. Now call POST /api/admin/binary/correct-pairs to reconcile pairs/commission against the corrected counts.",
+            affectedCount = log.Count(l => !l.StartsWith("No drifted")),
+            details = log
+        });
+    }
+
     // POST /api/admin/binary/fix-pairs-index
     // ONE-TIME production hotfix: the original unique index on
     // BinaryPairs(UserId, LeftChildId, RightChildId) is wrong — a node's
