@@ -8,7 +8,6 @@ import {
   Info,
   ArrowLeft,
   ChevronRight,
-  ArrowDownLeft,
   TrendingUp,
   Loader2,
   AlertCircle,
@@ -81,6 +80,20 @@ export type WithdrawalRequestDto = {
   requestedAt: string;
   processedAt: string | null;
   adminRemarks: string | null;
+};
+
+// Matches BinaryWithdrawalRequestDto from GET /api/wallet/withdrawals/binary.
+// Note: unlike WithdrawalRequestDto, the binary side doesn't store the tax
+// breakdown on the row — only `status` (the field this whole fix depends on).
+export type BinaryWithdrawalRequestDto = {
+  id: number;
+  userId: string;
+  userName: string;
+  amount: number;
+  status: 'Pending' | 'Approved' | 'Rejected' | string;
+  requestedAt: string;
+  processedAt: string | null;
+  adminNote: string | null;
 };
 
 // matches BinaryNodeStatusDto from GET /api/binary/status
@@ -177,6 +190,43 @@ function requestBinaryWithdrawal(amount: number): Promise<WithdrawalRequestDto> 
   });
 }
 
+// ── FIX: the withdrawal history/detail view used to infer Pending/Approved/
+// Rejected by scanning transaction description text, which silently stayed
+// "Pending" forever because the backend doesn't always rewrite that text on
+// approval. These two endpoints return the withdrawal REQUEST records
+// directly, which carry a real `status` field the admin panel actually sets
+// when it approves/rejects — that's now the single source of truth.
+function getMyWithdrawals(planKey: PlanKey): Promise<WithdrawalRequestDto[]> {
+  if (planKey === 'BINARY') {
+    return apiFetch<BinaryWithdrawalRequestDto[]>('/api/wallet/withdrawals/binary').then((rows) =>
+      rows.map(binaryToWithdrawalRequestDto)
+    );
+  }
+  return apiFetch<WithdrawalRequestDto[]>('/api/wallet/withdrawals');
+}
+
+// BinaryWithdrawalRequestDto doesn't store the tax breakdown on the row
+// (only Dream Plan requests do), so we recompute it client-side using the
+// same 5% + 5% rule the backend applies — this matches WalletRules on the
+// server and is purely for display.
+function binaryToWithdrawalRequestDto(r: BinaryWithdrawalRequestDto): WithdrawalRequestDto {
+  const { serviceTax, tds, net } = estimateTaxBreakdown(r.amount);
+  return {
+    id: r.id,
+    userId: r.userId,
+    userName: r.userName,
+    planType: PLAN_TYPES.BINARY,
+    amount: r.amount,
+    serviceTaxAmount: serviceTax,
+    tdsAmount: tds,
+    netPayableAmount: net,
+    status: (r.status as WithdrawalStatus) ?? 'Pending',
+    requestedAt: r.requestedAt,
+    processedAt: r.processedAt,
+    adminRemarks: r.adminNote,
+  };
+}
+
 // ==========================================
 // COMPONENT METADATA & HELPER FUNCTIONS
 // ==========================================
@@ -228,33 +278,13 @@ function estimateTaxBreakdown(amount: number) {
   return { serviceTax, tds, net };
 }
 
-// ── NEW: withdrawal-only filter ─────────────────────────────────────────
-// History tab should show ONLY withdrawal activity (Requested / Approved /
-// Rejected), not commission/BV credit entries. We filter on `source` since
-// that's what your backend writes ("Withdrawal Requested", "Withdrawal
-// Rejected", etc.). Adjust the match string if your backend uses different
-// wording, or better: filter server-side once you add a dedicated endpoint.
-function isWithdrawalTransaction(tx: WalletTransactionDto) {
-  return tx.source?.toLowerCase().includes('withdraw');
-}
-
-// ── NEW: derive a withdrawal's Pending / Approved / Rejected status from
-// its transaction text. The wallet transaction log (WalletTransactionDto)
-// doesn't carry a dedicated `status` field the way WithdrawalRequestDto
-// does, so we infer it from the description/source wording your backend
-// writes (e.g. "Reserved pending withdrawal approval", "Withdrawal
-// Approved", "Withdrawal Rejected"). Adjust the keyword matches below if
-// your backend uses different phrasing.
+// ── FIXED: status now comes straight from the backend's `status` field on
+// the withdrawal request (see getMyWithdrawals above) instead of being
+// guessed from transaction description text. That old guess is what caused
+// the wallet page to keep showing "Pending" after an admin approved/rejected
+// a request — the request row changed, but the transaction text didn't
+// always change with it. Keeping the type name for minimal diff elsewhere.
 type WithdrawalStatus = 'Pending' | 'Approved' | 'Rejected';
-
-function getWithdrawalStatus(tx: WalletTransactionDto): WithdrawalStatus {
-  const text = `${tx.description ?? ''} ${tx.source ?? ''}`.toLowerCase();
-  if (text.includes('reject') || text.includes('decline') || text.includes('fail')) return 'Rejected';
-  if (text.includes('approve') || text.includes('success') || text.includes('paid') || text.includes('complete')) {
-    return 'Approved';
-  }
-  return 'Pending';
-}
 
 const STATUS_META: Record<
   WithdrawalStatus,
@@ -286,12 +316,14 @@ export default function WalletPage() {
   const [loadingWallets, setLoadingWallets] = useState(true);
   const [walletsError, setWalletsError] = useState<string | null>(null);
 
-  const [history, setHistory] = useState<WalletTransactionDto[]>([]);
+  // FIXED: holds real WithdrawalRequestDto rows (with the authoritative
+  // `status` field) instead of raw WalletTransactionDto rows.
+  const [history, setHistory] = useState<WithdrawalRequestDto[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
   // NEW: which withdrawal history row's detail popup is open (null = closed)
-  const [detailTx, setDetailTx] = useState<WalletTransactionDto | null>(null);
+  const [detailTx, setDetailTx] = useState<WithdrawalRequestDto | null>(null);
 
   const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -379,15 +411,16 @@ export default function WalletPage() {
     }
   }, [selectedWallet, loadBinaryStatus]);
 
-  // ── UPDATED: loads history from the correct table per plan, then filters
-  // down to withdrawal-only entries so commission/BV credits don't show up
-  // in what's meant to be a withdrawal statement log.
+  // ── FIXED: loads the actual withdrawal REQUEST rows for the current plan
+  // (real `status` field) instead of the transaction log + text-guessing.
+  // This is what makes Approved/Rejected show up correctly right after an
+  // admin processes the request.
   const loadHistory = useCallback(async (key: PlanKey) => {
     setHistoryLoading(true);
     setHistoryError(null);
     try {
-      const data = await getTransactionHistory(key);
-      setHistory(data.filter(isWithdrawalTransaction));
+      const data = await getMyWithdrawals(key);
+      setHistory(data);
     } catch (err) {
       setHistoryError(err instanceof Error ? err.message : 'Could not load withdrawal history.');
     } finally {
@@ -848,24 +881,26 @@ export default function WalletPage() {
 
                       {!historyLoading && !historyError && history.length > 0 && (
                         <div className="space-y-2.5 sm:space-y-3">
-                          {history.map((tx) => {
-                            const { date, time } = formatDateTime(tx.createdAt);
-                            const isCredit = tx.type === 'Credit';
+                          {history.map((req) => {
+                            const { date, time } = formatDateTime(req.requestedAt);
+                            // FIXED: badge now reflects req.status straight from the
+                            // backend instead of a guess derived from transaction text.
+                            const meta = STATUS_META[(req.status as WithdrawalStatus) ?? 'Pending'];
                             return (
                               <div
-                                key={tx.id}
+                                key={req.id}
                                 className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-gray-50/50 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all"
                               >
                                 <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                                   <div
-                                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 ${
-                                      isCredit ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
-                                    }`}
+                                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 ${meta.bg} ${meta.text}`}
                                   >
-                                    {isCredit ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                                    <ArrowUpRight className="w-4 h-4" />
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate">{tx.description || tx.source}</p>
+                                    <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate">
+                                      Withdrawal Request
+                                    </p>
                                     <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">
                                       {date} • {time}
                                     </p>
@@ -873,11 +908,17 @@ export default function WalletPage() {
                                 </div>
 
                                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                                  <span className={`text-xs sm:text-sm font-bold whitespace-nowrap ${isCredit ? 'text-[#22c55e]' : 'text-gray-700'}`}>
-                                    {isCredit ? '+' : '-'} {formatINR(tx.amount)}
+                                  <span
+                                    className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold px-2 py-1 rounded-full ${meta.bg} ${meta.text}`}
+                                  >
+                                    {meta.icon}
+                                    {meta.label}
+                                  </span>
+                                  <span className="text-xs sm:text-sm font-bold whitespace-nowrap text-gray-700">
+                                    - {formatINR(req.amount)}
                                   </span>
                                   <button
-                                    onClick={() => setDetailTx(tx)}
+                                    onClick={() => setDetailTx(req)}
                                     className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition-all whitespace-nowrap"
                                   >
                                     <Receipt className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -899,7 +940,7 @@ export default function WalletPage() {
       </div>
 
       {/* Withdrawal Detail Popup — shows requested amount, tax breakdown & status */}
-      {detailTx && <WithdrawalDetailModal tx={detailTx} onClose={() => setDetailTx(null)} />}
+      {detailTx && <WithdrawalDetailModal request={detailTx} onClose={() => setDetailTx(null)} />}
     </div>
   );
 }
@@ -909,11 +950,15 @@ export default function WalletPage() {
 // Popup shown when the user taps "Detail" on a withdrawal history row.
 // Displays the requested amount, the Service Tax (5%) & TDS (5%) deductions,
 // the resulting Net Payable amount, and the request's current status.
-function WithdrawalDetailModal({ tx, onClose }: { tx: WalletTransactionDto; onClose: () => void }) {
-  const { date, time } = formatDateTime(tx.createdAt);
-  const status = getWithdrawalStatus(tx);
+//
+// FIXED: reads `request.status` directly from the WithdrawalRequestDto
+// (the real column the admin panel sets) instead of re-deriving it from
+// transaction description text. This is the actual bug fix — everything
+// else here is just plumbing the real field through to the UI.
+function WithdrawalDetailModal({ request, onClose }: { request: WithdrawalRequestDto; onClose: () => void }) {
+  const { date, time } = formatDateTime(request.requestedAt);
+  const status = (request.status as WithdrawalStatus) ?? 'Pending';
   const statusMeta = STATUS_META[status];
-  const { serviceTax, tds, net } = estimateTaxBreakdown(tx.amount);
 
   return (
     <div
@@ -958,11 +1003,11 @@ function WithdrawalDetailModal({ tx, onClose }: { tx: WalletTransactionDto; onCl
         {/* Amount breakdown */}
         <div className="px-5 py-4 space-y-3">
           <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-2.5">
-            <TaxRow label="Requested Amount" value={formatINR(tx.amount)} />
-            <TaxRow label="Service Tax (5%)" value={`- ${formatINR(serviceTax)}`} negative />
-            <TaxRow label="TDS (5%)" value={`- ${formatINR(tds)}`} negative />
+            <TaxRow label="Requested Amount" value={formatINR(request.amount)} />
+            <TaxRow label="Service Tax (5%)" value={`- ${formatINR(request.serviceTaxAmount)}`} negative />
+            <TaxRow label="TDS (5%)" value={`- ${formatINR(request.tdsAmount)}`} negative />
             <div className="h-px bg-gray-200 my-1" />
-            <TaxRow label="Net Payable Amount" value={formatINR(net)} bold />
+            <TaxRow label="Net Payable Amount" value={formatINR(request.netPayableAmount)} bold />
           </div>
 
           <p className="text-[11px] text-gray-400 leading-relaxed">
@@ -973,6 +1018,12 @@ function WithdrawalDetailModal({ tx, onClose }: { tx: WalletTransactionDto; onCl
             {status === 'Rejected' &&
               'This withdrawal request was rejected. If the amount was reserved, it has been returned to your wallet balance.'}
           </p>
+
+          {request.adminRemarks && (
+            <p className="text-[11px] text-gray-400 leading-relaxed">
+              <span className="font-semibold text-gray-500">Admin note:</span> {request.adminRemarks}
+            </p>
+          )}
         </div>
 
         {/* Footer */}
