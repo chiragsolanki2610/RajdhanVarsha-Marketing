@@ -244,12 +244,15 @@ public class WalletService : IWalletService
         return result!;
     }
 
-    public async Task<List<WithdrawalRequestDto>> GetWithdrawalRequestsAsync(WithdrawalStatus? status = null)
+    public async Task<List<WithdrawalRequestDto>> GetWithdrawalRequestsAsync(WithdrawalStatus? status = null, string? userId = null)
     {
         var query = _db.WithdrawalRequests.AsQueryable();
 
         if (status.HasValue)
             query = query.Where(r => r.Status == status.Value);
+
+        if (!string.IsNullOrEmpty(userId))
+            query = query.Where(r => r.UserId == userId);
 
         var requests = await query
             .OrderByDescending(r => r.RequestedAt)
@@ -284,6 +287,25 @@ public class WalletService : IWalletService
         var wallet = await GetOrCreateWalletAsync(request.UserId, request.PlanType);
         wallet.TotalWithdrawn += request.Amount;
         wallet.UpdatedAt = DateTime.UtcNow;
+
+        // Log the approval on the transaction timeline too. This isn't what the
+        // wallet page uses to show status anymore (it now reads
+        // WithdrawalRequestDto.Status directly), but keeping the transaction
+        // log in sync avoids the same "approved in DB, stale text on screen"
+        // mismatch anywhere else that still reads transaction history.
+        var reserveTxn = await _db.WalletTransactions
+            .Where(t => t.UserId == request.UserId
+                     && t.PlanType == request.PlanType
+                     && t.ReferenceId == request.Id.ToString()
+                     && t.Source == "Withdrawal Request")
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (reserveTxn != null)
+        {
+            reserveTxn.Source = "Withdrawal Approved";
+            reserveTxn.Description = $"Withdrawal approved. Net payable: {request.NetPayableAmount}";
+        }
 
         await _db.SaveChangesAsync();
 
@@ -348,12 +370,15 @@ public class WalletService : IWalletService
 
     // ---------- Withdrawals (Binary Plan) ----------
 
-    public async Task<List<BinaryWithdrawalRequestDto>> GetBinaryWithdrawalRequestsAsync(string? status = null)
+    public async Task<List<BinaryWithdrawalRequestDto>> GetBinaryWithdrawalRequestsAsync(string? status = null, string? userId = null)
     {
         var query = _db.BinaryWithdrawalRequests.AsQueryable();
 
         if (!string.IsNullOrEmpty(status))
             query = query.Where(r => r.Status == status);
+
+        if (!string.IsNullOrEmpty(userId))
+            query = query.Where(r => r.UserId == userId);
 
         var requests = await query
             .OrderByDescending(r => r.RequestedAt)
@@ -389,6 +414,23 @@ public class WalletService : IWalletService
         {
             wallet.TotalWithdrawn += request.Amount;
             wallet.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // Same fix as the Dream Plan side: log the approval on the binary
+        // transaction timeline so it never disagrees with the request's
+        // Status column (this is what previously left binary withdrawals
+        // stuck showing "Pending" on the wallet page after admin approved).
+        var reserveTxn = await _db.BinaryWalletTransactions
+            .Where(t => t.UserId == request.UserId
+                     && t.ReferenceId == request.Id.ToString()
+                     && t.Source == "Withdrawal Requested")
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (reserveTxn != null)
+        {
+            reserveTxn.Source = "Withdrawal Approved";
+            reserveTxn.Description = $"Withdrawal approved. Ref: WR-{requestId}";
         }
 
         await _db.SaveChangesAsync();
