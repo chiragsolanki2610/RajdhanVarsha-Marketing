@@ -889,41 +889,47 @@ export default function WalletPage() {
                             return (
                               <div
                                 key={req.id}
-                                className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-gray-50/50 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all"
+                                className="p-3 sm:p-4 bg-gray-50/50 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all"
                               >
-                                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                                  <div
-                                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 ${meta.bg} ${meta.text}`}
-                                  >
+                                {/* Row 1: icon + title + status badge — badge gets its own
+                                    space on the right so the title never has to shrink down
+                                    to "Wit…" the way it did in the single-line layout. */}
+                                <div className="flex items-start gap-2.5 sm:gap-3">
+                                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 bg-blue-50 text-blue-600">
                                     <ArrowUpRight className="w-4 h-4" />
                                   </div>
-                                  <div className="min-w-0">
-                                    <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate">
-                                      Withdrawal Request
-                                    </p>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="text-xs sm:text-sm font-semibold text-gray-800">
+                                        Withdrawal Request
+                                      </p>
+                                      <span
+                                        className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold px-2 py-1 rounded-full shrink-0 ${meta.bg} ${meta.text}`}
+                                      >
+                                        {meta.icon}
+                                        {meta.label}
+                                      </span>
+                                    </div>
                                     <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">
                                       {date} • {time}
                                     </p>
-                                  </div>
-                                </div>
 
-                                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                                  <span
-                                    className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold px-2 py-1 rounded-full ${meta.bg} ${meta.text}`}
-                                  >
-                                    {meta.icon}
-                                    {meta.label}
-                                  </span>
-                                  <span className="text-xs sm:text-sm font-bold whitespace-nowrap text-gray-700">
-                                    - {formatINR(req.amount)}
-                                  </span>
-                                  <button
-                                    onClick={() => setDetailTx(req)}
-                                    className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition-all whitespace-nowrap"
-                                  >
-                                    <Receipt className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                                    Detail
-                                  </button>
+                                    {/* Row 2: amount + Detail button, separated with a divider
+                                        so it reads as a distinct line even on narrow screens. */}
+                                    <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-100">
+                                      <span className="text-xs sm:text-sm font-bold text-gray-700">
+                                        - {formatINR(req.amount)}
+                                      </span>
+                                      <button
+                                        onClick={() => setDetailTx(req)}
+                                        className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition-all whitespace-nowrap"
+                                      >
+                                        <Receipt className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                        Detail
+                                      </button>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             );
