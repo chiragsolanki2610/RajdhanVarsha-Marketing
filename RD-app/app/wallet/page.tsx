@@ -18,6 +18,9 @@ import {
   Circle,
   Lock,
   Receipt,
+  X,
+  Clock,
+  XCircle,
 } from 'lucide-react';
 
 import { useRouter } from 'next/navigation';
@@ -235,6 +238,38 @@ function isWithdrawalTransaction(tx: WalletTransactionDto) {
   return tx.source?.toLowerCase().includes('withdraw');
 }
 
+// ── NEW: derive a withdrawal's Pending / Approved / Rejected status from
+// its transaction text. The wallet transaction log (WalletTransactionDto)
+// doesn't carry a dedicated `status` field the way WithdrawalRequestDto
+// does, so we infer it from the description/source wording your backend
+// writes (e.g. "Reserved pending withdrawal approval", "Withdrawal
+// Approved", "Withdrawal Rejected"). Adjust the keyword matches below if
+// your backend uses different phrasing.
+type WithdrawalStatus = 'Pending' | 'Approved' | 'Rejected';
+
+function getWithdrawalStatus(tx: WalletTransactionDto): WithdrawalStatus {
+  const text = `${tx.description ?? ''} ${tx.source ?? ''}`.toLowerCase();
+  if (text.includes('reject') || text.includes('decline') || text.includes('fail')) return 'Rejected';
+  if (text.includes('approve') || text.includes('success') || text.includes('paid') || text.includes('complete')) {
+    return 'Approved';
+  }
+  return 'Pending';
+}
+
+const STATUS_META: Record<
+  WithdrawalStatus,
+  { label: string; bg: string; text: string; icon: React.ReactNode }
+> = {
+  Pending: { label: 'Pending', bg: 'bg-amber-50', text: 'text-amber-600', icon: <Clock className="w-3.5 h-3.5" /> },
+  Approved: {
+    label: 'Approved',
+    bg: 'bg-green-50',
+    text: 'text-green-600',
+    icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+  },
+  Rejected: { label: 'Rejected', bg: 'bg-red-50', text: 'text-red-600', icon: <XCircle className="w-3.5 h-3.5" /> },
+};
+
 // ==========================================
 // MAIN COMPONENT EXPORT
 // ==========================================
@@ -254,6 +289,9 @@ export default function WalletPage() {
   const [history, setHistory] = useState<WalletTransactionDto[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+
+  // NEW: which withdrawal history row's detail popup is open (null = closed)
+  const [detailTx, setDetailTx] = useState<WalletTransactionDto | null>(null);
 
   const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -833,9 +871,19 @@ export default function WalletPage() {
                                     </p>
                                   </div>
                                 </div>
-                                <span className={`text-xs sm:text-sm font-bold whitespace-nowrap ${isCredit ? 'text-[#22c55e]' : 'text-gray-700'}`}>
-                                  {isCredit ? '+' : '-'} {formatINR(tx.amount)}
-                                </span>
+
+                                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                  <span className={`text-xs sm:text-sm font-bold whitespace-nowrap ${isCredit ? 'text-[#22c55e]' : 'text-gray-700'}`}>
+                                    {isCredit ? '+' : '-'} {formatINR(tx.amount)}
+                                  </span>
+                                  <button
+                                    onClick={() => setDetailTx(tx)}
+                                    className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition-all whitespace-nowrap"
+                                  >
+                                    <Receipt className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                    Detail
+                                  </button>
+                                </div>
                               </div>
                             );
                           })}
@@ -849,11 +897,97 @@ export default function WalletPage() {
           )}
         </div>
       </div>
+
+      {/* Withdrawal Detail Popup — shows requested amount, tax breakdown & status */}
+      {detailTx && <WithdrawalDetailModal tx={detailTx} onClose={() => setDetailTx(null)} />}
     </div>
   );
 }
 
 // Subcomponents at the bottom
+
+// Popup shown when the user taps "Detail" on a withdrawal history row.
+// Displays the requested amount, the Service Tax (5%) & TDS (5%) deductions,
+// the resulting Net Payable amount, and the request's current status.
+function WithdrawalDetailModal({ tx, onClose }: { tx: WalletTransactionDto; onClose: () => void }) {
+  const { date, time } = formatDateTime(tx.createdAt);
+  const status = getWithdrawalStatus(tx);
+  const statusMeta = STATUS_META[status];
+  const { serviceTax, tds, net } = estimateTaxBreakdown(tx.amount);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Receipt className="w-4.5 h-4.5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-gray-800">Withdrawal Detail</h3>
+              <p className="text-[11px] text-gray-400">
+                {date} • {time}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-all"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Status badge */}
+        <div className="px-5 pt-4">
+          <span
+            className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full ${statusMeta.bg} ${statusMeta.text}`}
+          >
+            {statusMeta.icon}
+            {statusMeta.label}
+          </span>
+        </div>
+
+        {/* Amount breakdown */}
+        <div className="px-5 py-4 space-y-3">
+          <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-2.5">
+            <TaxRow label="Requested Amount" value={formatINR(tx.amount)} />
+            <TaxRow label="Service Tax (5%)" value={`- ${formatINR(serviceTax)}`} negative />
+            <TaxRow label="TDS (5%)" value={`- ${formatINR(tds)}`} negative />
+            <div className="h-px bg-gray-200 my-1" />
+            <TaxRow label="Net Payable Amount" value={formatINR(net)} bold />
+          </div>
+
+          <p className="text-[11px] text-gray-400 leading-relaxed">
+            {status === 'Pending' &&
+              'Your withdrawal request is under admin review. Amounts shown are calculated at request time.'}
+            {status === 'Approved' &&
+              'This withdrawal has been approved and the net payable amount has been processed to your account.'}
+            {status === 'Rejected' &&
+              'This withdrawal request was rejected. If the amount was reserved, it has been returned to your wallet balance.'}
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5">
+          <button
+            onClick={onClose}
+            className="w-full bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold py-2.5 rounded-xl transition-all"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function StatCard({
   label,
   value,
