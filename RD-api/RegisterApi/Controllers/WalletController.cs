@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RegisterApi.DTOs;
@@ -55,6 +55,27 @@ public class WalletController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    // GET /api/wallet/withdrawals  -> the CURRENT user's own Dream Plan withdrawal
+    // requests, with the real Status field ("Pending" | "Approved" | "Rejected").
+    // The wallet page's history/detail view should read `status` from here
+    // instead of guessing it from transaction description text — that guess
+    // is what caused approved/rejected requests to keep showing "Pending".
+    [HttpGet("withdrawals")]
+    public async Task<IActionResult> GetMyWithdrawals()
+    {
+        var requests = await _walletService.GetWithdrawalRequestsAsync(status: null, userId: CurrentUserId);
+        return Ok(requests);
+    }
+
+    // GET /api/wallet/withdrawals/binary  -> the CURRENT user's own Binary Plan
+    // withdrawal requests, same idea as above but for the binary wallet.
+    [HttpGet("withdrawals/binary")]
+    public async Task<IActionResult> GetMyBinaryWithdrawals()
+    {
+        var requests = await _walletService.GetBinaryWithdrawalRequestsAsync(status: null, userId: CurrentUserId);
+        return Ok(requests);
     }
 
     // GET /api/wallet/commissions  -> every commission you've earned, with the
