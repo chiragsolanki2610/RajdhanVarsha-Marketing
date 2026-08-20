@@ -26,45 +26,46 @@ const DocumentRow: React.FC<DocumentRowProps> = ({
   onViewClick,
 }) => {
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-gray-200 transition-colors duration-200">
-      <div className="flex items-start sm:items-center gap-4">
+    <div className="bg-white border border-gray-100 rounded-2xl p-4 md:p-5 shadow-sm hover:border-gray-200 transition-colors duration-200 flex flex-col md:flex-row md:items-center md:justify-between">
+      <div className="flex items-start md:items-center gap-4">
         {/* Icon Container */}
         <div className="shrink-0 p-3 bg-gray-50 rounded-xl text-gray-500">
           {icon}
         </div>
 
         {/* Document Details */}
-        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-          <h3 className="text-[15px] sm:text-base font-semibold text-slate-900 leading-snug">
-            {title}
-          </h3>
+        <div className="flex-1 min-w-0 flex flex-col gap-1.5 md:flex-row md:items-center md:space-x-2 md:gap-0 md:flex-wrap">
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+            <h3 className="text-[15px] md:text-base font-semibold text-slate-900 leading-snug">
+              {title}
+            </h3>
+            <span
+              className={`self-start text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${badgeColorClass}`}
+            >
+              {badgeText}
+            </span>
+          </div>
 
-          <span
-            className={`self-start text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${badgeColorClass}`}
-          >
-            {badgeText}
-          </span>
-
-          <p className="text-xs text-gray-400 font-medium">{issuer}</p>
+          <p className="text-xs text-gray-400 font-medium md:w-full">{issuer}</p>
 
           {/* Status and ID Row */}
-          <div className="flex items-center flex-wrap gap-2 mt-1">
+          <div className="flex items-center flex-wrap gap-2 mt-1 md:w-full">
             <span className="flex items-center text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5"></span>
               Active
             </span>
-            <span className="text-[11px] font-mono font-medium text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-md uppercase tracking-wider truncate max-w-[160px]">
+            <span className="text-[11px] font-mono font-medium text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-md uppercase tracking-wider truncate max-w-[160px] md:max-w-none">
               {idLabel}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Action Button — full width on mobile, inline on larger screens */}
-      <div className="mt-4 sm:mt-3 sm:pl-[64px]">
+      {/* Action Button — full width on mobile only, original inline layout on tablet/laptop */}
+      <div className="mt-4 md:mt-0">
         <button
           onClick={onViewClick}
-          className="w-full sm:w-auto inline-flex items-center justify-center space-x-1.5 px-4 py-2.5 sm:py-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 rounded-xl transition-colors duration-150"
+          className="w-full md:w-auto inline-flex items-center justify-center space-x-1 px-4 py-2.5 md:py-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 rounded-xl transition-colors duration-150"
         >
           <span>View Document</span>
           <svg
@@ -112,15 +113,15 @@ export default function LegalDocumentsPage() {
 
         {/* Top Floating Status Badge */}
         <div className="flex justify-center mb-5">
-          <div className="inline-flex items-center space-x-1.5 bg-emerald-50 border border-emerald-100 text-emerald-700 font-semibold text-[11px] sm:text-xs px-3.5 sm:px-4 py-1.5 rounded-full text-center">
+          <div className="inline-flex items-center space-x-1.5 bg-emerald-50 border border-emerald-100 text-emerald-700 font-semibold text-xs px-4 py-1.5 rounded-full">
             <span>★</span>
             <span>All documents verified & up to date</span>
           </div>
         </div>
 
         {/* Header Typography Section */}
-        <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12 px-2">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-3 sm:mb-4">
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">
             Our Legal & Compliance Documents
           </h1>
           <p className="text-sm md:text-base text-gray-500 leading-relaxed font-normal">
@@ -214,10 +215,10 @@ export default function LegalDocumentsPage() {
           >
             {/* Modal Header */}
             <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0">
-              <h3 className="text-base font-bold text-slate-900 pr-4">{selectedDocTitle}</h3>
+              <h3 className="text-base font-bold text-slate-900">{selectedDocTitle}</h3>
               <button
                 onClick={closeModal}
-                className="shrink-0 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -226,7 +227,7 @@ export default function LegalDocumentsPage() {
             </div>
 
             {/* Modal Image Wrapper Container */}
-            <div className="p-4 sm:p-6 bg-gray-50 flex-grow overflow-y-auto flex items-center justify-center min-h-[300px]">
+            <div className="p-6 bg-gray-50 flex-grow overflow-y-auto flex items-center justify-center min-h-[300px]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={selectedDocImage}
