@@ -3,11 +3,17 @@
 import { useState, ChangeEvent, FormEvent } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { UploadCloud, CheckCircle2, Loader2 } from "lucide-react";
+import { UploadCloud, CheckCircle2, Loader2, Eye, EyeOff } from "lucide-react";
+
+type CredentialsState = {
+  username: string;
+  phone: string;
+  password: string;
+  confirmPassword: string;
+};
 
 type FormState = {
   name: string;
-  phone: string;
   aadharNumber: string;
   panNumber: string;
   accountNumber: string;
@@ -22,9 +28,15 @@ type FileState = {
   passbookImage: File | null;
 };
 
+const initialCredentials: CredentialsState = {
+  username: "",
+  phone: "",
+  password: "",
+  confirmPassword: "",
+};
+
 const initialForm: FormState = {
   name: "",
-  phone: "",
   aadharNumber: "",
   panNumber: "",
   accountNumber: "",
@@ -84,7 +96,7 @@ export default function PickupCenterPage() {
         </section>
 
         <section className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
-          {mode === "apply" ? <ApplyForm /> : <LoginForm />}
+          {mode === "apply" ? <ApplyFlow /> : <LoginForm />}
         </section>
       </main>
 
@@ -93,9 +105,166 @@ export default function PickupCenterPage() {
   );
 }
 
+/* ------------------------------ Apply Flow ------------------------------ */
+/* Step 1: choose a username/password for the pickup center account.
+   Step 2: fill the rest of the application details and submit everything. */
+
+function ApplyFlow() {
+  const [step, setStep] = useState<"credentials" | "details">("credentials");
+  const [credentials, setCredentials] = useState<CredentialsState>(initialCredentials);
+  const [credError, setCredError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const handleCredChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setCredentials((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCredSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    setCredError(null);
+
+    if (credentials.username.trim().length < 4) {
+      setCredError("Username must be at least 4 characters.");
+      return;
+    }
+    if (!/^[0-9]{10}$/.test(credentials.phone.trim())) {
+      setCredError("Enter a valid 10-digit phone number.");
+      return;
+    }
+    if (credentials.password.length < 6) {
+      setCredError("Password must be at least 6 characters.");
+      return;
+    }
+    if (credentials.password !== credentials.confirmPassword) {
+      setCredError("Passwords do not match.");
+      return;
+    }
+
+    setStep("details");
+  };
+
+  if (step === "credentials") {
+    return (
+      <form
+        onSubmit={handleCredSubmit}
+        className="mx-auto max-w-md space-y-5 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm"
+      >
+        <h3 className="text-center text-lg font-bold text-blue-700">
+          Create Your Pickup Center Account
+        </h3>
+        <p className="text-center text-sm text-gray-500">
+          Choose a username and password. You&apos;ll use these to log in
+          once your application is approved.
+        </p>
+
+        <TextField
+          label="Username"
+          name="username"
+          value={credentials.username}
+          onChange={handleCredChange}
+          placeholder="Choose a username"
+          required
+        />
+
+        <TextField
+          label="Phone Number"
+          name="phone"
+          type="tel"
+          value={credentials.phone}
+          onChange={handleCredChange}
+          placeholder="10-digit mobile number"
+          pattern="[0-9]{10}"
+          maxLength={10}
+          required
+        />
+
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+            Password
+          </label>
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              name="password"
+              value={credentials.password}
+              onChange={handleCredChange}
+              placeholder="Create a password"
+              required
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-11 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+            Confirm Password
+          </label>
+          <div className="relative">
+            <input
+              type={showConfirmPassword ? "text" : "password"}
+              name="confirmPassword"
+              value={credentials.confirmPassword}
+              onChange={handleCredChange}
+              placeholder="Re-enter your password"
+              required
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-11 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword((prev) => !prev)}
+              className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600"
+              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              tabIndex={-1}
+            >
+              {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+        </div>
+
+        {credError && (
+          <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+            {credError}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+        >
+          Continue
+        </button>
+      </form>
+    );
+  }
+
+  return (
+    <ApplyForm
+      credentials={credentials}
+      onBack={() => setStep("credentials")}
+    />
+  );
+}
+
 /* ----------------------------- Apply Form ----------------------------- */
 
-function ApplyForm() {
+function ApplyForm({
+  credentials,
+  onBack,
+}: {
+  credentials: CredentialsState;
+  onBack: () => void;
+}) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [files, setFiles] = useState<FileState>(initialFiles);
   const [submitting, setSubmitting] = useState(false);
@@ -131,6 +300,9 @@ function ApplyForm() {
     setSubmitting(true);
     try {
       const data = new FormData();
+      data.append("username", credentials.username);
+      data.append("phone", credentials.phone);
+      data.append("password", credentials.password);
       Object.entries(form).forEach(([key, value]) => data.append(key, value));
       data.append("aadharImage", files.aadharImage);
       data.append("panImage", files.panImage);
@@ -163,12 +335,6 @@ function ApplyForm() {
           contact you on your registered phone number within 2–3 business
           days.
         </p>
-        <button
-          onClick={() => setSubmitted(false)}
-          className="mt-2 rounded-full bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-        >
-          Submit Another Application
-        </button>
       </div>
     );
   }
@@ -178,6 +344,19 @@ function ApplyForm() {
       onSubmit={handleSubmit}
       className="space-y-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8"
     >
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">
+          Account username: <span className="font-semibold text-gray-800">{credentials.username}</span>
+        </p>
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+        >
+          Edit account details
+        </button>
+      </div>
+
       {/* Personal details */}
       <div>
         <h3 className="mb-4 text-lg font-bold text-blue-700">
@@ -194,14 +373,10 @@ function ApplyForm() {
           />
           <TextField
             label="Phone Number"
-            name="phone"
-            type="tel"
-            value={form.phone}
-            onChange={handleChange}
+            name="phoneDisplay"
+            value={credentials.phone}
             placeholder="10-digit mobile number"
-            pattern="[0-9]{10}"
-            maxLength={10}
-            required
+            disabled
           />
         </div>
       </div>
@@ -332,8 +507,9 @@ function ApplyForm() {
 /* ------------------------------ Login Form ----------------------------- */
 
 function LoginForm() {
-  const [phone, setPhone] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -345,10 +521,10 @@ function LoginForm() {
       const res = await fetch("/api/pickup-center/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, password }),
+        body: JSON.stringify({ username, password }),
       });
 
-      if (!res.ok) throw new Error("Invalid phone number or password.");
+      if (!res.ok) throw new Error("Invalid username or password.");
 
       window.location.href = "/pickup-center/dashboard";
     } catch (err) {
@@ -368,13 +544,11 @@ function LoginForm() {
       </h3>
 
       <TextField
-        label="Registered Phone Number"
-        name="phone"
-        type="tel"
-        value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-        placeholder="10-digit mobile number"
-        maxLength={10}
+        label="Username"
+        name="username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="Enter your username"
         required
       />
 
@@ -382,14 +556,25 @@ function LoginForm() {
         <label className="mb-1.5 block text-sm font-semibold text-gray-700">
           Password
         </label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Enter your password"
-          required
-          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        />
+        <div className="relative">
+          <input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            required
+            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-11 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            tabIndex={-1}
+          >
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
       </div>
 
       {error && (
