@@ -43,28 +43,28 @@ export default function PickupCenterPage() {
   const [mode, setMode] = useState<"apply" | "login">("apply");
 
   return (
-    <>
+    <div className="flex min-h-screen flex-col bg-white">
       <Navbar />
 
-      <main className="bg-[#0b1220] min-h-screen text-white">
+      <main className="flex-1 bg-gray-50">
         {/* Hero */}
-        <section className="border-b border-white/10 bg-gradient-to-r from-[#0b1220] via-[#101a30] to-[#0b1220] py-14 text-center">
-          <h1 className="text-3xl font-extrabold sm:text-4xl">
-            Pickup Center Registration
+        <section className="bg-white py-14 text-center">
+          <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+            Pickup Center <span className="text-red-600">Registration</span>
           </h1>
-          <p className="mx-auto mt-3 max-w-xl px-4 text-sm text-gray-400">
-            Apply to open your own Raj Dhan Varsha pickup center, or log in if
+          <p className="mx-auto mt-3 max-w-xl px-4 text-sm text-gray-500">
+            Apply to open your own Raj Dhanvarsha pickup center, or log in if
             you already run one.
           </p>
 
           {/* Mode toggle */}
-          <div className="mx-auto mt-8 flex w-fit rounded-full bg-white/5 p-1">
+          <div className="mx-auto mt-8 flex w-fit rounded-full border border-gray-200 bg-gray-100 p-1">
             <button
               onClick={() => setMode("apply")}
               className={`rounded-full px-6 py-2 text-sm font-semibold transition ${
                 mode === "apply"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-300 hover:text-white"
+                  ? "bg-blue-600 text-white shadow"
+                  : "text-gray-600 hover:text-gray-900"
               }`}
             >
               Apply for Pickup Center
@@ -74,8 +74,8 @@ export default function PickupCenterPage() {
               id="login"
               className={`rounded-full px-6 py-2 text-sm font-semibold transition ${
                 mode === "login"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-300 hover:text-white"
+                  ? "bg-blue-600 text-white shadow"
+                  : "text-gray-600 hover:text-gray-900"
               }`}
             >
               Pickup Center Login
@@ -89,7 +89,7 @@ export default function PickupCenterPage() {
       </main>
 
       <Footer />
-    </>
+    </div>
   );
 }
 
@@ -155,17 +155,17 @@ function ApplyForm() {
 
   if (submitted) {
     return (
-      <div className="flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-12 text-center">
-        <CheckCircle2 className="text-green-400" size={52} />
-        <h2 className="text-xl font-bold">Application Submitted</h2>
-        <p className="max-w-md text-sm text-gray-400">
+      <div className="flex flex-col items-center gap-4 rounded-2xl border border-gray-200 bg-white p-12 text-center shadow-sm">
+        <CheckCircle2 className="text-green-500" size={52} />
+        <h2 className="text-xl font-bold text-gray-900">Application Submitted</h2>
+        <p className="max-w-md text-sm text-gray-500">
           Thank you for applying. Our team will verify your documents and
           contact you on your registered phone number within 2–3 business
           days.
         </p>
         <button
           onClick={() => setSubmitted(false)}
-          className="mt-2 rounded-full bg-blue-600 px-6 py-2 text-sm font-semibold hover:bg-blue-700"
+          className="mt-2 rounded-full bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-700"
         >
           Submit Another Application
         </button>
@@ -176,11 +176,11 @@ function ApplyForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-8 rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8"
+      className="space-y-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8"
     >
       {/* Personal details */}
       <div>
-        <h3 className="mb-4 text-lg font-bold text-blue-400">
+        <h3 className="mb-4 text-lg font-bold text-blue-700">
           Personal Details
         </h3>
         <div className="grid gap-5 sm:grid-cols-2">
@@ -208,7 +208,7 @@ function ApplyForm() {
 
       {/* Identity documents */}
       <div>
-        <h3 className="mb-4 text-lg font-bold text-blue-400">
+        <h3 className="mb-4 text-lg font-bold text-blue-700">
           Identity Documents
         </h3>
         <div className="grid gap-5 sm:grid-cols-2">
@@ -248,7 +248,7 @@ function ApplyForm() {
 
       {/* Bank details */}
       <div>
-        <h3 className="mb-4 text-lg font-bold text-blue-400">
+        <h3 className="mb-4 text-lg font-bold text-blue-700">
           Bank Account Details
         </h3>
         <div className="grid gap-5 sm:grid-cols-2">
@@ -282,7 +282,7 @@ function ApplyForm() {
 
       {/* Pickup center details */}
       <div>
-        <h3 className="mb-4 text-lg font-bold text-blue-400">
+        <h3 className="mb-4 text-lg font-bold text-blue-700">
           Pickup Center Details
         </h3>
         <div className="grid gap-5 sm:grid-cols-2">
@@ -295,7 +295,7 @@ function ApplyForm() {
             required
           />
           <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-sm font-semibold text-gray-300">
+            <label className="mb-1.5 block text-sm font-semibold text-gray-700">
               Pickup Center Address
             </label>
             <textarea
@@ -305,14 +305,14 @@ function ApplyForm() {
               placeholder="Full address with pin code"
               rows={3}
               required
-              className="w-full rounded-lg border border-white/10 bg-[#0b1220] px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
         </div>
       </div>
 
       {error && (
-        <p className="rounded-lg bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
+        <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
           {error}
         </p>
       )}
@@ -361,9 +361,9 @@ function LoginForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="mx-auto max-w-md space-y-5 rounded-2xl border border-white/10 bg-white/5 p-8"
+      className="mx-auto max-w-md space-y-5 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm"
     >
-      <h3 className="text-center text-lg font-bold text-blue-400">
+      <h3 className="text-center text-lg font-bold text-blue-700">
         Pickup Center Login
       </h3>
 
@@ -379,7 +379,7 @@ function LoginForm() {
       />
 
       <div>
-        <label className="mb-1.5 block text-sm font-semibold text-gray-300">
+        <label className="mb-1.5 block text-sm font-semibold text-gray-700">
           Password
         </label>
         <input
@@ -388,12 +388,12 @@ function LoginForm() {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Enter your password"
           required
-          className="w-full rounded-lg border border-white/10 bg-[#0b1220] px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
+          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
         />
       </div>
 
       {error && (
-        <p className="rounded-lg bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
+        <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
           {error}
         </p>
       )}
@@ -422,12 +422,12 @@ function TextField({
 } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-semibold text-gray-300">
+      <label className="mb-1.5 block text-sm font-semibold text-gray-700">
         {label}
       </label>
       <input
         {...props}
-        className={`w-full rounded-lg border border-white/10 bg-[#0b1220] px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500 ${className}`}
+        className={`w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${className}`}
       />
     </div>
   );
@@ -446,11 +446,11 @@ function FileField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-semibold text-gray-300">
+      <label className="mb-1.5 block text-sm font-semibold text-gray-700">
         {label}
       </label>
-      <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-white/20 bg-[#0b1220] px-4 py-2.5 text-sm text-gray-400 transition hover:border-blue-500">
-        <UploadCloud size={18} className="shrink-0 text-blue-400" />
+      <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-500 transition hover:border-blue-500 hover:bg-blue-50">
+        <UploadCloud size={18} className="shrink-0 text-blue-600" />
         <span className="truncate">
           {file ? file.name : "Click to upload image (JPG/PNG, max 5MB)"}
         </span>
