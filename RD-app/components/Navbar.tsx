@@ -152,7 +152,7 @@ export default function Navbar({ transparent = false }: NavbarProps) {
           </Link>
           
           {/* Desktop Redirect to Delivery Center */}
-          <Link href="/delivery-center" className={linkStyles}>
+          <Link href="/pickup-center" className={linkStyles}>
             Pickup Center
           </Link>
         </nav>
