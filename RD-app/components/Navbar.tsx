@@ -14,6 +14,7 @@ export default function Navbar({ transparent = false }: NavbarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [aboutDropdownOpen, setAboutDropdownOpen] = useState(false);
+  const [aboutMobileOpen, setAboutMobileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
@@ -34,11 +35,16 @@ export default function Navbar({ transparent = false }: NavbarProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Reset mobile "About Us" collapse state whenever the mobile menu itself closes
+  useEffect(() => {
+    if (!mobileOpen) setAboutMobileOpen(false);
+  }, [mobileOpen]);
+
   // Intercepts click if already on home page to provide smooth scrolling
   const handleScrollLink = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
     setMobileOpen(false);
     setAboutDropdownOpen(false);
-    
+
     if (pathname === "/") {
       e.preventDefault();
       const el = document.getElementById(id);
@@ -49,8 +55,8 @@ export default function Navbar({ transparent = false }: NavbarProps) {
   const isOpaque = !transparent || isScrolled;
 
   const linkStyles = `text-sm font-semibold transition-all duration-300 px-4 py-2 rounded-full select-none border tracking-wide hover:scale-105 active:scale-98 flex items-center gap-1 ${
-    isOpaque 
-      ? "text-gray-600 border-transparent hover:text-[#2E4CA2] hover:bg-blue-50/60 hover:border-blue-200/50 hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.8),0_4px_12px_rgba(46,76,162,0.05)] hover:backdrop-blur-sm" 
+    isOpaque
+      ? "text-gray-600 border-transparent hover:text-[#2E4CA2] hover:bg-blue-50/60 hover:border-blue-200/50 hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.8),0_4px_12px_rgba(46,76,162,0.05)] hover:backdrop-blur-sm"
       : "text-white/90 border-transparent hover:text-white hover:bg-white/[0.18] hover:border-white/30 hover:backdrop-blur-lg hover:shadow-[inset_0_1px_2px_rgba(255,255,255,0.45),0_8px_20px_rgba(0,0,0,0.15)]"
   }`;
 
@@ -100,11 +106,11 @@ export default function Navbar({ transparent = false }: NavbarProps) {
           <Link href="/#home" onClick={(e) => handleScrollLink(e, "home")} className={linkStyles}>
             Home
           </Link>
-          
+
           {/* About Us Dropdown Container */}
           <div className="relative" ref={dropdownRef}>
-            <button 
-              onClick={() => setAboutDropdownOpen(!aboutDropdownOpen)} 
+            <button
+              onClick={() => setAboutDropdownOpen(!aboutDropdownOpen)}
               className={`${linkStyles} ${aboutDropdownOpen ? (isOpaque ? "text-[#2E4CA2] bg-blue-50/60 border-blue-200/50" : "text-white bg-white/[0.18] border-white/30") : ""}`}
             >
               About Us
@@ -115,8 +121,8 @@ export default function Navbar({ transparent = false }: NavbarProps) {
             {aboutDropdownOpen && (
               <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 w-56 transform origin-top transition-all duration-300 animation-liquid-pop z-50
                 border rounded-2xl p-1.5 flex flex-col gap-1 overflow-hidden
-                ${isOpaque 
-                  ? "bg-white border-gray-200 shadow-xl" 
+                ${isOpaque
+                  ? "bg-white border-gray-200 shadow-xl"
                   : "bg-white/20 backdrop-blur-xl border-white/40 shadow-[inset_0_1.5px_3px_rgba(255,255,255,0.6),_0_12px_24px_rgba(0,0,0,0.15)]"
                 }`}
               >
@@ -130,10 +136,10 @@ export default function Navbar({ transparent = false }: NavbarProps) {
                 >
                   Our Team
                 </Link>
-                
+
                 {/* Clean redirection to Legal Documents page */}
                 <Link
-                  href="/legal-documents" 
+                  href="/legal-documents"
                   onClick={() => setAboutDropdownOpen(false)}
                   className={dropdownItemStyles}
                 >
@@ -142,15 +148,15 @@ export default function Navbar({ transparent = false }: NavbarProps) {
               </div>
             )}
           </div>
-          
+
           <Link href="/our-plan" className={linkStyles}>
             Our Plan
           </Link>
-          
+
           <Link href="/products" className={linkStyles}>
             Products
           </Link>
-          
+
           {/* Desktop Redirect to Delivery Center */}
           <Link href="/pickup-center" className={linkStyles}>
             Pickup Center
@@ -173,27 +179,27 @@ export default function Navbar({ transparent = false }: NavbarProps) {
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label="Toggle menu"
         >
-          <span 
+          <span
             className={`h-[2px] bg-slate-800 rounded-full transition-all duration-300 origin-center ${
               mobileOpen ? "w-6 rotate-45 translate-y-[8px]" : "w-6"
-            }`} 
+            }`}
           />
-          <span 
+          <span
             className={`h-[2px] bg-slate-800 rounded-full transition-all duration-300 ${
               mobileOpen ? "w-0 opacity-0" : "w-5"
-            }`} 
+            }`}
           />
-          <span 
+          <span
             className={`h-[2px] bg-slate-800 rounded-full transition-all duration-300 origin-center ${
               mobileOpen ? "w-6 -rotate-45 -translate-y-[8px]" : "w-4"
-            }`} 
+            }`}
           />
         </button>
       </div>
 
       {/* Mobile menu wrapper */}
       {mobileOpen && (
-        <div className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-xl py-4 px-4 flex flex-col gap-2 animate-fadeIn">
+        <div className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-xl py-4 px-4 flex flex-col gap-2 animate-fadeIn max-h-[calc(100vh-72px)] overflow-y-auto">
           <Link
             href="/#home"
             onClick={(e) => handleScrollLink(e, "home")}
@@ -201,28 +207,41 @@ export default function Navbar({ transparent = false }: NavbarProps) {
           >
             Home
           </Link>
-          
-          <div className="flex flex-col border-l-2 border-gray-100 ml-2 pl-2">
-            <span className="text-left text-xs font-bold uppercase tracking-wider p-2 text-gray-400">
+
+          {/* About Us — now a toggle, styled like the other mobile links, collapsed by default */}
+          <div className="flex flex-col">
+            <button
+              onClick={() => setAboutMobileOpen(!aboutMobileOpen)}
+              className="w-full flex items-center justify-between text-left text-sm font-semibold p-2.5 hover:bg-gray-50 active:bg-gray-100 rounded-lg text-gray-800 transition-colors"
+              aria-expanded={aboutMobileOpen}
+            >
               About Us
-            </span>
-            {/* Overview link removed per request */}
-            {/* Mobile Redirect to Our Team page */}
-            <Link
-              href="/our-team"
-              onClick={() => setMobileOpen(false)}
-              className="text-left text-sm font-medium p-2 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors no-underline"
-            >
-              Our Team
-            </Link>
-            {/* Mobile Redirect to Legal Documents page */}
-            <Link
-              href="/legal-documents"
-              onClick={() => setMobileOpen(false)}
-              className="text-left text-sm font-medium p-2 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors no-underline"
-            >
-              Legal Documents
-            </Link>
+              <ChevronDown
+                size={16}
+                className={`transition-transform duration-200 ${aboutMobileOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {aboutMobileOpen && (
+              <div className="flex flex-col border-l-2 border-gray-100 ml-2 pl-2 mt-1 animate-fadeIn">
+                {/* Mobile Redirect to Our Team page */}
+                <Link
+                  href="/our-team"
+                  onClick={() => setMobileOpen(false)}
+                  className="text-left text-sm font-medium p-2 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors no-underline"
+                >
+                  Our Team
+                </Link>
+                {/* Mobile Redirect to Legal Documents page */}
+                <Link
+                  href="/legal-documents"
+                  onClick={() => setMobileOpen(false)}
+                  className="text-left text-sm font-medium p-2 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors no-underline"
+                >
+                  Legal Documents
+                </Link>
+              </div>
+            )}
           </div>
 
           <Link
@@ -232,7 +251,7 @@ export default function Navbar({ transparent = false }: NavbarProps) {
           >
             Our Plan
           </Link>
-          
+
           <Link
             href="/products"
             onClick={() => setMobileOpen(false)}
@@ -249,7 +268,7 @@ export default function Navbar({ transparent = false }: NavbarProps) {
           >
             Delivery Center
           </Link>
-          
+
           {/* Mobile Redirect to Join Now / Register page */}
           <Link
             href="/register"
