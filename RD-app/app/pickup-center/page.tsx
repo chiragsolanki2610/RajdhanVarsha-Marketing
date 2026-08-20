@@ -46,7 +46,7 @@ export default function PickupCenterPage() {
     <div className="flex min-h-screen flex-col bg-white">
       <Navbar />
 
-      <main className="flex-1 bg-gray-50">
+      <main className="flex-1 bg-gray-50 pt-20 md:pt-24">
         {/* Hero */}
         <section className="bg-white py-14 text-center">
           <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
