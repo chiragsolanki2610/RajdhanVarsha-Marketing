@@ -1,0 +1,541 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using RegisterApi.Data;
+using RegisterApi.DTOs;
+using RegisterApi.Models;
+using RegisterApi.Services;
+using System.Security.Claims;
+
+namespace RegisterApi.Controllers;
+
+[ApiController]
+[Route("api/binary")]
+[Authorize]
+public class BinaryPlanController : ControllerBase
+{
+    private readonly AppDbContext _db;
+    private readonly IBinaryPlanService _binaryService;
+
+    // Must buy ≥600 BV of products to activate Binary Plan ID
+    private const decimal BinaryPlanActivationBv = 600m;
+
+    public BinaryPlanController(AppDbContext db, IBinaryPlanService binaryService)
+    {
+        _db = db;
+        _binaryService = binaryService;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/status
+    // Returns current user's binary plan enrollment & wallet snapshot.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("status")]
+    public async Task<IActionResult> GetStatus()
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var node = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == userId);
+        var wallet = await _db.BinaryWallets.FirstOrDefaultAsync(w => w.UserId == userId);
+
+        if (node == null)
+            return Ok(new BinaryNodeStatusDto { IsInBinaryPlan = false });
+
+        var totalSponsor = await _db.BinaryNodes.CountAsync(n => n.SponsorId == userId);
+
+        // ── Work out which side (left/right) each of MY referrals landed on ──
+        // A referral isn't necessarily my direct child (spillover can place
+        // them several levels down), so for each person I sponsored we walk
+        // UP their parent chain until we reach one of my two direct children.
+        var mySponsored = await _db.BinaryNodes
+            .Where(n => n.SponsorId == userId)
+            .ToListAsync();
+
+        int leftSponsoredCount = 0;
+        int rightSponsoredCount = 0;
+
+        if (mySponsored.Count > 0 && (node.LeftChildId != null || node.RightChildId != null))
+        {
+            // Pull every node's parent pointer once so the chain walk doesn't
+            // hit the DB once per referral.
+            var allNodes = await _db.BinaryNodes
+                .Select(n => new { n.UserId, n.ParentId })
+                .ToDictionaryAsync(n => n.UserId, n => n.ParentId);
+
+            foreach (var sponsored in mySponsored)
+            {
+                var side = DetermineSide(sponsored.UserId, node.LeftChildId, node.RightChildId, allNodes);
+                if (side == "LEFT") leftSponsoredCount++;
+                else if (side == "RIGHT") rightSponsoredCount++;
+            }
+        }
+
+        return Ok(new BinaryNodeStatusDto
+        {
+            IsInBinaryPlan = true,
+            IsActive = node.IsActive,
+            Position = node.Position,
+            ParentId = node.ParentId,
+            LeftChildId = node.LeftChildId,
+            RightChildId = node.RightChildId,
+            TreeLevel = node.TreeLevel,
+            LeftLegCount = node.LeftLegCount,
+            RightLegCount = node.RightLegCount,
+            TotalDownlineCount = node.LeftLegCount + node.RightLegCount,
+            WithdrawalUnlocked = wallet?.WithdrawalUnlocked ?? false,
+            PairsCompleted = wallet?.PairsCount ?? 0,
+            WalletBalance = wallet?.Balance ?? 0,
+
+            JoiningDate = node.CreatedAt,
+            TotalSponsor = totalSponsor,
+            LeftSponsor = node.LeftChildId ?? "--",
+            RightSponsor = node.RightChildId ?? "--",
+
+            LeftSponsoredCount = leftSponsoredCount,
+            RightSponsoredCount = rightSponsoredCount,
+
+            LeftActiveCount = node.LeftActiveCount,
+            RightActiveCount = node.RightActiveCount,
+            TotalActiveDownlineCount = node.LeftActiveCount + node.RightActiveCount
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Walks a node's ParentId chain upward until it reaches `myLeftChildId`
+    // or `myRightChildId`, returning which side it belongs to. Returns null
+    // if the chain runs out before reaching either (shouldn't normally
+    // happen for a real downline member, but guards against bad data).
+    // ─────────────────────────────────────────────────────────────────────
+    private static string? DetermineSide(
+        string startUserId,
+        string? myLeftChildId,
+        string? myRightChildId,
+        Dictionary<string, string?> parentById)
+    {
+        var current = startUserId;
+        var visited = new HashSet<string>();
+
+        while (current != null && visited.Add(current))
+        {
+            if (current == myLeftChildId) return "LEFT";
+            if (current == myRightChildId) return "RIGHT";
+
+            if (!parentById.TryGetValue(current, out var parent) || parent == null)
+                return null;
+
+            current = parent;
+        }
+
+        return null;
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/preview-placement?sponsorId=RD0001&preferredPosition=LEFT
+    // Call this BEFORE joining — shows exactly where user will land in the tree.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("preview-placement")]
+    public async Task<IActionResult> PreviewPlacement(
+        [FromQuery] string sponsorId,
+        [FromQuery] string preferredPosition = "LEFT")
+    {
+        if (string.IsNullOrWhiteSpace(sponsorId))
+            return BadRequest(new { message = "sponsorId is required." });
+
+        var result = await _binaryService.PreviewPlacementAsync(sponsorId, preferredPosition);
+        if (!result.Success)
+            return BadRequest(new { message = result.Message });
+
+        return Ok(result);
+    }
+
+
+
+    // ─────────────────────────────────────────────────────────────────────
+    // POST /api/binary/join
+    // Enroll in the binary tree (placement only — ID activates after product purchase).
+    // Body: { sponsorId: "RD0001", preferredPosition: "LEFT" }
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpPost("join")]
+    public async Task<IActionResult> JoinBinaryPlan([FromBody] JoinBinaryPlanDto dto)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        // ── RD0001 is the root node — no sponsor or position required ──
+        if (userId == "RD0001")
+        {
+            var rootResult = await _binaryService.PlaceRootNodeAsync(userId);
+            if (!rootResult.Success)
+                return BadRequest(new { message = rootResult.Message });
+            return Ok(rootResult);
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.SponsorId))
+            return BadRequest(new { message = "sponsorId is required." });
+
+        var result = await _binaryService.PlaceUserInBinaryTreeAsync(
+            userId, dto.SponsorId, dto.PreferredPosition);
+
+        if (!result.Success)
+            return BadRequest(new { message = result.Message });
+
+        return Ok(result);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // POST /api/binary/activate
+    // Purchase ≥600 BV products to activate the Binary Plan ID.
+    // Uses the same Products table as the Dream Plan shop.
+    // Body: { items: [{ productId, quantity }] }
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpPost("activate")]
+    public async Task<IActionResult> ActivateBinaryId([FromBody] BinaryActivationDto dto)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var node = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == userId);
+        if (node == null)
+            return BadRequest(new { message = "You must join the Binary Plan first via POST /api/binary/join." });
+
+        if (node.IsActive)
+            return BadRequest(new { message = "Your Binary Plan ID is already active." });
+
+        if (dto.Items == null || dto.Items.Count == 0)
+            return BadRequest(new { message = "No products selected." });
+
+        var productIds = dto.Items.Select(i => i.ProductId).ToList();
+        var products = await _db.Products
+            .Where(p => productIds.Contains(p.Id) && p.IsActive)
+            .ToListAsync();
+
+        if (products.Count != productIds.Distinct().Count())
+            return BadRequest(new { message = "One or more products are invalid." });
+
+        decimal totalBv = 0, totalAmount = 0;
+        foreach (var item in dto.Items)
+        {
+            var product = products.First(p => p.Id == item.ProductId);
+            if (item.Quantity <= 0)
+                return BadRequest(new { message = $"Invalid quantity for {product.ProductName}." });
+            totalBv += product.Bv * item.Quantity;
+            totalAmount += product.Mrp * item.Quantity;
+        }
+
+        if (totalBv < BinaryPlanActivationBv)
+            return BadRequest(new
+            {
+                message = $"Binary Plan requires at least {BinaryPlanActivationBv} BV. You selected {totalBv} BV.",
+                required = BinaryPlanActivationBv,
+                selected = totalBv
+            });
+
+        // Record as a Plan purchase (PlanType = "Binary Plan") for consistency
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+        if (user == null) return NotFound();
+
+        var plan = new Plan
+        {
+            UserId = userId,
+            PlanType = "Binary Plan",
+            Status = PlanStatus.Paid,
+            TotalBv = totalBv,
+            TotalAmount = totalAmount,
+            CreatedAt = DateTime.UtcNow
+        };
+        foreach (var item in dto.Items)
+        {
+            var product = products.First(p => p.Id == item.ProductId);
+            plan.Items.Add(new PlanItem
+            {
+                ProductId = product.Id,
+                Quantity = item.Quantity,
+                Bv = product.Bv,
+                Mrp = product.Mrp
+            });
+        }
+        _db.Plans.Add(plan);
+
+        // Update User record
+        user.IsActive = true;
+        user.SelectedPlan = "Binary Plan";
+        user.BusinessVolume += (int)totalBv;
+        user.IdStatus = "active";
+
+        await _db.SaveChangesAsync();
+
+        // Activate the binary node
+        // Activate the binary node and award pair commissions to uplines
+        // when both LEFT and RIGHT children are active.
+        await _binaryService.ActivateBinaryNodeAsync(userId, totalBv, awardPairs: true);
+
+        return Ok(new
+        {
+            message = "Binary Plan ID activated successfully.",
+            totalBv,
+            totalAmount,
+            planId = plan.Id
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/team
+    // Flat, paginated listing of the current user's ENTIRE binary downline
+    // (used by the Team Details page). Unlike /tree, this has no nesting and
+    // no depth parameter — it scales to any number of members or any tree
+    // depth, since the response is just a page of rows, not a nested object.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("team")]
+    public async Task<IActionResult> GetMyBinaryTeamFlat(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var result = await _binaryService.GetBinaryTeamFlatAsync(userId, page, pageSize, search);
+        return Ok(result);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/tree
+    // Returns the FULL binary tree rooted at the current user — every
+    // descendant, however deep. The recursion in GetBinaryTreeAsync already
+    // stops naturally once a node has no LeftChildId/RightChildId, so depth
+    // is only used as a safety ceiling (not a real limit on real data).
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("tree")]
+    public async Task<IActionResult> GetMyBinaryTree([FromQuery] int depth = 50)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        // 50 is a safety ceiling against runaway recursion if bad data ever
+        // created a cycle in Left/RightChildId — not a real depth limit,
+        // since no realistic binary tree grows anywhere near that deep.
+        depth = Math.Clamp(depth, 1, 50);
+        var tree = await _binaryService.GetBinaryTreeAsync(userId, depth);
+
+        if (tree == null)
+            return NotFound(new { message = "You are not enrolled in the Binary Plan." });
+
+        return Ok(tree);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/tree/{targetUserId}
+    // Lazy-load endpoint: returns a small subtree (default depth 3 = up to
+    // 7 nodes) rooted at ANY node in the caller's own downline — used by the
+    // frontend to fetch the next batch of nodes only when the user drills
+    // into a branch, instead of pulling the whole tree up front.
+    //
+    // Security: targetUserId must be the caller themselves OR somewhere in
+    // the caller's downline. We verify this by walking UP the parent chain
+    // from targetUserId until we either hit the caller's userId (allowed)
+    // or run out of parents (not in caller's downline -> Forbid).
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("tree/{targetUserId}")]
+    public async Task<IActionResult> GetSubTree(string targetUserId, [FromQuery] int depth = 3)
+    {
+        var callerId = GetUserId();
+        if (callerId == null) return Unauthorized();
+
+        depth = Math.Clamp(depth, 1, 10);
+
+        if (targetUserId != callerId)
+        {
+            var isDownline = await IsInDownlineAsync(callerId, targetUserId);
+            if (!isDownline) return Forbid();
+        }
+
+        var tree = await _binaryService.GetBinaryTreeAsync(targetUserId, depth);
+        if (tree == null)
+            return NotFound(new { message = "Node not found." });
+
+        return Ok(tree);
+    }
+
+    // Walks up targetUserId's ParentId chain looking for callerId.
+    private async Task<bool> IsInDownlineAsync(string callerId, string targetUserId)
+    {
+        var parentLookup = await _db.BinaryNodes
+            .Select(n => new { n.UserId, n.ParentId })
+            .ToDictionaryAsync(n => n.UserId, n => n.ParentId);
+
+        if (!parentLookup.ContainsKey(targetUserId)) return false;
+
+        var current = targetUserId;
+        var guard = 0; // safety against cycles in bad data
+        while (parentLookup.TryGetValue(current, out var parentId) && guard++ < 1000)
+        {
+            if (parentId == null) return false;
+            if (parentId == callerId) return true;
+            current = parentId;
+        }
+        return false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/today-activations
+    // Returns the IDs (LEFT / RIGHT split) in the current user's entire
+    // downline that got their Binary Plan ID activated today.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("today-activations")]
+    public async Task<IActionResult> GetTodayActivations()
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var result = await _binaryService.GetTodayActivationsAsync(userId);
+        return Ok(result);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/wallet
+    // Returns current user's binary wallet balance, pairs, transactions.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("wallet")]
+    public async Task<IActionResult> GetWallet()
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var wallet = await _binaryService.GetBinaryWalletAsync(userId);
+        return Ok(wallet);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GET /api/binary/transactions
+    // Full Binary Plan transaction history (not capped at 20 like the
+    // RecentTransactions list embedded in GET /api/binary/wallet).
+    // Shaped to match WalletTransactionDto so the frontend can reuse the
+    // same table/mapping code it already has for the Dream Plan.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("transactions")]
+    public async Task<IActionResult> GetTransactionHistory()
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var history = await _binaryService.GetTransactionHistoryAsync(userId);
+        return Ok(history);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // POST /api/binary/withdraw
+    // Request a withdrawal from the binary wallet.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpPost("withdraw")]
+    public async Task<IActionResult> RequestWithdrawal([FromBody] SubmitBinaryWithdrawalDto dto)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var (success, message, request) = await _binaryService.RequestWithdrawalAsync(userId, dto.Amount);
+
+        if (!success || request == null) return BadRequest(new { message });
+
+        const decimal serviceTaxRate = 0.05m;
+        const decimal tdsRate = 0.05m;
+        var serviceTaxAmount = Math.Round(request.Amount * serviceTaxRate, 2);
+        var tdsAmount = Math.Round(request.Amount * tdsRate, 2);
+        var netPayableAmount = Math.Round(request.Amount - serviceTaxAmount - tdsAmount, 2);
+
+        return Ok(new
+        {
+            id = request.Id,
+            userId = request.UserId,
+            userName = User.Identity?.Name ?? "",
+            planType = "BINARY",
+            amount = request.Amount,
+            serviceTaxAmount,
+            tdsAmount,
+            netPayableAmount,
+            status = request.Status,
+            requestedAt = request.RequestedAt,
+            processedAt = request.ProcessedAt,
+            adminRemarks = request.AdminNote,
+            message
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // ADMIN: GET /api/binary/admin/pending-withdrawals
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpGet("admin/pending-withdrawals")]
+    [Authorize(Roles = "Admin,SuperAdmin")]
+    public async Task<IActionResult> GetPendingWithdrawals()
+    {
+        var pending = await _db.BinaryWithdrawalRequests
+            .Where(r => r.Status == "Pending")
+            .OrderBy(r => r.RequestedAt)
+            .ToListAsync();
+
+        return Ok(pending);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // ADMIN: POST /api/binary/admin/process-withdrawal/{id}
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpPost("admin/process-withdrawal/{id:int}")]
+    [Authorize(Roles = "Admin,SuperAdmin")]
+    public async Task<IActionResult> ProcessWithdrawal(int id, [FromBody] ProcessBinaryWithdrawalDto dto)
+    {
+        var (success, message) = await _binaryService.ProcessWithdrawalAsync(id, dto.Approve, dto.AdminNote);
+
+        if (!success) return BadRequest(new { message });
+        return Ok(new { message });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // ADMIN: POST /api/binary/admin/approve-activation/{userId}
+    // Manually approve/activate a Binary Plan ID without requiring a 
+    // product purchase. Useful for admin overrides or special cases.
+    // ─────────────────────────────────────────────────────────────────────
+    [HttpPost("admin/approve-activation/{userId}")]
+    [Authorize(Roles = "Admin,SuperAdmin")]
+    public async Task<IActionResult> AdminApproveBinaryActivation(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return BadRequest(new { message = "userId is required." });
+
+        // Check if user exists in binary tree
+        var node = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == userId);
+        if (node == null)
+            return NotFound(new { message = $"User '{userId}' is not enrolled in the Binary Plan." });
+
+        // Check if already active
+        if (node.IsActive)
+            return BadRequest(new { message = $"User '{userId}' Binary Plan ID is already active." });
+
+        // Activate the binary node (0 BV since no purchase)
+        await _binaryService.ActivateBinaryNodeAsync(userId, 0, awardPairs: true);
+
+        // Also update the User record for consistency
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+        if (user != null)
+        {
+            user.IsActive = true;
+            user.IdStatus = "active";
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(new
+        {
+            message = $"Binary Plan ID for user '{userId}' has been activated by admin.",
+            userId = userId,
+            isActive = true,
+            activatedAt = DateTime.UtcNow
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // PRIVATE
+    // ─────────────────────────────────────────────────────────────────────
+    private string? GetUserId() =>
+        User.FindFirst("userId")?.Value ??
+        User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+}

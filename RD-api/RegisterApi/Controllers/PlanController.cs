@@ -1,0 +1,248 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using RegisterApi.Data;
+using RegisterApi.DTOs;
+using RegisterApi.Models;
+using RegisterApi.Services;
+
+namespace RegisterApi.Controllers
+{
+    [ApiController]
+    [Route("api/Plans")]
+    [Authorize]
+    public class PlanController : ControllerBase
+    {
+        private readonly AppDbContext _db;
+        private readonly ICommissionService _commissionService;
+        private readonly IBinaryPlanService _binaryPlanService;
+
+        // Move this to a DB-backed PlanTypes table later if you want it admin-editable
+        private static readonly Dictionary<string, int> PlanBvRequirement = new()
+        {
+            { "Dream Plan", 600 },
+            { "Binary Plan", 600 }
+        };
+
+        public PlanController(AppDbContext db, ICommissionService commissionService, IBinaryPlanService binaryPlanService)
+        {
+            _db = db;
+            _commissionService = commissionService;
+            _binaryPlanService = binaryPlanService;
+        }
+
+        // ---------------------------------------------------------------
+        // GET /api/Plans/my-plan
+        // Returns the current logged-in user's plan/purchase status.
+        // Used by the dashboard to show ACTIVE/INACTIVE, purchase date, BV.
+        // ---------------------------------------------------------------
+        [HttpGet("my-plan")]
+        public async Task<IActionResult> GetMyPlan()
+        {
+            var userId = User.FindFirst("userId")?.Value
+                       ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null)
+                return NotFound(new { message = "User not found." });
+
+            // ── Legacy source: the old direct-checkout flow (POST /api/Plans/checkout).
+            //    Kept for backward compatibility with any historical data, but this
+            //    endpoint is no longer what the app actually uses to purchase. ──
+            var latestDreamPlanLegacy = await _db.Plans
+                .Where(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid && p.PlanType == "Dream Plan")
+                .OrderByDescending(p => p.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            var latestBinaryPlanLegacy = await _db.Plans
+                .Where(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid && p.PlanType == "Binary Plan")
+                .OrderByDescending(p => p.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            // ── Real source: the actual live flow. A user submits a payment via
+            //    POST /api/Orders/payment (UTR + screenshot), and an admin approves
+            //    it via POST /api/Orders/payment-requests/{id}/approve. THAT approval
+            //    is what really activates a plan — this endpoint was never reading
+            //    from it before, which is why an approved order never showed as
+            //    "active" here even though the admin panel said Approved. ──
+            var latestDreamOrder = await _db.PaymentOrders
+                .Where(o => o.UserId == user.UserId && o.PlanType == "Dream Plan" && o.Status == PaymentOrderStatus.Approved)
+                .OrderByDescending(o => o.ProcessedAt)
+                .FirstOrDefaultAsync();
+
+            var latestBinaryOrder = await _db.PaymentOrders
+                .Where(o => o.UserId == user.UserId && o.PlanType == "Binary Plan" && o.Status == PaymentOrderStatus.Approved)
+                .OrderByDescending(o => o.ProcessedAt)
+                .FirstOrDefaultAsync();
+
+            var totalSells =
+                await _db.Plans.CountAsync(p => p.UserId == user.UserId && p.Status == PlanStatus.Paid) +
+                await _db.PaymentOrders.CountAsync(o => o.UserId == user.UserId && o.Status == PaymentOrderStatus.Approved);
+
+            // ── Merge: whichever of legacy vs. real is more recent for each plan wins ──
+            DateTime? dreamDate = null;
+            decimal dreamBv = 0;
+            bool dreamIsActive = latestDreamPlanLegacy != null || latestDreamOrder != null;
+            if ((latestDreamOrder?.ProcessedAt ?? DateTime.MinValue) >= (latestDreamPlanLegacy?.CreatedAt ?? DateTime.MinValue))
+            {
+                dreamDate = latestDreamOrder?.ProcessedAt;
+                dreamBv = latestDreamOrder?.TotalBv ?? 0;
+            }
+            else
+            {
+                dreamDate = latestDreamPlanLegacy?.CreatedAt;
+                dreamBv = latestDreamPlanLegacy?.TotalBv ?? 0;
+            }
+
+            DateTime? binaryDate = null;
+            decimal binaryBv = 0;
+            bool binaryIsActive = latestBinaryPlanLegacy != null || latestBinaryOrder != null;
+            if ((latestBinaryOrder?.ProcessedAt ?? DateTime.MinValue) >= (latestBinaryPlanLegacy?.CreatedAt ?? DateTime.MinValue))
+            {
+                binaryDate = latestBinaryOrder?.ProcessedAt;
+                binaryBv = latestBinaryOrder?.TotalBv ?? 0;
+            }
+            else
+            {
+                binaryDate = latestBinaryPlanLegacy?.CreatedAt;
+                binaryBv = latestBinaryPlanLegacy?.TotalBv ?? 0;
+            }
+
+            // Use whichever plan (Dream or Binary) is more recent as the "primary" one
+            var useDreamAsPrimary = (dreamDate ?? DateTime.MinValue) >= (binaryDate ?? DateTime.MinValue);
+
+            return Ok(new
+            {
+                isActive = user.IsActive,
+                purchaseDate = useDreamAsPrimary ? dreamDate : binaryDate,
+                bv = useDreamAsPrimary ? dreamBv : binaryBv,
+                planType = useDreamAsPrimary
+                    ? (dreamIsActive ? "Dream Plan" : null)
+                    : (binaryIsActive ? "Binary Plan" : null),
+                totalSells,
+                // ── Individual active flags for each plan — now correctly reflect
+                //    admin-approved orders from the real purchase flow. ──
+                dreamIsActive,
+                binaryIsActive
+            });
+        }
+
+        [HttpPost("checkout")]
+        public async Task<IActionResult> Checkout([FromBody] PlanCheckoutDto dto)
+        {
+            if (dto.Items == null || dto.Items.Count == 0)
+                return BadRequest(new { message = "No products selected." });
+
+            if (!PlanBvRequirement.TryGetValue(dto.PlanType, out var requiredBv))
+                return BadRequest(new { message = $"Unknown plan '{dto.PlanType}'." });
+
+            var userId = User.FindFirst("userId")?.Value
+                       ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null)
+                return NotFound(new { message = "User not found." });
+
+            var productIds = dto.Items.Select(i => i.ProductId).ToList();
+            var products = await _db.Products
+                .Where(p => productIds.Contains(p.Id) && p.IsActive)
+                .ToListAsync();
+
+            if (products.Count != productIds.Distinct().Count())
+                return BadRequest(new { message = "One or more products are invalid or unavailable." });
+
+            var plan = new Plan
+            {
+                UserId = user.UserId,
+                PlanType = dto.PlanType,
+                Status = PlanStatus.Pending,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            decimal totalBv = 0, totalAmount = 0;
+
+            foreach (var item in dto.Items)
+            {
+                var product = products.First(p => p.Id == item.ProductId);
+                if (item.Quantity <= 0)
+                    return BadRequest(new { message = $"Invalid quantity for {product.ProductName}." });
+
+                plan.Items.Add(new PlanItem
+                {
+                    ProductId = product.Id,
+                    Quantity = item.Quantity,
+                    Bv = product.Bv,
+                    Mrp = product.Mrp
+                });
+
+                totalBv += product.Bv * item.Quantity;
+                totalAmount += product.Mrp * item.Quantity;
+            }
+
+            plan.TotalBv = totalBv;
+            plan.TotalAmount = totalAmount;
+
+            // ⚠️ No payment gateway wired yet — see note below.
+            plan.Status = PlanStatus.Paid;
+
+            _db.Plans.Add(plan);
+
+            // ✅ When plan is Paid and BV threshold is met:
+            //    - Mark user as active
+            //    - Set selected plan
+            //    - Accumulate business volume
+            //    - Set IdStatus to "active"
+            if (plan.Status == PlanStatus.Paid && totalBv >= requiredBv)
+            {
+                user.IsActive = true;
+                user.SelectedPlan = dto.PlanType;
+                user.BusinessVolume += (int)totalBv;
+                user.IdStatus = "active";
+            }
+
+            await _db.SaveChangesAsync();
+
+            // ✅ If this is a Binary Plan purchase, activate the binary node
+            //    and trigger pair commission check for the parent.
+            //    This fires awardPairs: true so ₹150 is credited to the parent
+            //    the moment both LEFT and RIGHT children are active.
+            if (plan.Status == PlanStatus.Paid && totalBv >= requiredBv && dto.PlanType == "Binary Plan")
+            {
+                var binaryNode = await _db.BinaryNodes
+                    .FirstOrDefaultAsync(n => n.UserId == user.UserId);
+
+                if (binaryNode != null && !binaryNode.IsActive)
+                {
+                    await _binaryPlanService.ActivateBinaryNodeAsync(
+                        user.UserId, totalBv, awardPairs: true);
+                }
+            }
+
+            // ✅ Pay out level commissions: 10% self bonus to the buyer,
+            //    then 12 levels up the SponsorId chain, into each person's
+            //    "Dream Wallet". Runs for every paid purchase, independent
+            //    of whether this particular order met the activation BV
+            //    threshold above.
+            if (plan.Status == PlanStatus.Paid)
+            {
+                await _commissionService.DistributeProductPurchaseCommissionAsync(
+                    user.UserId, totalBv, plan.Id.ToString());
+            }
+
+            return Ok(new
+            {
+                message = user.IsActive
+                    ? "Plan purchased and account activated."
+                    : "Order placed, but BV threshold not yet met.",
+                planId = plan.Id,
+                totalBv = plan.TotalBv,
+                userIsActive = user.IsActive,
+                idStatus = user.IdStatus
+            });
+        }
+    }
+}
