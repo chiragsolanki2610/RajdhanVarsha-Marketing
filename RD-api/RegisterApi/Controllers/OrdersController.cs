@@ -154,8 +154,12 @@ public class OrdersController : ControllerBase
         }
 
         // 5c. Dream Plan: must clear the same 600 BV threshold as the UI enforces
-        //     client-side. Checked here so someone can't bypass the frontend's
-        //     bvMet gate by calling the API directly with a smaller cart.
+        //     client-side -- but ONLY on the first (activation) purchase, same
+        //     one-time rule as Binary Plan. Once buyer.IsActive is true, the
+        //     600 BV gate no longer applies to later shop purchases under
+        //     Dream Plan; they're regular purchases at any BV level.
+        //     Checked here so someone can't bypass the frontend's bvMet gate
+        //     by calling the API directly with a smaller cart on their first order.
         //
         //     Also: must have a SponsorId set. Legacy-imported accounts start
         //     with SponsorId = null, and the frontend routes those users through
@@ -166,18 +170,21 @@ public class OrdersController : ControllerBase
         //     to walk and every level of commission would silently go unpaid.
         if (planType == "Dream Plan")
         {
-            const decimal dreamPlanBvTarget = 600m;
-            if (totalBv < dreamPlanBvTarget)
-                return BadRequest(new
-                {
-                    message = $"Dream Plan requires at least {dreamPlanBvTarget} BV. You selected {totalBv} BV.",
-                    required = dreamPlanBvTarget,
-                    selected = totalBv
-                });
-
             var buyerForSponsorCheck = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
             if (buyerForSponsorCheck == null)
                 return BadRequest(new { message = "User not found." });
+
+            if (!buyerForSponsorCheck.IsActive)
+            {
+                const decimal dreamPlanBvTarget = 600m;
+                if (totalBv < dreamPlanBvTarget)
+                    return BadRequest(new
+                    {
+                        message = $"Dream Plan requires at least {dreamPlanBvTarget} BV. You selected {totalBv} BV.",
+                        required = dreamPlanBvTarget,
+                        selected = totalBv
+                    });
+            }
 
             if (string.IsNullOrWhiteSpace(buyerForSponsorCheck.SponsorId))
                 return BadRequest(new { message = "Set your Sponsor ID before purchasing the Dream Plan." });
