@@ -24,10 +24,15 @@ type FormState = {
   centerAddress: string;
 };
 
+type UploadedFile = {
+  name: string;
+  base64: string;
+};
+
 type FileState = {
-  aadharImage: File | null;
-  panImage: File | null;
-  passbookImage: File | null;
+  aadharImage: UploadedFile | null;
+  panImage: UploadedFile | null;
+  passbookImage: UploadedFile | null;
 };
 
 const initialCredentials: CredentialsState = {
@@ -55,14 +60,26 @@ const initialFiles: FileState = {
   passbookImage: null,
 };
 
-function fileToBase64(file: File | null): Promise<string | null> {
-  if (!file) return Promise.resolve(null);
+function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.onerror = () =>
+      reject(
+        new Error(
+          `Couldn't read "${file.name}". Please try selecting the image again.`
+        )
+      );
     reader.readAsDataURL(file);
   });
+}
+
+// WhatsApp / Instagram / Facebook in-app browsers (Android WebViews) are the
+// most common cause of "Failed to read file" — their sandbox can invalidate
+// the picked file's content:// reference before we get a chance to read it.
+function isInAppBrowser() {
+  if (typeof navigator === "undefined") return false;
+  return /FBAN|FBAV|Instagram|WhatsApp|Line\//i.test(navigator.userAgent);
 }
 
 export default function PickupCenterPage() {
@@ -333,14 +350,46 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.sponsorId]);
 
-  const handleFile = (key: keyof FileState) => (e: ChangeEvent<HTMLInputElement>) => {
+  // Track per-field "reading..." state so the UI can show progress and the
+  // user can immediately see which specific upload failed.
+  const [readingFile, setReadingFile] = useState<keyof FileState | null>(null);
+
+  const handleFile = (key: keyof FileState) => async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
-    if (file && file.size > 5 * 1024 * 1024) {
+    // reset the input value so re-selecting the same file after a failed
+    // read still fires onChange
+    const inputEl = e.target;
+
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
       setError("Each image must be under 5MB.");
+      setFiles((prev) => ({ ...prev, [key]: null }));
+      inputEl.value = "";
       return;
     }
+
     setError(null);
-    setFiles((prev) => ({ ...prev, [key]: file }));
+    setReadingFile(key);
+    try {
+      // Read the file into base64 immediately on selection, not at submit
+      // time — this avoids the file reference going stale while the user
+      // fills in the rest of the form.
+      const base64 = await fileToBase64(file);
+      setFiles((prev) => ({ ...prev, [key]: { name: file.name, base64 } }));
+    } catch (err) {
+      setFiles((prev) => ({ ...prev, [key]: null }));
+      const baseMessage =
+        err instanceof Error ? err.message : "Failed to read the selected file.";
+      setError(
+        isInAppBrowser()
+          ? `${baseMessage} This often happens inside the WhatsApp/Instagram in-app browser — please open this page in Chrome (tap ⋮ menu → "Open in Chrome" or "Open in browser") and try again.`
+          : `${baseMessage} Please try selecting it again, or try a different photo.`
+      );
+      inputEl.value = "";
+    } finally {
+      setReadingFile(null);
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -360,11 +409,12 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
 
     setSubmitting(true);
     try {
-      const [aadharImageBase64, panImageBase64, passbookImageBase64] = await Promise.all([
-        fileToBase64(files.aadharImage),
-        fileToBase64(files.panImage),
-        fileToBase64(files.passbookImage),
-      ]);
+      // Files were already converted to base64 at selection time (see
+      // handleFile), so submitting never re-reads from disk and can't hit
+      // the "Failed to read file" error at this stage.
+      const aadharImageBase64 = files.aadharImage.base64;
+      const panImageBase64 = files.panImage.base64;
+      const passbookImageBase64 = files.passbookImage.base64;
 
       const res = await fetch("https://rd-api-j7zj.onrender.com/api/PickupCenter/apply", {
         method: "POST",
@@ -435,6 +485,15 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
           Edit account details
         </button>
       </div>
+
+      {isInAppBrowser() && (
+        <p className="rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+          You appear to be using an in-app browser (e.g. WhatsApp or
+          Instagram). Image uploads can fail here — for a smooth
+          application, please open this page in Chrome (tap the ⋮ menu and
+          choose &quot;Open in Chrome&quot; or &quot;Open in browser&quot;).
+        </p>
+      )}
 
       {/* Personal details */}
       <div>
@@ -511,6 +570,7 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
             label="Upload Aadhar Card Image"
             file={files.aadharImage}
             onChange={handleFile("aadharImage")}
+            isReading={readingFile === "aadharImage"}
             required
           />
           <TextField
@@ -527,6 +587,7 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
             label="Upload PAN Card Image"
             file={files.panImage}
             onChange={handleFile("panImage")}
+            isReading={readingFile === "panImage"}
             required
           />
         </div>
@@ -560,6 +621,7 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
               label="Upload Passbook / Bank Statement Image"
               file={files.passbookImage}
               onChange={handleFile("passbookImage")}
+              isReading={readingFile === "passbookImage"}
               required
             />
           </div>
@@ -605,7 +667,7 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
 
       <button
         type="submit"
-        disabled={submitting}
+        disabled={submitting || readingFile !== null}
         className="flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting && <Loader2 size={16} className="animate-spin" />}
@@ -737,11 +799,13 @@ function FileField({
   file,
   onChange,
   required,
+  isReading,
 }: {
   label: string;
-  file: File | null;
+  file: UploadedFile | null;
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
   required?: boolean;
+  isReading?: boolean;
 }) {
   return (
     <div>
@@ -749,15 +813,24 @@ function FileField({
         {label}
       </label>
       <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-500 transition hover:border-blue-500 hover:bg-blue-50">
-        <UploadCloud size={18} className="shrink-0 text-blue-600" />
+        {isReading ? (
+          <Loader2 size={18} className="shrink-0 animate-spin text-blue-600" />
+        ) : (
+          <UploadCloud size={18} className="shrink-0 text-blue-600" />
+        )}
         <span className="truncate">
-          {file ? file.name : "Click to upload image (JPG/PNG, max 5MB)"}
+          {isReading
+            ? "Reading image..."
+            : file
+            ? file.name
+            : "Click to upload image (JPG/PNG, max 5MB)"}
         </span>
         <input
           type="file"
           accept="image/*"
           onChange={onChange}
-          required={required}
+          required={required && !file}
+          disabled={isReading}
           className="hidden"
         />
       </label>
