@@ -42,7 +42,7 @@ interface PickupCenterSummary {
 type PaymentStep = "sponsor" | "pickup" | "cart" | "checkout" | "success";
 
 // ─── API URL ──────────────────────────────────────────────────────────────────
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:56187";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
 
 const DREAM_PLAN_BV_TARGET = 600;
 

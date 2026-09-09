@@ -48,7 +48,7 @@ export default function KycVerificationPage() {
       try {
         const token = localStorage.getItem('authToken');
         
-        const response = await fetch('https://localhost:56187/api/Auth/profile', {
+        const response = await fetch('https://rd-api-j7zj.onrender.com/api/Auth/profile', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -144,7 +144,7 @@ export default function KycVerificationPage() {
       console.log("PAN Card:", (panCardImg.size / 1024 / 1024).toFixed(2), "MB", panCardImg.type);
       console.log("Bank Proof:", (bankProofImg.size / 1024 / 1024).toFixed(2), "MB", bankProofImg.type);
 
-      const response = await fetch('https://localhost:56187/api/Kyc/submit', {
+      const response = await fetch('https://rd-api-j7zj.onrender.com/api/Kyc/submit', {
         method: 'POST',
         headers: {
           // NOTE: do NOT set Content-Type manually for FormData — the browser

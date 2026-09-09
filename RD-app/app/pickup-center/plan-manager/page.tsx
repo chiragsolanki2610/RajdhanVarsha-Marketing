@@ -8,7 +8,7 @@ import { Check } from "lucide-react";
 // ─────────────────────────────────────────────────────────────────────────
 // Config
 // ─────────────────────────────────────────────────────────────────────────
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://localhost:56187";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://rd-api-j7zj.onrender.com";
 const MIN_BV = 600;
 const BRAND = "#3B5998";
 

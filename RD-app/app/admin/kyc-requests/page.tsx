@@ -46,7 +46,7 @@ export default function KycRequests() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('https://localhost:56187/api/Admin/kyc-requests', {
+      const response = await fetch('https://rd-api-j7zj.onrender.com/api/Admin/kyc-requests', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -74,7 +74,7 @@ export default function KycRequests() {
       setError(null);
       const token = localStorage.getItem('token');
 
-      const response = await fetch(`https://localhost:56187/api/Admin/kyc-requests/${id}/status`, {
+      const response = await fetch(`https://rd-api-j7zj.onrender.com/api/Admin/kyc-requests/${id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -103,7 +103,7 @@ interface TodayActivationsData {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || 'https://localhost:56187';
+  process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
 
 // ── Reads the auth token regardless of which key the login/register flow
 // happened to save it under. Some flows save "token", others save

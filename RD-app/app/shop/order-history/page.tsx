@@ -28,7 +28,7 @@ import Sidebar from '@/components/Sidebar';
 import LoginTopbar from '@/components/loginTopbar';
 
 // ─── BASE URL ─────────────────────────────────────────────────────────────────
-const BASE_URL = 'https://localhost:56187'; // Updated to match your Swagger UI port
+const BASE_URL = 'https://rd-api-j7zj.onrender.com'; // Updated to match your Swagger UI port
 
 // ─── Company Constants ────────────────────────────────────────────────────────
 const COMPANY = {

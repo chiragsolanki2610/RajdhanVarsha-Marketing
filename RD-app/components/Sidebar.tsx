@@ -139,7 +139,7 @@ export default function Sidebar() {
 
       setUserData({ name: fallbackName, memberId: currentUserId, role: fallbackRole, profilePictureUrl: fallbackPicture });
 
-      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:56187';
+      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
       const savedToken = localStorage.getItem('token');
 
       const response = await fetch(`${BASE_URL}/api/Auth/${currentUserId}`, {

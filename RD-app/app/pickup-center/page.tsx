@@ -460,7 +460,7 @@ function ApplyForm({
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://localhost:56187/api/Auth/sponsor-lookup/${encodeURIComponent(id)}`
+          `https://rd-api-j7zj.onrender.com/api/Auth/sponsor-lookup/${encodeURIComponent(id)}`
         );
 
         if (!res.ok) {
@@ -519,7 +519,7 @@ function ApplyForm({
         fileToBase64(files.passbookImage),
       ]);
 
-      const res = await fetch("https://localhost:56187/api/PickupCenter/apply", {
+      const res = await fetch("https://rd-api-j7zj.onrender.com/api/PickupCenter/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -835,7 +835,7 @@ function LoginForm() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("https://localhost:56187/api/PickupCenter/login", {
+      const res = await fetch("https://rd-api-j7zj.onrender.com/api/PickupCenter/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),

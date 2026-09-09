@@ -32,7 +32,7 @@ export default function AdminWithdrawalPage() {
   const [selectedRequest, setSelectedRequest] = useState<WithdrawalRequest | null>(null);
   const [activeTab, setActiveTab] = useState<"all" | RequestType>("all");
 
-  const API = "https://localhost:56187";
+  const API = "https://rd-api-j7zj.onrender.com";
 
   const getAuthHeaders = () => {
     if (typeof window !== "undefined") {

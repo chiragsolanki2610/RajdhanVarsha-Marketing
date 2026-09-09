@@ -14,7 +14,7 @@ import { Check, Network, ChevronDown, ChevronUp, CircleDot, FileText, BadgeCheck
 // -----------------------------------------------------------------------------
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || 'https://localhost:56187';
+  process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
 
 export default function PlanPage() {
   const router = useRouter();

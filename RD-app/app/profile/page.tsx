@@ -44,7 +44,7 @@ interface UserProfileData {
   bankProofImageUrl?: string | null;
 }
 
-const API_BASE = 'https://localhost:56187';
+const API_BASE = 'https://rd-api-j7zj.onrender.com';
 
 export default function ProfilePage() {
   const router = useRouter();

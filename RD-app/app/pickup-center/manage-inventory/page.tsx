@@ -25,7 +25,7 @@ import {
 import PickupCenterSidebar from "@/components/pickup_centersidebar";
 import PickupCenterTopbar from "@/components/pickup_centertopbar";
 
-const API_BASE = "https://localhost:56187";
+const API_BASE = "https://rd-api-j7zj.onrender.com";
 
 // Minimum cart value (₹) required before a pickup center can proceed to payment
 const MIN_ORDER_VALUE = 15000;
