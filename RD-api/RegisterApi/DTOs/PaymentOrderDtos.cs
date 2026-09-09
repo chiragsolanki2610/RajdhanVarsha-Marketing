@@ -25,6 +25,8 @@ public class PaymentOrderDto
 
     // true once a draft PDF exists for ADMIN to preview/edit, regardless of finalize state
     public bool ReceiptDraftReady { get; set; }
+    public string? SelectedPucId { get; set; }
+    public string? SelectedPucCenterName { get; set; }
 }
 
 // ── Admin approve / reject body ───────────────────────────────────────────────
@@ -46,6 +48,7 @@ public class SubmitPaymentFormDto
     public string? TotalAmount { get; set; }
     public string? TotalBv { get; set; }
     public string? CartItems { get; set; }   // JSON string
+    public string? PucId { get; set; }
 }
 
 // ── Parsed shape of one entry in dto.CartItems ("[{productId, quantity, dp, bv}]") ──

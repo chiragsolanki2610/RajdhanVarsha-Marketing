@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -13,23 +14,51 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // ── CORS Policy ──────────────────────────────────────────────────────────
+    // ── Request Size Limits ──────────────────────────────────────────────
+    // Kestrel's default MaxRequestBodySize is ~30MB. The KYC submission
+    // uploads 4 images (up to 8MB each, capped client-side) as
+    // multipart/form-data, which can exceed that default and cause the
+    // connection to be reset mid-request — the browser then reports this
+    // as a generic network failure ("Failed to fetch") instead of a clean
+    // HTTP error. Raising the limit here fixes that.
+    const long MaxRequestBodySizeBytes = 50 * 1024 * 1024; // 50MB
+
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.Limits.MaxRequestBodySize = MaxRequestBodySizeBytes;
+    });
+
+    // Also raise the multipart form-parsing limits (separate from Kestrel's
+    // raw body limit) so ASP.NET Core's form reader doesn't reject large
+    // individual file fields either.
+    builder.Services.Configure<FormOptions>(options =>
+    {
+        options.MultipartBodyLengthLimit = MaxRequestBodySizeBytes;
+        options.ValueLengthLimit = int.MaxValue;
+        options.MultipartHeadersLengthLimit = int.MaxValue;
+    });
+
+    // ── CORS Policy ────────────────────────────────────────────────────────────
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("NextFrontendPolicy", policy =>
         {
             policy.WithOrigins(
+                    "https://localhost:3000", 
                     "http://localhost:3000",
-                    "https://localhost:3000",
                     "https://rd-app.onrender.com",
-                    "https://rd-app-piwd.onrender.com"
+                    "https://rd-app-piwd.onrender.com",
+                    "https://rajdhanvarsha.in",
+                    "https://www.rajdhanvarsha.in",
+                    "https://rajdhanvarsha.in"
+
                   )
                   .AllowAnyHeader()
                   .AllowAnyMethod();
         });
     });
 
-    // ── Database (Supabase PostgreSQL via EF Core) ───────────────────────────
+    // ── Database (Supabase PostgreSQL via EF Core) ──────────────────────────────
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseNpgsql(
             builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -60,12 +89,11 @@ try
     // ── HTTP Client Factory ──────────────────────────────────────────────────
     builder.Services.AddHttpClient();
 
-    // ── Services ─────────────────────────────────────────────────────────────
+    // ── Services ──────────────────────────────────────────────────────────────
     builder.Services.AddScoped<IWalletService, WalletService>();
     builder.Services.AddScoped<ICommissionService, CommissionService>();
     builder.Services.AddScoped<IUserService, UserService>();
     builder.Services.AddScoped<IUserIdGenerator, UserIdGenerator>();
-    builder.Services.AddScoped<IPickupCenterIdGenerator, PickupCenterIdGenerator>();
     builder.Services.AddScoped<IPasswordService, PasswordService>();
     builder.Services.AddScoped<IReceiptService, ReceiptService>();
     builder.Services.AddScoped<IBinaryPlanService, BinaryPlanService>();  // ← ADDED
@@ -75,7 +103,7 @@ try
     // automatically without anyone having to trigger it by hand.
     builder.Services.AddHostedService<PairReconciliationHostedService>();
 
-    // ── JWT Auth ─────────────────────────────────────────────────────────────
+    // ── JWT Auth ──────────────────────────────────────────────────────────────
     var jwtKey = builder.Configuration["Jwt:Key"]
         ?? throw new InvalidOperationException(
             "Jwt:Key is missing in appsettings.json under 'Jwt' -> 'Key'.");
@@ -110,7 +138,7 @@ try
             options.JsonSerializerOptions.MaxDepth = 256;
         });
 
-    // ── Swagger ───────────────────────────────────────────────────────────────
+    // ── Swagger ──────────────────────────────────────────────────────────────
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
     {
@@ -140,10 +168,10 @@ try
         });
     });
 
-    // ── Build App ─────────────────────────────────────────────────────────────
+    // ── Build App ──────────────────────────────────────────────────────────────
     var app = builder.Build();
 
-    // ── Auto-apply Migrations on Startup ─────────────────────────────────────
+    // ── Auto-apply Migrations on Startup ──────────────────────────────────────────
     using (var scope = app.Services.CreateScope())
     {
         try
@@ -178,7 +206,7 @@ try
         }
     }
 
-    // ── Global exception handler (must be FIRST, before CORS) ────────────────
+    // ── Global exception handler (must be FIRST, before CORS) ──────────────────────
     // Ensures that if a request throws unhandled anywhere downstream, it still
     // gets a clean JSON response with CORS headers attached, instead of the
     // connection dying (which the browser reports as a phantom CORS error).
@@ -192,7 +220,7 @@ try
         });
     });
 
-    // ── Middleware Pipeline ───────────────────────────────────────────────────
+    // ── Middleware Pipeline ──────────────────────────────────────────────────────
     // ✅ CORS must be before everything else
     app.UseCors("NextFrontendPolicy");
 

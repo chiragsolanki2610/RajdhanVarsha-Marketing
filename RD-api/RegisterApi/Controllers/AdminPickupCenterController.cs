@@ -130,6 +130,8 @@ namespace RegisterApi.Controllers
                     PassbookImageBase64 = request.PassbookImageBase64,
                     CenterName = request.CenterName,
                     CenterAddress = request.CenterAddress,
+                    State = request.State,
+                    City = request.City,
                     Status = "Active",
                     SourceRequestId = request.Id,
                     CreatedAt = DateTime.UtcNow,

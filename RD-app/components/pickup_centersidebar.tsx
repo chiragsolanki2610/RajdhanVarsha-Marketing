@@ -10,6 +10,8 @@ import {
   History,
   LogOut,
   ChevronLeft,
+  FileText,
+  Layers,
 } from 'lucide-react';
 
 interface PucInfo {
@@ -24,29 +26,30 @@ function MobileBottomNav() {
   const pathname = usePathname();
 
   const navItems = [
-    { icon: Home,         label: 'Home',    path: '/pickup-center/dashboard' },
-    { icon: ShoppingCart, label: 'Sell',    path: '/pickup-center/sell' },
-    { icon: Package,      label: 'Manage Inventory',  path: '/pickup-center/manage-inventory' },
-    { icon: History,      label: 'History', path: '/pickup-center/history' },
+    { icon: Home,         label: 'Home',            path: '/pickup-center/dashboard' },
+    { icon: ShoppingCart, label: 'Sell',            path: '/pickup-center/sell' },
+    { icon: Layers,       label: 'Plan Manager',    path: '/pickup-center/plan-manager' },
+    { icon: Package,      label: 'Manage Inventory',path: '/pickup-center/manage-inventory' },
+    { icon: History,      label: 'History',         path: '/pickup-center/history' },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around px-2 py-2 md:hidden shadow-[0_-2px_12px_rgba(0,0,0,0.08)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around px-1 py-2 md:hidden shadow-[0_-2px_12px_rgba(0,0,0,0.08)]">
       {navItems.map(({ icon: Icon, label, path }) => {
         const isActive = pathname === path || (path !== '/pickup-center/dashboard' && pathname.startsWith(path));
         return (
           <Link
             key={label}
             href={path}
-            className="flex flex-col items-center gap-0.5 min-w-[48px] py-1 px-2 rounded-xl transition-colors duration-150"
+            className="flex flex-col items-center gap-0.5 min-w-[44px] py-1 px-1 rounded-xl transition-colors duration-150"
           >
             <Icon
-              size={22}
+              size={20}
               strokeWidth={isActive ? 2.2 : 1.6}
               className={isActive ? 'text-[#3B5998]' : 'text-gray-400'}
             />
             <span
-              className={`text-[10px] font-medium tracking-tight leading-none ${
+              className={`text-[9px] font-medium tracking-tight leading-none text-center ${
                 isActive ? 'text-[#3B5998] font-semibold' : 'text-gray-400'
               }`}
             >
@@ -142,10 +145,14 @@ export default function PickupCenterSidebar() {
 
             {/* ── Profile Block ── */}
             <div className={`w-full mt-6 ${isOpen ? 'px-4 mb-6' : 'px-2 mb-4 flex justify-center'}`}>
-              <div
-                className={`w-full flex items-center rounded-xl border transition-all bg-blue-900/30 border-blue-400/20 text-white ${
+              <Link
+                href="/pickup-center/profile"
+                onClick={() => router.push('/pickup-center/profile')}
+                aria-label="Open pickup center profile"
+                className={`w-full cursor-pointer flex items-center rounded-xl border transition-all bg-blue-900/30 border-blue-400/20 text-white hover:bg-blue-800/40 ${
                   isOpen ? 'p-3 gap-3' : 'p-0 justify-center w-10 h-10 rounded-full'
                 }`}
+                title={!isOpen ? 'Open profile' : undefined}
               >
                 <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 uppercase shadow-inner bg-blue-600 text-white">
                   {isLoading ? '...' : getInitials(pucData?.fullName)}
@@ -171,7 +178,7 @@ export default function PickupCenterSidebar() {
                     )}
                   </div>
                 )}
-              </div>
+              </Link>
             </div>
 
             {/* ── Nav Menu ── */}
@@ -212,6 +219,36 @@ export default function PickupCenterSidebar() {
                   >
                     <ShoppingCart size={16} className={pathname === '/pickup-center/sell' ? 'text-blue-600' : 'text-blue-200'} />
                     {isOpen && <span className="truncate animate-fadeIn">Sell</span>}
+                  </Link>
+
+                  {/* Plan Manager */}
+                  <Link
+                    href="/pickup-center/plan-manager"
+                    className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
+                      isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
+                    } ${
+                      pathname === '/pickup-center/plan-manager'
+                        ? 'bg-white text-blue-900 font-bold shadow-md'
+                        : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
+                    }`}
+                  >
+                    <Layers size={16} className={pathname === '/pickup-center/plan-manager' ? 'text-blue-600' : 'text-blue-200'} />
+                    {isOpen && <span className="truncate animate-fadeIn">Plan Manager</span>}
+                  </Link>
+
+                  {/* Order Request */}
+                  <Link
+                    href="/pickup-center/order-request"
+                    className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
+                      isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
+                    } ${
+                      pathname === '/pickup-center/order-request'
+                        ? 'bg-white text-blue-900 font-bold shadow-md'
+                        : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
+                    }`}
+                  >
+                    <FileText size={16} className={pathname === '/pickup-center/order-request' ? 'text-blue-600' : 'text-blue-200'} />
+                    {isOpen && <span className="truncate animate-fadeIn">Order Request</span>}
                   </Link>
 
                   {/* Manage Inventory */}

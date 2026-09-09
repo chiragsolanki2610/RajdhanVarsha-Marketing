@@ -46,7 +46,8 @@ namespace RegisterApi.Models
         public string CenterName { get; set; } = string.Empty;
         [Required]
         public string CenterAddress { get; set; } = string.Empty;
-
+        public string State { get; set; } = string.Empty;
+        public string City { get; set; } = string.Empty;
         public string Status { get; set; } = "Pending";
 
         public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;

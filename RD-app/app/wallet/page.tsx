@@ -30,7 +30,7 @@ import LoginTopbar from '@/components/loginTopbar';
 // INTEGRATED WALLET API CONFIG & UTILITIES
 // ==========================================
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://rd-api-j7zj.onrender.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:56187';
 
 // Tax rates used for the client-side live estimate shown while typing.
 // The authoritative numbers always come back from the API response after

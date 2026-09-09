@@ -5,7 +5,7 @@ import Sidebar from '@/components/Sidebar';
 import LoginTopbar from '@/components/loginTopbar'; // Added LoginTopbar import
 import { ChevronLeft, User, AlertCircle, Loader2, RefreshCw, Search } from 'lucide-react';
 
-const API_BASE = 'https://rd-api-j7zj.onrender.com';
+const API_BASE = 'https://localhost:56187';
 const VISIBLE_LEVELS = 3; // how many levels deep to render under whichever node is currently focused
 const LONG_PRESS_MS = 400; // how long a press/touch must be held to reveal details on mobile
 

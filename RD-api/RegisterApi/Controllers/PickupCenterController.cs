@@ -79,6 +79,8 @@ namespace RegisterApi.Controllers
                 PassbookImageBase64 = dto.PassbookImageBase64,
                 CenterName = dto.CenterName.Trim(),
                 CenterAddress = dto.CenterAddress.Trim(),
+                State = dto.State.Trim(),
+                City = dto.City.Trim(),
                 Status = "Pending",
                 SubmittedAt = DateTime.UtcNow
             };
@@ -131,6 +133,230 @@ namespace RegisterApi.Controllers
             }
 
             return Unauthorized(new { message = "Invalid username or password." });
+        }
+
+        [HttpGet("profile")]
+        [Authorize(Roles = "PickupCenter")]
+        public async Task<IActionResult> GetProfile()
+        {
+            var center = await _db.PickupCenters
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.PucId == CurrentPucId);
+
+            if (center == null)
+                return NotFound(new { message = "Pickup center not found." });
+
+            return Ok(MapProfile(center));
+        }
+
+        [HttpPut("profile")]
+        [Authorize(Roles = "PickupCenter")]
+        public async Task<IActionResult> UpdateProfile([FromBody] PickupCenterProfileUpdateDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var center = await _db.PickupCenters.FirstOrDefaultAsync(p => p.PucId == CurrentPucId);
+            if (center == null)
+                return NotFound(new { message = "Pickup center not found." });
+
+            center.FullName = dto.FullName.Trim();
+            center.Phone = dto.Phone.Trim();
+            center.CenterName = dto.CenterName.Trim();
+            center.CenterAddress = dto.CenterAddress.Trim();
+            center.State = dto.State.Trim();
+            center.City = dto.City.Trim();
+            center.AccountHolderName = dto.AccountHolderName.Trim();
+            center.BankName = dto.BankName.Trim();
+            center.AccountNumber = dto.AccountNumber.Trim();
+            center.IfscCode = dto.IfscCode.Trim().ToUpperInvariant();
+            center.AccountType = string.IsNullOrWhiteSpace(dto.AccountType) ? "Savings" : dto.AccountType.Trim();
+            center.UpiId = dto.UpiId.Trim();
+            if (dto.UpiQrImageBase64 == null || dto.UpiQrImageBase64.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+                center.UpiQrImageBase64 = dto.UpiQrImageBase64;
+
+            await _db.SaveChangesAsync();
+            return Ok(MapProfile(center));
+        }
+
+        private static PickupCenterProfileDto MapProfile(PickupCenter center) => new()
+        {
+            PucId = center.PucId,
+            Username = center.Username,
+            FullName = center.FullName,
+            Phone = center.Phone,
+            SponsorId = center.SponsorId,
+            SponsorName = center.SponsorName,
+            AadharNumber = center.AadharNumber,
+            PanNumber = center.PanNumber,
+            AccountHolderName = center.AccountHolderName,
+            BankName = center.BankName,
+            AccountNumber = center.AccountNumber,
+            IfscCode = center.IfscCode,
+            AccountType = center.AccountType,
+            UpiId = center.UpiId,
+            UpiQrImageBase64 = center.UpiQrImageBase64,
+            CenterName = center.CenterName,
+            CenterAddress = center.CenterAddress,
+            State = center.State,
+            City = center.City,
+            Status = center.Status,
+            CreatedAt = center.CreatedAt
+        };
+
+        [HttpGet("payment-details/{pucId}")]
+        [Authorize]
+        public async Task<IActionResult> GetPaymentDetails(string pucId)
+        {
+            var center = await _db.PickupCenters
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.PucId == pucId.Trim() && p.Status == "Active");
+
+            if (center == null)
+                return NotFound(new { message = "No active pickup center found with that ID." });
+
+            return Ok(new PickupCenterPaymentDetailsDto
+            {
+                PucId = center.PucId,
+                CenterName = center.CenterName,
+                AccountHolderName = center.AccountHolderName,
+                BankName = center.BankName,
+                AccountType = center.AccountType,
+                UpiId = center.UpiId,
+                UpiQrImageBase64 = center.UpiQrImageBase64
+            });
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Pickup Center Locator — used by regular members during Dream Purchase
+        // to choose a nearby active pickup center before shopping.
+        // ─────────────────────────────────────────────────────────────────────
+
+        // GET /api/PickupCenter/states — distinct states that have an active center
+        [HttpGet("states")]
+        [Authorize]
+        public async Task<IActionResult> GetStates()
+        {
+            var states = await _db.PickupCenters
+                .Where(p => p.Status == "Active")
+                .Select(p => p.State)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync();
+
+            return Ok(states);
+        }
+
+        // GET /api/PickupCenter/cities?state=Haryana — distinct cities within a state
+        [HttpGet("cities")]
+        [Authorize]
+        public async Task<IActionResult> GetCities([FromQuery] string state)
+        {
+            if (string.IsNullOrWhiteSpace(state))
+                return BadRequest(new { message = "State is required." });
+
+            var cities = await _db.PickupCenters
+                .Where(p => p.Status == "Active" && p.State == state.Trim())
+                .Select(p => p.City)
+                .Distinct()
+                .OrderBy(c => c)
+                .ToListAsync();
+
+            return Ok(cities);
+        }
+
+        // GET /api/PickupCenter/search?state=Haryana&city=Yamuna+Nagar
+        // Lists active centers in the chosen area (safe summary — no bank/Aadhar/PAN fields)
+        [HttpGet("search")]
+        [Authorize]
+        public async Task<IActionResult> SearchCenters([FromQuery] string state, [FromQuery] string city)
+        {
+            if (string.IsNullOrWhiteSpace(state) || string.IsNullOrWhiteSpace(city))
+                return BadRequest(new { message = "State and city are required." });
+
+            var centers = await _db.PickupCenters
+                .Where(p => p.Status == "Active" && p.State == state.Trim() && p.City == city.Trim())
+                .OrderBy(p => p.CenterName)
+                .Select(p => new PickupCenterSummaryDto
+                {
+                    PucId = p.PucId,
+                    CenterName = p.CenterName,
+                    CenterAddress = p.CenterAddress,
+                    State = p.State,
+                    City = p.City,
+                    Phone = p.Phone
+                })
+                .ToListAsync();
+
+            return Ok(centers);
+        }
+
+        // GET /api/PickupCenter/lookup/RD-PUC-0001 — direct lookup by Pickup Center ID
+        [HttpGet("lookup/{pucId}")]
+        [Authorize]
+        public async Task<IActionResult> LookupCenter(string pucId)
+        {
+            if (string.IsNullOrWhiteSpace(pucId))
+                return BadRequest(new { message = "Pickup Center ID is required." });
+
+            var center = await _db.PickupCenters
+                .Where(p => p.PucId == pucId.Trim() && p.Status == "Active")
+                .Select(p => new PickupCenterSummaryDto
+                {
+                    PucId = p.PucId,
+                    CenterName = p.CenterName,
+                    CenterAddress = p.CenterAddress,
+                    State = p.State,
+                    City = p.City,
+                    Phone = p.Phone
+                })
+                .FirstOrDefaultAsync();
+
+            if (center == null)
+                return NotFound(new { message = "No active pickup center found with that ID." });
+
+            return Ok(center);
+        }
+
+        // GET /api/PickupCenter/RDPUC2001/products — products a specific active
+        // pickup center currently has in stock. Used by members on Dream Purchase
+        // so they only see items they can actually buy from their chosen center.
+        [HttpGet("{pucId}/products")]
+        [Authorize]
+        public async Task<IActionResult> GetCenterProducts(string pucId, [FromQuery] string? category = null)
+        {
+            var center = await _db.PickupCenters
+                .FirstOrDefaultAsync(p => p.PucId == pucId.Trim() && p.Status == "Active");
+
+            if (center == null)
+                return NotFound(new { message = "No active pickup center found with that ID." });
+
+            var query =
+                from inv in _db.PickupCenterInventoryItems
+                where inv.PickupCenterId == center.Id && inv.Quantity > 0
+                join p in _db.Products on inv.ProductId equals p.Id
+                where p.IsActive
+                select new
+                {
+                    p.Id,
+                    p.ProductNo,
+                    p.ProductName,
+                    p.Category,
+                    p.Description,
+                    p.Mrp,
+                    p.Gst,
+                    p.Dp,
+                    p.Bv,
+                    p.ImageUrl,
+                    p.CreatedAt,
+                    AvailableQuantity = inv.Quantity
+                };
+
+            if (!string.IsNullOrWhiteSpace(category))
+                query = query.Where(p => p.Category == category);
+
+            var products = await query.OrderByDescending(p => p.CreatedAt).ToListAsync();
+            return Ok(products);
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -293,6 +519,172 @@ namespace RegisterApi.Controllers
 
             var result = orders.Select(MapOrderToDto).ToList();
             return Ok(result);
+        }
+
+        [HttpGet("order-requests")]
+        [Authorize(Roles = "PickupCenter")]
+        public async Task<IActionResult> GetOrderRequests()
+        {
+            try
+            {
+                var center = await _db.PickupCenters
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.PucId == CurrentPucId);
+
+                if (center == null)
+                    return NotFound(new { message = "Pickup center not found." });
+
+                var orders = await _db.PaymentOrders
+                    .AsNoTracking()
+                    .Where(o => o.SelectedPucId == center.PucId)
+                    .OrderByDescending(o => o.RequestedAt)
+                    .ToListAsync();
+
+                var userIds = orders.Select(o => o.UserId).Distinct().ToList();
+                var users = await _db.Users
+                    .Where(u => userIds.Contains(u.UserId))
+                    .ToDictionaryAsync(u => u.UserId);
+
+                var result = orders.Select(order =>
+                {
+                    var items = new List<object>();
+                    try
+                    {
+                        using var document = JsonDocument.Parse(order.CartItemsJson ?? "[]");
+                        if (document.RootElement.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var item in document.RootElement.EnumerateArray())
+                            {
+                                var productId = item.TryGetProperty("productId", out var id) && id.TryGetInt32(out var parsedId) ? parsedId : 0;
+                                var productName = item.TryGetProperty("productName", out var name) ? name.GetString() ?? "Item" : "Item";
+                                var quantity = item.TryGetProperty("quantity", out var quantityValue) && quantityValue.TryGetInt32(out var parsedQuantity) ? parsedQuantity : 0;
+                                var price = item.TryGetProperty("price", out var priceValue) && priceValue.TryGetDecimal(out var parsedPrice) ? parsedPrice : 0;
+
+                                items.Add(new { productId, productName, quantity, price });
+                            }
+                        }
+                    }
+                    catch (JsonException) { }
+                    catch (InvalidOperationException) { }
+
+                    return new
+                    {
+                        id = order.Id,
+                        requestNo = $"PAY-{order.Id:D6}",
+                        userId = order.UserId,
+                        userName = users.TryGetValue(order.UserId, out var user) ? user.Name : order.UserId,
+                        userPhone = users.TryGetValue(order.UserId, out user) ? user.MobileNo : null,
+                        items,
+                        totalAmount = order.TotalAmount,
+                        utrNumber = order.UtrNumber,
+                        screenshotUrl = order.ScreenshotUrl,
+                        status = order.PickupCenterDecision ?? "Pending",
+                        createdAt = order.RequestedAt,
+                        pucId = order.SelectedPucId
+                    };
+                }).ToList();
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                var detail = ex.InnerException?.Message ?? ex.Message;
+                Console.WriteLine($"[Pickup Center Requests Error] {detail}");
+                return StatusCode(500, new { message = $"Could not load order requests: {detail}" });
+            }
+        }
+
+        [HttpPost("order-requests/{id}/{decision}")]
+        [Authorize(Roles = "PickupCenter")]
+        public async Task<IActionResult> DecideOrderRequest(int id, string decision)
+        {
+            var center = await _db.PickupCenters.FirstOrDefaultAsync(c => c.PucId == CurrentPucId);
+            if (center == null)
+                return NotFound(new { message = "Pickup center not found." });
+
+            var normalizedDecision = decision.Trim().ToLowerInvariant();
+            if (normalizedDecision != "accept" && normalizedDecision != "reject")
+                return BadRequest(new { message = "Decision must be accept or reject." });
+
+            var order = await _db.PaymentOrders.FirstOrDefaultAsync(o =>
+                o.Id == id && o.SelectedPucId == center.PucId);
+
+            if (order == null)
+                return NotFound(new { message = "Order request not found for this pickup center." });
+
+            if (!string.IsNullOrWhiteSpace(order.PickupCenterDecision))
+                return BadRequest(new { message = "This order request has already been decided." });
+
+            var strategy = _db.Database.CreateExecutionStrategy();
+
+            try
+            {
+                string resultMessage = string.Empty;
+
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _db.Database.BeginTransactionAsync();
+                    try
+                    {
+                        if (normalizedDecision == "accept" && order.PlanType == "Dream Plan" && !order.CommissionDistributed)
+                        {
+                            var buyer = await _db.Users.FirstOrDefaultAsync(u => u.UserId == order.UserId);
+                            if (buyer == null)
+                                throw new InvalidOperationException("Order customer was not found.");
+
+                            buyer.BusinessVolume += (int)order.TotalBv;
+                            if (!buyer.IsActive)
+                            {
+                                buyer.IsActive = true;
+                                buyer.SelectedPlan = "Dream Plan";
+                                buyer.IdStatus = "active";
+                            }
+
+                            await _commissionService.DistributeProductPurchaseCommissionAsync(
+                                order.UserId, order.TotalBv, $"order-{order.Id}");
+                            order.CommissionDistributed = true;
+                        }
+
+                        order.PickupCenterDecision = normalizedDecision == "accept" ? "Accepted" : "Rejected";
+
+                        // Keep the order's top-level Status in sync with the pickup
+                        // center's decision so admin/user views (which read Status,
+                        // not PickupCenterDecision) reflect this immediately.
+                        if (normalizedDecision == "reject")
+                        {
+                            order.Status = PaymentOrderStatus.Rejected;
+                            order.ProcessedAt = DateTime.UtcNow;
+                        }
+                        else
+                        {
+                            order.Status = PaymentOrderStatus.Approved;
+                            order.ProcessedAt = DateTime.UtcNow;
+                        }
+
+                        await _db.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        resultMessage = order.PickupCenterDecision.ToLowerInvariant();
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+                });
+
+                return Ok(new { message = $"Order request {resultMessage}." });
+            }
+            catch (InvalidOperationException ex) when (ex.Message == "Order customer was not found.")
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                var detail = ex.InnerException?.Message ?? ex.Message;
+                Console.WriteLine($"[Pickup Center Decision Error] order={id}: {detail}");
+                return StatusCode(500, new { message = $"Could not process this request: {detail}" });
+            }
         }
 
         // GET /api/PickupCenter/inventory — this center's current stock ("My Stock" tab)

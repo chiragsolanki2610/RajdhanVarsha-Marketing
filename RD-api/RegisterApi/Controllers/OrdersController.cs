@@ -66,6 +66,14 @@ public class OrdersController : ControllerBase
             return BadRequest(new { message = "Screenshot must be a JPG, PNG, or WEBP image." });
 
         var userId = CurrentUserId;
+
+        var selectedCenter = string.IsNullOrWhiteSpace(dto.PucId)
+            ? null
+            : await _db.PickupCenters.FirstOrDefaultAsync(p => p.PucId == dto.PucId.Trim() && p.Status == "Active");
+
+        if (!string.IsNullOrWhiteSpace(dto.PucId) && selectedCenter == null)
+            return BadRequest(new { message = "The selected pickup center is not active." });
+
         string screenshotUrl;
 
         // 4. Convert screenshot to Base64 — stored directly in DB (no bucket needed)
@@ -202,6 +210,7 @@ public class OrdersController : ControllerBase
                 TotalAmount = totalAmount,
                 TotalBv = totalBv,
                 CartItemsJson = dto.CartItems ?? "[]",
+                SelectedPucId = selectedCenter?.PucId,
                 Status = PaymentOrderStatus.Pending,
                 RequestedAt = DateTime.UtcNow
             };
@@ -237,7 +246,11 @@ public class OrdersController : ControllerBase
     [FromQuery] int page = 1,
     [FromQuery] int pageSize = 20)
     {
-        var query = _db.PaymentOrders.AsQueryable();
+        // Orders routed to a pickup center (SelectedPucId set) are handled and
+        // approved on the pickup center's own Order Requests page, not here --
+        // otherwise the same order could be actioned (and BV/commission paid)
+        // twice, from two different places.
+        var query = _db.PaymentOrders.Where(o => o.SelectedPucId == null);
 
         if (status.HasValue)
             query = query.Where(o => o.Status == status.Value);
@@ -306,6 +319,63 @@ public class OrdersController : ControllerBase
         });
     }
 
+    // -----------------------------------------------------------------------
+    // GET /api/Orders/payment-requests/pickup-center
+    // Admin: read-only visibility into orders routed to a pickup center.
+    // These are accepted/rejected on the pickup center's own Order Requests
+    // page, not here -- this endpoint is just for admins to see them.
+    // -----------------------------------------------------------------------
+    [HttpGet("payment-requests/pickup-center")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetPickupCenterRoutedRequests(
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20)
+    {
+        var query = _db.PaymentOrders.Where(o => o.SelectedPucId != null);
+
+        var total = await query.CountAsync();
+        var orders = await query
+          .OrderByDescending(o => o.RequestedAt)
+          .Skip((page - 1) * pageSize)
+          .Take(pageSize)
+          .Select(o => new
+          {
+              o.Id,
+              o.UserId,
+              o.UtrNumber,
+              o.PlanType,
+              o.TotalAmount,
+              o.TotalBv,
+              o.CartItemsJson,
+              o.SelectedPucId,
+              PickupCenterDecision = o.PickupCenterDecision ?? "Pending",
+              o.RequestedAt
+          })
+          .ToListAsync();
+
+        var userIds = orders.Select(o => o.UserId).Distinct().ToList();
+        var userNames = await _db.Users
+          .Where(u => userIds.Contains(u.UserId))
+          .ToDictionaryAsync(u => u.UserId, u => u.Name);
+
+        var result = orders.Select(o => new
+        {
+            o.Id,
+            o.UserId,
+            UserName = userNames.TryGetValue(o.UserId, out var n) ? n : o.UserId,
+            o.UtrNumber,
+            o.PlanType,
+            o.TotalAmount,
+            o.TotalBv,
+            o.CartItemsJson,
+            o.SelectedPucId,
+            o.PickupCenterDecision,
+            o.RequestedAt
+        });
+
+        return Ok(new { total, page, pageSize, data = result });
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // GET /api/Orders/payment-requests/{id}
     // Admin: fetch ONE full order (includes screenshot — fine for single-order view)
@@ -314,36 +384,46 @@ public class OrdersController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetPaymentRequestById(int id)
     {
-        var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
-        if (order == null)
-            return NotFound(new { message = "Payment order not found." });
-
-        var userRow = await _db.Users
-          .Where(u => u.UserId == order.UserId)
-          .Select(u => new { u.Name, u.MobileNo })
-          .FirstOrDefaultAsync();
-
-        var result = new PaymentOrderDto
+        try
         {
-            Id = order.Id,
-            UserId = order.UserId,
-            UserName = userRow?.Name ?? order.UserId,
-            Phone = userRow?.MobileNo ?? string.Empty,
-            UtrNumber = order.UtrNumber,
-            PlanType = order.PlanType,
-            ScreenshotUrl = order.ScreenshotUrl,   // included here — single order, not a list
-            TotalAmount = order.TotalAmount,
-            TotalBv = order.TotalBv,
-            CartItemsJson = order.CartItemsJson,
-            Status = order.Status.ToString(),
-            RequestedAt = order.RequestedAt,
-            ProcessedAt = order.ProcessedAt,
-            AdminRemarks = order.AdminRemarks,
-            ReceiptAvailable = order.ReceiptFinalized,
-            ReceiptDraftReady = order.ReceiptPdf != null
-        };
+            var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
+            if (order == null)
+                return NotFound(new { message = "Payment order not found." });
 
-        return Ok(result);
+            var userRow = await _db.Users
+              .Where(u => u.UserId == order.UserId)
+              .Select(u => new { u.Name, u.MobileNo })
+              .FirstOrDefaultAsync();
+
+            var result = new PaymentOrderDto
+            {
+                Id = order.Id,
+                UserId = order.UserId,
+                UserName = userRow?.Name ?? order.UserId,
+                Phone = userRow?.MobileNo ?? string.Empty,
+                UtrNumber = order.UtrNumber,
+                PlanType = order.PlanType,
+                ScreenshotUrl = order.ScreenshotUrl,
+                TotalAmount = order.TotalAmount,
+                TotalBv = order.TotalBv,
+                CartItemsJson = order.CartItemsJson,
+                Status = order.Status.ToString(),
+                RequestedAt = order.RequestedAt,
+                ProcessedAt = order.ProcessedAt,
+                AdminRemarks = order.AdminRemarks,
+                ReceiptAvailable = order.ReceiptFinalized,
+                ReceiptDraftReady = order.ReceiptPdf != null
+            };
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GetPaymentRequestById Error] id={id} {ex.Message}");
+            Console.WriteLine($"[GetPaymentRequestById Inner] {ex.InnerException?.Message}");
+            var realError = ex.InnerException?.Message ?? ex.Message;
+            return StatusCode(500, new { message = $"Failed to load order: {realError}" });
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -435,6 +515,9 @@ public class OrdersController : ControllerBase
 
         if (order.Status != PaymentOrderStatus.Pending)
             return BadRequest(new { message = "This order has already been processed." });
+
+        if (!string.IsNullOrWhiteSpace(order.SelectedPucId))
+            return BadRequest(new { message = "This order was routed to a pickup center and must be accepted/rejected from the pickup center's Order Requests page." });
 
         order.Status = PaymentOrderStatus.Approved;
         order.ProcessedAt = DateTime.UtcNow;
@@ -535,7 +618,7 @@ public class OrdersController : ControllerBase
         {
             // --- DREAM PLAN: BV accumulates on user.BusinessVolume every time,
             // and full self + 12-level upline commission is paid every time. ---
-            if (buyer != null)
+            if (buyer != null && !order.CommissionDistributed)
             {
                 buyer.BusinessVolume += (int)order.TotalBv;
 
@@ -549,9 +632,13 @@ public class OrdersController : ControllerBase
 
             try
             {
-                await _commissionService.DistributeProductPurchaseCommissionAsync(
-                  order.UserId, order.TotalBv, $"order-{order.Id}");
-                commissionDistributed = true;
+                if (!order.CommissionDistributed)
+                {
+                    await _commissionService.DistributeProductPurchaseCommissionAsync(
+                        order.UserId, order.TotalBv, $"order-{order.Id}");
+                    order.CommissionDistributed = true;
+                }
+                commissionDistributed = order.CommissionDistributed;
             }
             catch (Exception ex)
             {
@@ -618,23 +705,36 @@ public class OrdersController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> RejectPayment(int id, [FromBody] ProcessPaymentOrderDto dto)
     {
-        var adminId = CurrentUserId;
-        var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
+        try
+        {
+            var adminId = CurrentUserId;
+            var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
 
-        if (order == null)
-            return NotFound(new { message = "Payment order not found." });
+            if (order == null)
+                return NotFound(new { message = "Payment order not found." });
 
-        if (order.Status != PaymentOrderStatus.Pending)
-            return BadRequest(new { message = "This order has already been processed." });
+            if (order.Status != PaymentOrderStatus.Pending)
+                return BadRequest(new { message = "This order has already been processed." });
 
-        order.Status = PaymentOrderStatus.Rejected;
-        order.ProcessedAt = DateTime.UtcNow;
-        order.ProcessedByAdminId = adminId;
-        order.AdminRemarks = dto.AdminRemarks;
+            if (!string.IsNullOrWhiteSpace(order.SelectedPucId))
+                return BadRequest(new { message = "This order was routed to a pickup center and must be accepted/rejected from the pickup center's Order Requests page." });
 
-        await _db.SaveChangesAsync();
+            order.Status = PaymentOrderStatus.Rejected;
+            order.ProcessedAt = DateTime.UtcNow;
+            order.ProcessedByAdminId = adminId;
+            order.AdminRemarks = dto.AdminRemarks;
 
-        return Ok(new { success = true, message = "Payment rejected." });
+            await _db.SaveChangesAsync();
+
+            return Ok(new { success = true, message = "Payment rejected." });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RejectPayment Error] id={id} {ex.Message}");
+            Console.WriteLine($"[RejectPayment Inner] {ex.InnerException?.Message}");
+            var realError = ex.InnerException?.Message ?? ex.Message;
+            return StatusCode(500, new { message = $"Failed to reject order: {realError}" });
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

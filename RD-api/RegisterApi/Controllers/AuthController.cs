@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using RegisterApi.DTOs;
 using RegisterApi.Services;
 using RegisterApi.Models;
+using RegisterApi.Helpers;
 using System.Security.Claims;
 
 namespace RegisterApi.Controllers;
@@ -70,7 +71,6 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProfile()
     {
-        // 🛠️ robust token claim fallback parsing to prevent context drops
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                      ?? User.FindFirst("UserId")?.Value;
 
@@ -95,7 +95,7 @@ public class AuthController : ControllerBase
             joinDate = user.CreatedAt.ToString("dd-MMM-yyyy"),
             role = user.Role.ToString(),
             status = "ACTIVE",
-            idStatus = user.IdStatus,           // ✅ ADDED
+            idStatus = user.IdStatus,
             membershipLevel = user.Role == UserRole.Admin ? "System Administrator" : "Registered Member",
             bvPoints = user.BusinessVolume,
             referrals = 0,
@@ -110,11 +110,11 @@ public class AuthController : ControllerBase
             accountType = user.AccountType ?? "Savings",
             profilePictureUrl = user.ProfilePictureUrl,
 
-            // ✅ NEW: KYC document images (persisted onto User at approval time)
-            aadharFrontImageUrl = user.AadharFrontImageUrl,
-            aadharBackImageUrl = user.AadharBackImageUrl,
-            panCardImageUrl = user.PanCardImageUrl,
-            bankProofImageUrl = user.BankProofImageUrl
+            // Works for both legacy (base64 string) and new (byte[]) records
+            aadharFrontImageUrl = ImageResolver.ToDataUri(user.AadharFrontImageUrl, user.AadharFrontImage, user.AadharFrontImageContentType),
+            aadharBackImageUrl = ImageResolver.ToDataUri(user.AadharBackImageUrl, user.AadharBackImage, user.AadharBackImageContentType),
+            panCardImageUrl = ImageResolver.ToDataUri(user.PanCardImageUrl, user.PanCardImage, user.PanCardImageContentType),
+            bankProofImageUrl = ImageResolver.ToDataUri(user.BankProofImageUrl, user.BankProofImage, user.BankProofImageContentType)
         });
     }
 
@@ -140,7 +140,6 @@ public class AuthController : ControllerBase
         if (file == null || file.Length == 0)
             return BadRequest(new { message = "Please choose an image to upload." });
 
-        // Max 5MB, same limit as payment screenshots
         if (file.Length > 5 * 1024 * 1024)
             return BadRequest(new { message = "Image must be smaller than 5MB." });
 
@@ -228,7 +227,6 @@ public class AuthController : ControllerBase
 
         if (!success)
         {
-            // Distinguish "not found" from a bad current password / validation failure
             if (error == "User record not found in database.")
                 return NotFound(new { message = error });
 
@@ -239,7 +237,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// 🛠️ DUAL-PURPOSE COMPATIBILITY ACTION
+    /// DUAL-PURPOSE COMPATIBILITY ACTION
     /// Handles Sidebar profile queries and Registration-form Sponsor matching dynamically.
     /// </summary>
     [HttpGet("{userId}")]
@@ -254,7 +252,6 @@ public class AuthController : ControllerBase
         if (user is null)
             return NotFound(new { message = $"User with ID '{userId}' not found." });
 
-        // CASE 1: If the client is logged in, allow them to view profile data directly
         if (User.Identity?.IsAuthenticated == true)
         {
             return Ok(new
@@ -270,7 +267,7 @@ public class AuthController : ControllerBase
                 joinDate = user.CreatedAt.ToString("dd-MMM-yyyy"),
                 role = user.Role.ToString(),
                 status = "ACTIVE",
-                idStatus = user.IdStatus,       // ✅ ADDED
+                idStatus = user.IdStatus,
                 membershipLevel = user.Role == UserRole.Admin ? "System Administrator" : "Registered Member",
                 bvPoints = user.BusinessVolume,
 
@@ -281,15 +278,13 @@ public class AuthController : ControllerBase
                 accountType = user.AccountType ?? "Savings",
                 profilePictureUrl = user.ProfilePictureUrl,
 
-                // ✅ NEW: KYC document images
-                aadharFrontImageUrl = user.AadharFrontImageUrl,
-                aadharBackImageUrl = user.AadharBackImageUrl,
-                panCardImageUrl = user.PanCardImageUrl,
-                bankProofImageUrl = user.BankProofImageUrl
+                aadharFrontImageUrl = ImageResolver.ToDataUri(user.AadharFrontImageUrl, user.AadharFrontImage, user.AadharFrontImageContentType),
+                aadharBackImageUrl = ImageResolver.ToDataUri(user.AadharBackImageUrl, user.AadharBackImage, user.AadharBackImageContentType),
+                panCardImageUrl = ImageResolver.ToDataUri(user.PanCardImageUrl, user.PanCardImage, user.PanCardImageContentType),
+                bankProofImageUrl = ImageResolver.ToDataUri(user.BankProofImageUrl, user.BankProofImage, user.BankProofImageContentType)
             });
         }
 
-        // CASE 2: Fallback for public registration page sponsor mapping lookup validation
         return Ok(new
         {
             sponsorId = user.UserId,
@@ -299,10 +294,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// One-time sponsor attachment for the currently logged-in user. Used by the
-    /// Dream Plan purchase page: legacy-imported accounts (SponsorId = null) are
-    /// sent here to enter and confirm a sponsor before they're allowed to buy.
-    /// Rejects if the account already has a SponsorId — this can only run once.
+    /// One-time sponsor attachment for the currently logged-in user.
     /// </summary>
     [HttpPost("set-sponsor")]
     [Authorize]
@@ -335,8 +327,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Live sponsor lookup for the public registration form. 
-    /// Does not require [Authorize] so the register page can verify codes on the fly.
+    /// Live sponsor lookup for the public registration form.
     /// </summary>
     [HttpGet("sponsor-lookup/{sponsorId}")]
     [AllowAnonymous]

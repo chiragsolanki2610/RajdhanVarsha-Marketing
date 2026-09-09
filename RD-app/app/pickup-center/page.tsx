@@ -22,17 +22,14 @@ type FormState = {
   ifscCode: string;
   centerName: string;
   centerAddress: string;
-};
-
-type UploadedFile = {
-  name: string;
-  base64: string;
+  centerState: string;
+  centerCity: string;
 };
 
 type FileState = {
-  aadharImage: UploadedFile | null;
-  panImage: UploadedFile | null;
-  passbookImage: UploadedFile | null;
+  aadharImage: File | null;
+  panImage: File | null;
+  passbookImage: File | null;
 };
 
 const initialCredentials: CredentialsState = {
@@ -52,6 +49,8 @@ const initialForm: FormState = {
   ifscCode: "",
   centerName: "",
   centerAddress: "",
+  centerState: "",
+  centerCity: "",
 };
 
 const initialFiles: FileState = {
@@ -60,26 +59,148 @@ const initialFiles: FileState = {
   passbookImage: null,
 };
 
-function fileToBase64(file: File): Promise<string> {
+/* ------------------------- India States & Cities ------------------------ */
+/* Covers all 28 states + 8 union territories with major cities/districts. */
+
+const STATE_CITY_MAP: Record<string, string[]> = {
+  "Andhra Pradesh": [
+    "Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Kurnool", "Rajahmundry",
+    "Tirupati", "Kadapa", "Kakinada", "Anantapur", "Chittoor", "Eluru",
+  ],
+  "Arunachal Pradesh": [
+    "Itanagar", "Naharlagun", "Pasighat", "Tawang", "Ziro", "Bomdila",
+  ],
+  Assam: [
+    "Guwahati", "Silchar", "Dibrugarh", "Jorhat", "Nagaon", "Tinsukia",
+    "Tezpur", "Karimganj", "Bongaigaon",
+  ],
+  Bihar: [
+    "Patna", "Gaya", "Bhagalpur", "Muzaffarpur", "Darbhanga", "Purnia",
+    "Ara", "Begusarai", "Katihar", "Munger", "Chhapra", "Saharsa",
+  ],
+  Chhattisgarh: [
+    "Raipur", "Bhilai", "Bilaspur", "Korba", "Durg", "Rajnandgaon",
+    "Jagdalpur", "Ambikapur",
+  ],
+  Goa: ["Panaji", "Margao", "Vasco da Gama", "Mapusa", "Ponda"],
+  Gujarat: [
+    "Ahmedabad", "Surat", "Vadodara", "Rajkot", "Bhavnagar", "Jamnagar",
+    "Junagadh", "Gandhinagar", "Anand", "Nadiad", "Mehsana", "Morbi",
+  ],
+  Haryana: [
+    "Yamuna Nagar", "Hisar", "Karnal", "Panipat", "Ambala", "Rohtak",
+    "Gurugram", "Faridabad", "Sonipat", "Kurukshetra", "Sirsa", "Bhiwani",
+    "Panchkula", "Jind", "Kaithal", "Rewari", "Jhajjar", "Fatehabad",
+    "Palwal", "Narnaul",
+  ],
+  "Himachal Pradesh": [
+    "Shimla", "Manali", "Solan", "Dharamshala", "Mandi", "Kullu",
+    "Una", "Hamirpur", "Bilaspur", "Chamba",
+  ],
+  Jharkhand: [
+    "Ranchi", "Jamshedpur", "Dhanbad", "Bokaro", "Deoghar", "Hazaribagh",
+    "Giridih", "Ramgarh",
+  ],
+  Karnataka: [
+    "Bengaluru", "Mysuru", "Hubballi", "Mangaluru", "Belagavi", "Kalaburagi",
+    "Davanagere", "Ballari", "Shivamogga", "Tumakuru", "Udupi", "Bidar",
+  ],
+  Kerala: [
+    "Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam",
+    "Kannur", "Alappuzha", "Palakkad", "Malappuram", "Kottayam",
+  ],
+  "Madhya Pradesh": [
+    "Bhopal", "Indore", "Gwalior", "Jabalpur", "Ujjain", "Sagar",
+    "Dewas", "Satna", "Ratlam", "Rewa", "Katni", "Singrauli",
+  ],
+  Maharashtra: [
+    "Mumbai", "Pune", "Nagpur", "Nashik", "Thane", "Aurangabad",
+    "Solapur", "Kolhapur", "Amravati", "Navi Mumbai", "Sangli", "Akola",
+    "Latur", "Jalgaon", "Nanded",
+  ],
+  Manipur: ["Imphal", "Thoubal", "Bishnupur", "Churachandpur"],
+  Meghalaya: ["Shillong", "Tura", "Jowai", "Nongstoin"],
+  Mizoram: ["Aizawl", "Lunglei", "Champhai", "Serchhip"],
+  Nagaland: ["Kohima", "Dimapur", "Mokokchung", "Tuensang"],
+  Odisha: [
+    "Bhubaneswar", "Cuttack", "Rourkela", "Berhampur", "Sambalpur",
+    "Puri", "Balasore", "Bhadrak",
+  ],
+  Punjab: [
+    "Chandigarh", "Ludhiana", "Amritsar", "Jalandhar", "Patiala",
+    "Mohali", "Bathinda", "Hoshiarpur", "Pathankot", "Moga", "Firozpur",
+  ],
+  Rajasthan: [
+    "Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer", "Bikaner",
+    "Alwar", "Bharatpur", "Sikar", "Bhilwara", "Sri Ganganagar",
+  ],
+  Sikkim: ["Gangtok", "Namchi", "Gyalshing", "Mangan"],
+  "Tamil Nadu": [
+    "Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem",
+    "Tirunelveli", "Erode", "Vellore", "Thoothukudi", "Dindigul",
+  ],
+  Telangana: [
+    "Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam",
+    "Ramagundam", "Mahbubnagar", "Secunderabad",
+  ],
+  Tripura: ["Agartala", "Udaipur", "Dharmanagar", "Kailashahar"],
+  "Uttar Pradesh": [
+    "Lucknow", "Noida", "Ghaziabad", "Kanpur", "Agra", "Meerut",
+    "Varanasi", "Prayagraj", "Bareilly", "Aligarh", "Moradabad",
+    "Saharanpur", "Gorakhpur", "Firozabad", "Jhansi", "Muzaffarnagar",
+    "Mathura", "Rampur", "Shahjahanpur",
+  ],
+  Uttarakhand: [
+    "Dehradun", "Haridwar", "Roorkee", "Haldwani", "Rudrapur",
+    "Nainital", "Rishikesh", "Kashipur",
+  ],
+  "West Bengal": [
+    "Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri", "Bardhaman",
+    "Malda", "Kharagpur", "Haldia", "Darjeeling",
+  ],
+  /* Union Territories */
+  "Andaman and Nicobar Islands": ["Port Blair", "Diglipur", "Car Nicobar"],
+  Chandigarh: ["Chandigarh"],
+  "Dadra and Nagar Haveli and Daman and Diu": ["Daman", "Diu", "Silvassa"],
+  Delhi: [
+    "New Delhi", "North Delhi", "South Delhi", "East Delhi",
+    "West Delhi", "Dwarka", "Rohini", "Karol Bagh",
+  ],
+  "Jammu and Kashmir": [
+    "Srinagar", "Jammu", "Anantnag", "Baramulla", "Udhampur", "Kathua",
+  ],
+  Ladakh: ["Leh", "Kargil"],
+  Lakshadweep: ["Kavaratti", "Agatti", "Minicoy"],
+  Puducherry: ["Puducherry", "Karaikal", "Mahe", "Yanam"],
+};
+
+const STATE_LIST = Object.keys(STATE_CITY_MAP).sort();
+
+function fileToBase64(file: File | null): Promise<string | null> {
+  if (!file) return Promise.resolve(null);
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () =>
-      reject(
-        new Error(
-          `Couldn't read "${file.name}". Please try selecting the image again.`
-        )
-      );
+    reader.onerror = () => reject(new Error("Failed to read file."));
     reader.readAsDataURL(file);
   });
 }
 
-// WhatsApp / Instagram / Facebook in-app browsers (Android WebViews) are the
-// most common cause of "Failed to read file" — their sandbox can invalidate
-// the picked file's content:// reference before we get a chance to read it.
-function isInAppBrowser() {
-  if (typeof navigator === "undefined") return false;
-  return /FBAN|FBAV|Instagram|WhatsApp|Line\//i.test(navigator.userAgent);
+// Pull a readable message out of an API error response. ASP.NET Core's
+// automatic [ApiController] model validation returns a ValidationProblemDetails
+// body (an `errors` object keyed by field name), NOT a `{ message }` field, so
+// without this we'd always fall back to a generic "something went wrong" text
+// even when the server told us exactly what was missing.
+async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
+  const data = await res.json().catch(() => null);
+  if (!data) return fallback;
+  if (typeof data.message === "string" && data.message.trim()) return data.message;
+  if (data.errors && typeof data.errors === "object") {
+    const fieldMessages = Object.values(data.errors as Record<string, string[]>).flat();
+    if (fieldMessages.length) return fieldMessages.join(" ");
+  }
+  if (typeof data.title === "string" && data.title.trim()) return data.title;
+  return fallback;
 }
 
 export default function PickupCenterPage() {
@@ -302,9 +423,9 @@ function ApplyForm({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // --- NEW: sponsor lookup state ---
-type SponsorLookupStatus = "idle" | "loading" | "found" | "not-found";
-const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStatus>("idle");
+  // --- sponsor lookup state ---
+  type SponsorLookupStatus = "idle" | "loading" | "found" | "not-found";
+  const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStatus>("idle");
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -313,7 +434,18 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // --- NEW: debounced sponsor lookup effect ---
+  // State dropdown: changing state clears the previously chosen city
+  const handleStateChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const newState = e.target.value;
+    setForm((prev) => ({ ...prev, centerState: newState, centerCity: "" }));
+  };
+
+  const handleCityChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const newCity = e.target.value;
+    setForm((prev) => ({ ...prev, centerCity: newCity }));
+  };
+
+  // --- debounced sponsor lookup effect ---
   useEffect(() => {
     const id = form.sponsorId.trim();
 
@@ -328,7 +460,7 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://rd-api-j7zj.onrender.com/api/Auth/sponsor-lookup/${encodeURIComponent(id)}`
+          `https://localhost:56187/api/Auth/sponsor-lookup/${encodeURIComponent(id)}`
         );
 
         if (!res.ok) {
@@ -350,46 +482,14 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.sponsorId]);
 
-  // Track per-field "reading..." state so the UI can show progress and the
-  // user can immediately see which specific upload failed.
-  const [readingFile, setReadingFile] = useState<keyof FileState | null>(null);
-
-  const handleFile = (key: keyof FileState) => async (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFile = (key: keyof FileState) => (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
-    // reset the input value so re-selecting the same file after a failed
-    // read still fires onChange
-    const inputEl = e.target;
-
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
+    if (file && file.size > 5 * 1024 * 1024) {
       setError("Each image must be under 5MB.");
-      setFiles((prev) => ({ ...prev, [key]: null }));
-      inputEl.value = "";
       return;
     }
-
     setError(null);
-    setReadingFile(key);
-    try {
-      // Read the file into base64 immediately on selection, not at submit
-      // time — this avoids the file reference going stale while the user
-      // fills in the rest of the form.
-      const base64 = await fileToBase64(file);
-      setFiles((prev) => ({ ...prev, [key]: { name: file.name, base64 } }));
-    } catch (err) {
-      setFiles((prev) => ({ ...prev, [key]: null }));
-      const baseMessage =
-        err instanceof Error ? err.message : "Failed to read the selected file.";
-      setError(
-        isInAppBrowser()
-          ? `${baseMessage} This often happens inside the WhatsApp/Instagram in-app browser — please open this page in Chrome (tap ⋮ menu → "Open in Chrome" or "Open in browser") and try again.`
-          : `${baseMessage} Please try selecting it again, or try a different photo.`
-      );
-      inputEl.value = "";
-    } finally {
-      setReadingFile(null);
-    }
+    setFiles((prev) => ({ ...prev, [key]: file }));
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -401,22 +501,25 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
       return;
     }
 
-    // --- NEW: guard against submitting with an unresolved sponsor ---
     if (sponsorLookupStatus !== "found") {
       setError("Please enter a valid Sponsor ID before submitting.");
       return;
     }
 
+    if (!form.centerState || !form.centerCity) {
+      setError("Please select the pickup center's state and city.");
+      return;
+    }
+
     setSubmitting(true);
     try {
-      // Files were already converted to base64 at selection time (see
-      // handleFile), so submitting never re-reads from disk and can't hit
-      // the "Failed to read file" error at this stage.
-      const aadharImageBase64 = files.aadharImage.base64;
-      const panImageBase64 = files.panImage.base64;
-      const passbookImageBase64 = files.passbookImage.base64;
+      const [aadharImageBase64, panImageBase64, passbookImageBase64] = await Promise.all([
+        fileToBase64(files.aadharImage),
+        fileToBase64(files.panImage),
+        fileToBase64(files.passbookImage),
+      ]);
 
-      const res = await fetch("https://rd-api-j7zj.onrender.com/api/PickupCenter/apply", {
+      const res = await fetch("https://localhost:56187/api/PickupCenter/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -435,12 +538,17 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
           passbookImageBase64,
           centerName: form.centerName,
           centerAddress: form.centerAddress,
+          // NOTE: backend DTO expects "state" / "city" (not "centerState" /
+          // "centerCity"). Sending the wrong keys left these empty server-side
+          // and tripped the [Required] validation on State/City every time.
+          state: form.centerState,
+          city: form.centerCity,
         }),
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.message || "Submission failed. Please try again.");
+        const message = await extractErrorMessage(res, "Submission failed. Please try again.");
+        throw new Error(message);
       }
 
       setSubmitted(true);
@@ -486,15 +594,6 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
         </button>
       </div>
 
-      {isInAppBrowser() && (
-        <p className="rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
-          You appear to be using an in-app browser (e.g. WhatsApp or
-          Instagram). Image uploads can fail here — for a smooth
-          application, please open this page in Chrome (tap the ⋮ menu and
-          choose &quot;Open in Chrome&quot; or &quot;Open in browser&quot;).
-        </p>
-      )}
-
       {/* Personal details */}
       <div>
         <h3 className="mb-4 text-lg font-bold text-blue-700">
@@ -525,7 +624,7 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
             required
           />
 
-          {/* --- UPDATED: Sponsor Name is now read-only and auto-filled --- */}
+          {/* Sponsor Name is read-only and auto-filled */}
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-gray-700">
               Sponsor Name
@@ -570,7 +669,6 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
             label="Upload Aadhar Card Image"
             file={files.aadharImage}
             onChange={handleFile("aadharImage")}
-            isReading={readingFile === "aadharImage"}
             required
           />
           <TextField
@@ -587,7 +685,6 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
             label="Upload PAN Card Image"
             file={files.panImage}
             onChange={handleFile("panImage")}
-            isReading={readingFile === "panImage"}
             required
           />
         </div>
@@ -621,7 +718,6 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
               label="Upload Passbook / Bank Statement Image"
               file={files.passbookImage}
               onChange={handleFile("passbookImage")}
-              isReading={readingFile === "passbookImage"}
               required
             />
           </div>
@@ -634,14 +730,62 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
           Pickup Center Details
         </h3>
         <div className="grid gap-5 sm:grid-cols-2">
-          <TextField
-            label="Pickup Center Name"
-            name="centerName"
-            value={form.centerName}
-            onChange={handleChange}
-            placeholder="Enter proposed center name"
-            required
-          />
+          <div className="sm:col-span-2">
+            <TextField
+              label="Pickup Center Name"
+              name="centerName"
+              value={form.centerName}
+              onChange={handleChange}
+              placeholder="Enter proposed center name"
+              required
+            />
+          </div>
+
+          {/* State dropdown */}
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+              State
+            </label>
+            <select
+              name="centerState"
+              value={form.centerState}
+              onChange={handleStateChange}
+              required
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Select state</option>
+              {STATE_LIST.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* City dropdown, depends on selected state */}
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+              City
+            </label>
+            <select
+              name="centerCity"
+              value={form.centerCity}
+              onChange={handleCityChange}
+              required
+              disabled={!form.centerState}
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50"
+            >
+              <option value="">
+                {form.centerState ? "Select city" : "Select state first"}
+              </option>
+              {(STATE_CITY_MAP[form.centerState] ?? []).map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="sm:col-span-2">
             <label className="mb-1.5 block text-sm font-semibold text-gray-700">
               Pickup Center Address
@@ -667,7 +811,7 @@ const [sponsorLookupStatus, setSponsorLookupStatus] = useState<SponsorLookupStat
 
       <button
         type="submit"
-        disabled={submitting || readingFile !== null}
+        disabled={submitting}
         className="flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting && <Loader2 size={16} className="animate-spin" />}
@@ -691,15 +835,18 @@ function LoginForm() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("https://rd-api-j7zj.onrender.com/api/PickupCenter/login", {
+      const res = await fetch("https://localhost:56187/api/PickupCenter/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || "Invalid username or password.");
+      if (!res.ok) {
+        const message = await extractErrorMessage(res, "Invalid username or password.");
+        throw new Error(message);
+      }
 
+      const data = await res.json();
       localStorage.setItem("pucToken", data.token);
       localStorage.setItem("pucInfo", JSON.stringify(data));
       window.location.href = "/pickup-center/dashboard";
@@ -799,13 +946,11 @@ function FileField({
   file,
   onChange,
   required,
-  isReading,
 }: {
   label: string;
-  file: UploadedFile | null;
+  file: File | null;
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
   required?: boolean;
-  isReading?: boolean;
 }) {
   return (
     <div>
@@ -813,24 +958,15 @@ function FileField({
         {label}
       </label>
       <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-500 transition hover:border-blue-500 hover:bg-blue-50">
-        {isReading ? (
-          <Loader2 size={18} className="shrink-0 animate-spin text-blue-600" />
-        ) : (
-          <UploadCloud size={18} className="shrink-0 text-blue-600" />
-        )}
+        <UploadCloud size={18} className="shrink-0 text-blue-600" />
         <span className="truncate">
-          {isReading
-            ? "Reading image..."
-            : file
-            ? file.name
-            : "Click to upload image (JPG/PNG, max 5MB)"}
+          {file ? file.name : "Click to upload image (JPG/PNG, max 5MB)"}
         </span>
         <input
           type="file"
           accept="image/*"
           onChange={onChange}
-          required={required && !file}
-          disabled={isReading}
+          required={required}
           className="hidden"
         />
       </label>

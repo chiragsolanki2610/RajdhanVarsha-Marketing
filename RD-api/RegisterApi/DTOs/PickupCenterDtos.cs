@@ -28,6 +28,8 @@ namespace RegisterApi.DTOs
 
         [Required] public string CenterName { get; set; } = string.Empty;
         [Required] public string CenterAddress { get; set; } = string.Empty;
+        [Required] public string State { get; set; } = string.Empty;
+        [Required] public string City { get; set; } = string.Empty;
     }
 
     // ---- Public: Login ----
@@ -44,6 +46,59 @@ namespace RegisterApi.DTOs
         public string FullName { get; set; } = string.Empty;
         public string CenterName { get; set; } = string.Empty;
         public string Token { get; set; } = string.Empty;
+    }
+
+    public class PickupCenterProfileUpdateDto
+    {
+        [Required] public string FullName { get; set; } = string.Empty;
+        [Required] public string Phone { get; set; } = string.Empty;
+        [Required] public string CenterName { get; set; } = string.Empty;
+        [Required] public string CenterAddress { get; set; } = string.Empty;
+        [Required] public string State { get; set; } = string.Empty;
+        [Required] public string City { get; set; } = string.Empty;
+        public string AccountHolderName { get; set; } = string.Empty;
+        public string BankName { get; set; } = string.Empty;
+        [Required] public string AccountNumber { get; set; } = string.Empty;
+        [Required] public string IfscCode { get; set; } = string.Empty;
+        public string AccountType { get; set; } = "Savings";
+        public string UpiId { get; set; } = string.Empty;
+        public string? UpiQrImageBase64 { get; set; }
+    }
+
+    public class PickupCenterProfileDto
+    {
+        public string PucId { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string? SponsorId { get; set; }
+        public string? SponsorName { get; set; }
+        public string AadharNumber { get; set; } = string.Empty;
+        public string PanNumber { get; set; } = string.Empty;
+        public string AccountHolderName { get; set; } = string.Empty;
+        public string BankName { get; set; } = string.Empty;
+        public string AccountNumber { get; set; } = string.Empty;
+        public string IfscCode { get; set; } = string.Empty;
+        public string AccountType { get; set; } = "Savings";
+        public string UpiId { get; set; } = string.Empty;
+        public string? UpiQrImageBase64 { get; set; }
+        public string CenterName { get; set; } = string.Empty;
+        public string CenterAddress { get; set; } = string.Empty;
+        public string State { get; set; } = string.Empty;
+        public string City { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class PickupCenterPaymentDetailsDto
+    {
+        public string PucId { get; set; } = string.Empty;
+        public string CenterName { get; set; } = string.Empty;
+        public string AccountHolderName { get; set; } = string.Empty;
+        public string BankName { get; set; } = string.Empty;
+        public string AccountType { get; set; } = "Savings";
+        public string UpiId { get; set; } = string.Empty;
+        public string? UpiQrImageBase64 { get; set; }
     }
 
     // ---- Admin: review a request ----
@@ -154,5 +209,14 @@ namespace RegisterApi.DTOs
         public decimal TotalAmount { get; set; }
         public decimal TotalBv { get; set; }
         public bool ReceiptAvailable { get; set; }
+    }
+    public class PickupCenterSummaryDto
+    {
+        public string PucId { get; set; } = string.Empty;
+        public string CenterName { get; set; } = string.Empty;
+        public string CenterAddress { get; set; } = string.Empty;
+        public string State { get; set; } = string.Empty;
+        public string City { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
     }
 }

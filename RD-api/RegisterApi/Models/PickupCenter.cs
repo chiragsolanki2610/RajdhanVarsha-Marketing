@@ -34,8 +34,13 @@ namespace RegisterApi.Models
         public string? PanImageBase64 { get; set; }
 
         // Bank Account Details
+        public string AccountHolderName { get; set; } = string.Empty;
+        public string BankName { get; set; } = string.Empty;
         public string AccountNumber { get; set; } = string.Empty;
         public string IfscCode { get; set; } = string.Empty;
+        public string AccountType { get; set; } = "Savings";
+        public string UpiId { get; set; } = string.Empty;
+        public string? UpiQrImageBase64 { get; set; }
         public string? PassbookImageBase64 { get; set; }
 
         // Pickup Center Details
@@ -45,8 +50,10 @@ namespace RegisterApi.Models
         public string Status { get; set; } = "Active";
 
         public int SourceRequestId { get; set; }
-
+        public string State { get; set; } = string.Empty;
+        public string City { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string? ApprovedBy { get; set; }
+
     }
 }

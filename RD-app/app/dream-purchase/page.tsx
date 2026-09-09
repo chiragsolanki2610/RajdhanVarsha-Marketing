@@ -7,7 +7,7 @@ import LoginTopBar from "@/components/loginTopbar";
 import {
   ShoppingCart, Plus, Minus, Trash2, X, ArrowRight, ArrowLeft,
   Package, CheckCheck, Copy, IndianRupee, Upload, AlertCircle,
-  CheckCircle2, Loader2, QrCode, UserCheck, Search,
+  CheckCircle2, Loader2, QrCode, UserCheck, Search, MapPin, Store,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -26,16 +26,27 @@ interface CartItem extends Product {
   qty: number;
 }
 
-type PaymentStep = "sponsor" | "cart" | "checkout" | "success";
+interface PickupCenterSummary {
+  pucId: string;
+  centerName: string;
+  centerAddress: string;
+  city: string;
+  state: string;
+  upiId?: string;
+  upiQrImageBase64?: string | null;
+  accountHolderName?: string;
+  bankName?: string;
+  accountType?: string;
+}
+
+type PaymentStep = "sponsor" | "pickup" | "cart" | "checkout" | "success";
 
 // ─── API URL ──────────────────────────────────────────────────────────────────
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:56187";
 
 const DREAM_PLAN_BV_TARGET = 600;
 
 // IMPORTANT: this file must physically exist at "public/photos/QR.jpg" in your Next.js project.
-const QR_IMAGE_URL = "/photos/QR.jpg";
-const UPI_ID = "QR917404526380-0195@UNIONBANKOFINDIA";
 
 // ─── Helper: get auth headers ─────────────────────────────────────────────────
 function getToken(): string {
@@ -78,7 +89,6 @@ function ProductImage({ imageUrl, name, className }: { imageUrl: string; name: s
   );
 }
 
-
 function Shell({
   children,
   gradient,
@@ -109,7 +119,6 @@ export default function DreamPurchasePage() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [step, setStep] = useState<PaymentStep>("sponsor");
   const [showCart, setShowCart] = useState(false);
-  const [qrFailed, setQrFailed] = useState(false);
 
   // ── Sponsor gate state
   const [checkingSponsor, setCheckingSponsor] = useState(true);
@@ -119,6 +128,23 @@ export default function DreamPurchasePage() {
   const [sponsorLookupError, setSponsorLookupError] = useState<string | null>(null);
   const [sponsorSubmitting, setSponsorSubmitting] = useState(false);
   const [sponsorSubmitError, setSponsorSubmitError] = useState<string | null>(null);
+
+  // ── Pickup center gate state
+  const [pickupMode, setPickupMode] = useState<"search" | "id">("search");
+  const [states, setStates] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [selectedState, setSelectedState] = useState("");
+  const [selectedCity, setSelectedCity] = useState("");
+  const [statesLoading, setStatesLoading] = useState(false);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [centersLoading, setCentersLoading] = useState(false);
+  const [pickupCenters, setPickupCenters] = useState<PickupCenterSummary[]>([]);
+  const [pickupSearchError, setPickupSearchError] = useState<string | null>(null);
+  const [pickupIdInput, setPickupIdInput] = useState("");
+  const [pickupIdLookupLoading, setPickupIdLookupLoading] = useState(false);
+  const [pickupIdLookupError, setPickupIdLookupError] = useState<string | null>(null);
+  const [selectedPuc, setSelectedPuc] = useState<PickupCenterSummary | null>(null);
+  const [pickupContinueError, setPickupContinueError] = useState<string | null>(null);
 
   // payment form
   const [utrNumber, setUtrNumber] = useState("");
@@ -156,7 +182,7 @@ export default function DreamPurchasePage() {
 
         // Has a sponsor already (SYSTEM counts as having a sponsor) → skip gate
         if (sponsorId && sponsorId.trim() !== "") {
-          setStep("cart");
+          setStep("pickup");
         } else {
           setStep("sponsor");
         }
@@ -172,10 +198,12 @@ export default function DreamPurchasePage() {
     checkSponsor();
   }, []);
 
-  // ── Step 2: fetch products only once we're past the sponsor gate
+  // ── Step 2: fetch products for the SELECTED PICKUP CENTER only, once we're
+  // past the sponsor + pickup gates. Refetches whenever the chosen center
+  // changes (e.g. the person taps "Change" and picks a different one).
   useEffect(() => {
     if (step !== "cart" && step !== "checkout") return;
-    if (products.length > 0) return; // already loaded
+    if (!selectedPuc) return;
 
     const fetchProducts = async () => {
       try {
@@ -187,9 +215,10 @@ export default function DreamPurchasePage() {
           return;
         }
 
-        const res = await fetch(`${API_URL}/api/Products`, {
-          headers: getAuthHeaders(),
-        });
+        const res = await fetch(
+          `${API_URL}/api/PickupCenter/${encodeURIComponent(selectedPuc.pucId)}/products`,
+          { headers: getAuthHeaders() }
+        );
 
         if (res.status === 401 || res.status === 403) {
           localStorage.clear();
@@ -222,7 +251,113 @@ export default function DreamPurchasePage() {
     };
 
     fetchProducts();
+  }, [step, selectedPuc?.pucId]);
+
+  useEffect(() => {
+    if (!selectedPuc || selectedPuc.upiId !== undefined) return;
+
+    const fetchPaymentDetails = async () => {
+      try {
+        const response = await fetch(
+          `${API_URL}/api/PickupCenter/payment-details/${encodeURIComponent(selectedPuc.pucId)}`,
+          { headers: getAuthHeaders() }
+        );
+        if (!response.ok) throw new Error("Payment details unavailable");
+        const details = await response.json();
+        setSelectedPuc((current) => current ? { ...current, ...details } : current);
+      } catch {
+        setSelectedPuc((current) => current ? { ...current, upiId: "", upiQrImageBase64: null } : current);
+      }
+    };
+
+    fetchPaymentDetails();
+  }, [selectedPuc]);
+
+  // ── Step 3: load state list once we hit the pickup gate
+  useEffect(() => {
+    if (step !== "pickup") return;
+    if (states.length > 0) return; // already loaded
+
+    const fetchStates = async () => {
+      setStatesLoading(true);
+      try {
+        const res = await fetch(`${API_URL}/api/PickupCenter/states`, {
+          headers: getAuthHeaders(),
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setStates(Array.isArray(data) ? data : []);
+      } catch {
+        setStates([]);
+      } finally {
+        setStatesLoading(false);
+      }
+    };
+
+    fetchStates();
   }, [step]);
+
+  // ── Step 4: load cities whenever selectedState changes
+  useEffect(() => {
+    if (!selectedState) {
+      setCities([]);
+      setSelectedCity("");
+      return;
+    }
+
+    const fetchCities = async () => {
+      setCitiesLoading(true);
+      setSelectedCity("");
+      setPickupCenters([]);
+      try {
+        const res = await fetch(
+          `${API_URL}/api/PickupCenter/cities?state=${encodeURIComponent(selectedState)}`,
+          { headers: getAuthHeaders() }
+        );
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setCities(Array.isArray(data) ? data : []);
+      } catch {
+        setCities([]);
+      } finally {
+        setCitiesLoading(false);
+      }
+    };
+
+    fetchCities();
+  }, [selectedState]);
+
+  // ── Step 5: load centers whenever selectedCity changes
+  useEffect(() => {
+    if (!selectedState || !selectedCity) {
+      setPickupCenters([]);
+      return;
+    }
+
+    const fetchCenters = async () => {
+      setCentersLoading(true);
+      setPickupSearchError(null);
+      try {
+        const res = await fetch(
+          `${API_URL}/api/PickupCenter/search?state=${encodeURIComponent(selectedState)}&city=${encodeURIComponent(selectedCity)}`,
+          { headers: getAuthHeaders() }
+        );
+        if (!res.ok) throw new Error("Failed to fetch pickup centers.");
+        const data = await res.json();
+        setPickupCenters(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length === 0) {
+          setPickupSearchError("No active pickup centers found in this city.");
+        }
+      } catch (err: any) {
+        setPickupSearchError(err.message ?? "Could not load pickup centers.");
+        setPickupCenters([]);
+      } finally {
+        setCentersLoading(false);
+      }
+    };
+
+    fetchCenters();
+  }, [selectedState, selectedCity]);
 
   // ── Sponsor gate handlers
   const handleSponsorLookup = async () => {
@@ -273,8 +408,8 @@ export default function DreamPurchasePage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || `Could not set sponsor (${res.status})`);
 
-      // Sponsor successfully set → proceed to shop
-      setStep("cart");
+      // Sponsor successfully set → proceed to pickup center selection
+      setStep("pickup");
     } catch (err: any) {
       setSponsorSubmitError(err.message ?? "Something went wrong. Please try again.");
     } finally {
@@ -286,6 +421,47 @@ export default function DreamPurchasePage() {
     setSponsorVerified(null);
     setSponsorLookupError(null);
     setSponsorSubmitError(null);
+  };
+
+  // ── Pickup center gate handlers
+  const handlePickupIdLookup = async () => {
+    setPickupIdLookupError(null);
+    const id = pickupIdInput.trim();
+    if (!id) { setPickupIdLookupError("Please enter a Pickup Center ID."); return; }
+
+    setPickupIdLookupLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/PickupCenter/lookup/${encodeURIComponent(id)}`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || "Pickup Center ID not found.");
+      }
+
+      const data = await res.json();
+      setSelectedPuc({
+        pucId: data.pucId,
+        centerName: data.centerName,
+        centerAddress: data.centerAddress,
+        city: data.city,
+        state: data.state,
+      });
+    } catch (err: any) {
+      setPickupIdLookupError(err.message ?? "Pickup Center ID not found.");
+    } finally {
+      setPickupIdLookupLoading(false);
+    }
+  };
+
+  const handlePickupContinue = () => {
+    if (!selectedPuc) {
+      setPickupContinueError("Please select a pickup center to continue.");
+      return;
+    }
+    setPickupContinueError(null);
+    setStep("cart");
   };
 
   // ── Derived values
@@ -329,6 +505,7 @@ export default function DreamPurchasePage() {
   // ── Payment handler (UTR + screenshot, admin verification — same pattern as Binary Plan)
   const handlePaymentSubmit = async () => {
     setSubmitError(null);
+    if (!selectedPuc) { setSubmitError("Please select a pickup center before submitting."); return; }
     if (!utrNumber.trim()) { setSubmitError("Please enter the UTR / Transaction ID."); return; }
     if (!screenshot) { setSubmitError("Please upload your payment screenshot."); return; }
 
@@ -340,6 +517,7 @@ export default function DreamPurchasePage() {
       formData.append("PlanType", "Dream Plan");
       formData.append("TotalAmount", totalPrice.toString());
       formData.append("TotalBv", totalBV.toString());
+      formData.append("PucId", selectedPuc.pucId);
       formData.append(
         "CartItems",
         JSON.stringify(
@@ -389,7 +567,9 @@ export default function DreamPurchasePage() {
     router.push("/plan");
   };
 
-  const handleCopyUpi = () => navigator.clipboard?.writeText(UPI_ID);
+  const handleCopyUpi = () => {
+    if (selectedPuc?.upiId) navigator.clipboard?.writeText(selectedPuc.upiId);
+  };
 
   // ═══════════════════════════════════════════════════════════════════════════
   // INITIAL LOADING (checking sponsor status)
@@ -510,6 +690,199 @@ export default function DreamPurchasePage() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // PICKUP CENTER GATE SCREEN
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (step === "pickup") {
+    return (
+      <Shell gradient>
+        <div className="p-6 md:p-8 flex items-center justify-center min-h-[calc(100vh-64px)]">
+          <div className="max-w-xl w-full">
+            <div className="bg-white rounded-3xl shadow-xl p-8 md:p-10 border border-gray-100">
+              <div className="w-16 h-16 bg-[#eef1f8] rounded-full flex items-center justify-center mx-auto mb-5">
+                <Store size={30} className="text-[#3b5998]" />
+              </div>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2 text-center">
+                Choose Your Pickup Center
+              </h2>
+              <p className="text-sm text-gray-500 mb-6 text-center leading-relaxed">
+                Select the pickup center you'll collect your Dream Plan products from.
+              </p>
+
+              {/* Mode toggle */}
+              <div className="flex gap-2 mb-6 bg-gray-50 rounded-2xl p-1">
+                <button
+                  onClick={() => { setPickupMode("search"); setPickupIdLookupError(null); }}
+                  className={`flex-1 text-sm font-semibold py-2.5 rounded-xl transition-colors ${pickupMode === "search" ? "bg-white shadow-sm text-[#3b5998]" : "text-gray-400"
+                    }`}
+                >
+                  Search by Location
+                </button>
+                <button
+                  onClick={() => { setPickupMode("id"); setPickupSearchError(null); }}
+                  className={`flex-1 text-sm font-semibold py-2.5 rounded-xl transition-colors ${pickupMode === "id" ? "bg-white shadow-sm text-[#3b5998]" : "text-gray-400"
+                    }`}
+                >
+                  Enter Center ID
+                </button>
+              </div>
+
+              {pickupMode === "search" ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        State
+                      </label>
+                      <select
+                        value={selectedState}
+                        onChange={(e) => setSelectedState(e.target.value)}
+                        disabled={statesLoading}
+                        className="w-full border border-gray-200 rounded-2xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#5f76ab] focus:border-transparent transition-all bg-white"
+                      >
+                        <option value="">
+                          {statesLoading ? "Loading..." : "Select state"}
+                        </option>
+                        {states.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        City
+                      </label>
+                      <select
+                        value={selectedCity}
+                        onChange={(e) => setSelectedCity(e.target.value)}
+                        disabled={!selectedState || citiesLoading}
+                        className="w-full border border-gray-200 rounded-2xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#5f76ab] focus:border-transparent transition-all bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                      >
+                        <option value="">
+                          {citiesLoading ? "Loading..." : "Select city"}
+                        </option>
+                        {cities.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {centersLoading && (
+                    <div className="flex items-center justify-center gap-2 text-gray-400 text-sm py-6">
+                      <Loader2 size={16} className="animate-spin" /> Loading pickup centers...
+                    </div>
+                  )}
+
+                  {!centersLoading && pickupSearchError && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-2xl px-4 py-3 mb-2 flex items-start gap-2">
+                      <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                      {pickupSearchError}
+                    </div>
+                  )}
+
+                  {!centersLoading && pickupCenters.length > 0 && (
+                    <div className="space-y-2 max-h-64 overflow-y-auto mb-2 pr-1">
+                      {pickupCenters.map((c) => {
+                        const isSelected = selectedPuc?.pucId === c.pucId;
+                        return (
+                          <button
+                            key={c.pucId}
+                            onClick={() => setSelectedPuc(c)}
+                            className={`w-full text-left rounded-2xl border p-3.5 transition-colors ${isSelected
+                              ? "border-[#3b5998] bg-[#eef1f8]"
+                              : "border-gray-100 hover:border-[#b8c3e1] bg-white"
+                              }`}
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <MapPin size={16} className={`flex-shrink-0 mt-0.5 ${isSelected ? "text-[#3b5998]" : "text-gray-300"}`} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-800">{c.centerName}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">{c.centerAddress}</p>
+                                <p className="text-[11px] text-[#46608f] font-medium mt-1">ID: {c.pucId}</p>
+                              </div>
+                              {isSelected && <CheckCircle2 size={16} className="text-[#3b5998] flex-shrink-0 mt-0.5" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Pickup Center ID <span className="text-red-400">*</span>
+                  </label>
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      type="text"
+                      value={pickupIdInput}
+                      onChange={(e) => setPickupIdInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handlePickupIdLookup(); }}
+                      placeholder="e.g. PUC0001"
+                      className="flex-1 border border-gray-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#5f76ab] focus:border-transparent transition-all"
+                    />
+                    <button
+                      onClick={handlePickupIdLookup}
+                      disabled={pickupIdLookupLoading}
+                      className="bg-[#3b5998] hover:bg-[#2f4677] disabled:bg-[#8fa0ce] text-white font-semibold px-5 rounded-2xl flex items-center justify-center gap-2 transition-colors text-sm"
+                    >
+                      {pickupIdLookupLoading
+                        ? <Loader2 size={16} className="animate-spin" />
+                        : <><Search size={15} /> Find</>}
+                    </button>
+                  </div>
+
+                  {pickupIdLookupError && (
+                    <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl px-4 py-3 mb-2 flex items-start gap-2">
+                      <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                      {pickupIdLookupError}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Selected center summary (shown regardless of mode, once picked) */}
+              {selectedPuc && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mt-3 mb-4 flex items-start gap-3">
+                  <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wide mb-0.5">
+                      Selected Pickup Center
+                    </p>
+                    <p className="text-sm text-emerald-800 font-medium truncate">
+                      {selectedPuc.centerName} ({selectedPuc.pucId})
+                    </p>
+                    <p className="text-xs text-emerald-700 mt-0.5">{selectedPuc.city}, {selectedPuc.state}</p>
+                  </div>
+                </div>
+              )}
+
+              {pickupContinueError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl px-4 py-3 mb-4 flex items-start gap-2">
+                  <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                  {pickupContinueError}
+                </div>
+              )}
+
+              <button
+                onClick={handlePickupContinue}
+                disabled={!selectedPuc}
+                className={`w-full font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-colors text-sm mt-2 ${selectedPuc
+                  ? "bg-[#3b5998] hover:bg-[#2f4677] text-white"
+                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  }`}
+              >
+                <ArrowRight size={16} /> Continue to Shop
+              </button>
+            </div>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // SUCCESS SCREEN
   // ═══════════════════════════════════════════════════════════════════════════
   if (step === "success") {
@@ -579,6 +952,15 @@ export default function DreamPurchasePage() {
                     </h2>
                   </div>
                   <div className="p-5">
+                    {selectedPuc && (
+                      <div className="flex items-start gap-2 bg-[#eef1f8] rounded-2xl px-3.5 py-3 mb-4">
+                        <Store size={15} className="text-[#3b5998] flex-shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold text-[#3b5998] uppercase tracking-wide">Pickup Center</p>
+                          <p className="text-xs text-gray-600 truncate">{selectedPuc.centerName} ({selectedPuc.pucId})</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="space-y-3 mb-4">
                       {cart.map((item) => (
                         <div key={item.id} className="flex items-center gap-3">
@@ -610,19 +992,17 @@ export default function DreamPurchasePage() {
                   <p className="text-2xl font-bold text-[#2f4677] mb-5">₹{totalPrice.toLocaleString("en-IN")}</p>
 
                   <div className="inline-flex flex-col items-center justify-center w-52 h-52 bg-gradient-to-br from-[#eef1f8] to-indigo-50 border-2 border-dashed border-[#b8c3e1] rounded-2xl mx-auto mb-5 overflow-hidden">
-                    {!qrFailed ? (
+                    {selectedPuc?.upiQrImageBase64 ? (
                       <img
-                        src={QR_IMAGE_URL}
-                        alt="UPI QR Code"
+                        src={selectedPuc.upiQrImageBase64}
+                        alt={`${selectedPuc.centerName} UPI QR Code`}
                         className="w-full h-full object-contain p-3"
-                        onError={() => setQrFailed(true)}
                       />
                     ) : (
                       <div className="flex flex-col items-center gap-2 px-4 text-center">
                         <QrCode size={56} className="text-[#8fa0ce]" />
                         <p className="text-[10px] text-gray-400 leading-relaxed">
-                          QR image not found.<br />
-                          Add it at <code className="font-mono">public{QR_IMAGE_URL}</code>
+                          This pickup center has not added a QR image yet.
                         </p>
                       </div>
                     )}
@@ -630,7 +1010,7 @@ export default function DreamPurchasePage() {
 
                   <div className="flex items-center justify-center gap-2 bg-[#eef1f8] border border-[#dde3f1] rounded-2xl px-4 py-3 mb-3">
                     <IndianRupee size={15} className="text-[#46608f] flex-shrink-0" />
-                    <span className="font-mono text-[#253a63] font-semibold text-xs break-all">{UPI_ID}</span>
+                    <span className="font-mono text-[#253a63] font-semibold text-xs break-all">{selectedPuc?.upiId || "UPI ID not added"}</span>
                     <button
                       onClick={handleCopyUpi}
                       className="ml-1 text-[#5f76ab] hover:text-[#2f4677] transition-colors p-1 hover:bg-[#dde3f1] rounded-lg flex-shrink-0"
@@ -639,6 +1019,12 @@ export default function DreamPurchasePage() {
                       <Copy size={14} />
                     </button>
                   </div>
+                  {(selectedPuc?.bankName || selectedPuc?.accountHolderName) && (
+                    <p className="mb-3 text-xs text-gray-500">
+                      Pay to {selectedPuc.accountHolderName || selectedPuc.bankName}
+                      {selectedPuc.bankName ? ` · ${selectedPuc.bankName}` : ""}
+                    </p>
+                  )}
 
                   <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-left">
                     <span className="text-amber-500 flex-shrink-0 text-base">⚠️</span>
@@ -758,6 +1144,24 @@ export default function DreamPurchasePage() {
             <p className="text-xs text-gray-400 mt-0.5">
               Add products worth at least {DREAM_PLAN_BV_TARGET} BV to activate your Dream Plan
             </p>
+            {selectedPuc && (
+              <p className="text-[11px] text-[#46608f] font-medium mt-1 flex items-center gap-1">
+                <Store size={11} /> Pickup: {selectedPuc.centerName} ({selectedPuc.pucId})
+                <button
+                  onClick={() => {
+                    // Clear stale products/cart from the previous center so the
+                    // shop screen doesn't briefly show items that aren't
+                    // available at whichever center gets picked next.
+                    setProducts([]);
+                    setCart([]);
+                    setStep("pickup");
+                  }}
+                  className="ml-1 text-[#5f76ab] hover:text-[#2f4677] underline underline-offset-2"
+                >
+                  Change
+                </button>
+              </p>
+            )}
           </div>
           {cartCount > 0 && (
             <div className="relative">
@@ -797,8 +1201,8 @@ export default function DreamPurchasePage() {
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${selectedCategory === cat
-                  ? "bg-[#3b5998] text-white border-[#3b5998]"
-                  : "bg-white text-gray-600 border-gray-200 hover:border-[#8fa0ce]"
+                ? "bg-[#3b5998] text-white border-[#3b5998]"
+                : "bg-white text-gray-600 border-gray-200 hover:border-[#8fa0ce]"
                 }`}
             >
               {cat}
@@ -832,7 +1236,11 @@ export default function DreamPurchasePage() {
         {!loading && !error && filteredProducts.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400">
             <Package size={28} className="mb-3" />
-            <p className="text-sm">No products found in this category.</p>
+            <p className="text-sm">
+              {products.length === 0
+                ? "This pickup center has no products in stock right now."
+                : "No products found in this category."}
+            </p>
           </div>
         )}
 

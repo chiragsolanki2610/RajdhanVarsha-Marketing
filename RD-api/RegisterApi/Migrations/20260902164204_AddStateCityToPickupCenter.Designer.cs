@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RegisterApi.Data;
@@ -11,9 +12,11 @@ using RegisterApi.Data;
 namespace RegisterApi.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260902164204_AddStateCityToPickupCenter")]
+    partial class AddStateCityToPickupCenter
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -473,9 +476,6 @@ namespace RegisterApi.Migrations
                     b.Property<string>("SelectedPucId")
                         .HasColumnType("text");
 
-                    b.Property<bool>("CommissionDistributed")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("SoldByPucId")
                         .HasColumnType("text");
 
@@ -528,14 +528,6 @@ namespace RegisterApi.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("AccountHolderName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("AccountType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("ApprovedBy")
                         .HasColumnType("text");
 
@@ -544,10 +536,6 @@ namespace RegisterApi.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("CenterName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("BankName")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -597,13 +585,6 @@ namespace RegisterApi.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("SponsorName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("UpiId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("UpiQrImageBase64")
                         .HasColumnType("text");
 
                     b.Property<string>("State")

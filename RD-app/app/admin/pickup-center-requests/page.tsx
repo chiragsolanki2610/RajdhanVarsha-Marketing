@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import LoginTopbar from "@/components/loginTopbar";
 
-const API_BASE = "https://rd-api-j7zj.onrender.com";
+const API_BASE = "https://localhost:56187";
 
 /* ============================================================
    Shared

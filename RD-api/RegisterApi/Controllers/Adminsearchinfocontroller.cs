@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RegisterApi.Data;
 using RegisterApi.DTOs;
+using RegisterApi.Helpers;
 
 namespace RegisterApi.Controllers;
 
@@ -24,16 +25,12 @@ public class AdminSearchInfoController : ControllerBase
         _db = db;
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // GET /api/Admin/search-user/{userId}
-    // ──────────────────────────────────────────────────────────────────────
     [HttpGet("search-user/{userId}")]
     public async Task<IActionResult> GetUserFullInfo(string userId)
     {
         if (string.IsNullOrWhiteSpace(userId))
             return BadRequest(new { message = "userId is required." });
 
-        // ── 1. Core user record ───────────────────────────────────────────
         var user = await _db.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.UserId == userId.Trim().ToUpper());
@@ -41,35 +38,30 @@ public class AdminSearchInfoController : ControllerBase
         if (user == null)
             return NotFound(new { message = $"No user found with ID '{userId}'." });
 
-        // ── 2. KYC request (pending/rejected row; null if already approved & deleted) ──
         var kyc = await _db.KycRequests
             .AsNoTracking()
             .Where(k => k.UserId == user.UserId)
             .OrderByDescending(k => k.SubmittedAt)
             .FirstOrDefaultAsync();
 
-        // ── 3. Wallet rows (one per plan type the user has) ───────────────
         var wallets = await _db.Wallets
             .AsNoTracking()
             .Where(w => w.UserId == user.UserId)
             .OrderBy(w => w.PlanType)
             .ToListAsync();
 
-        // ── 4. Plans purchased ────────────────────────────────────────────
         var plans = await _db.Plans
             .AsNoTracking()
             .Where(p => p.UserId == user.UserId)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync();
 
-        // ── 5. Withdrawal requests ────────────────────────────────────────
         var withdrawals = await _db.WithdrawalRequests
             .AsNoTracking()
             .Where(w => w.UserId == user.UserId)
             .OrderByDescending(w => w.RequestedAt)
             .ToListAsync();
 
-        // ── 6. Recent wallet transactions (last 20) ───────────────────────
         var transactions = await _db.WalletTransactions
             .AsNoTracking()
             .Where(t => t.UserId == user.UserId)
@@ -77,36 +69,32 @@ public class AdminSearchInfoController : ControllerBase
             .Take(20)
             .ToListAsync();
 
-        // ── 7. Build response DTO ─────────────────────────────────────────
         var response = new AdminUserSearchResponseDto
         {
-            // Identity
             UserId        = user.UserId,
             Name          = user.Name,
             MobileNo      = user.MobileNo,
             AadharNo      = user.AadharNo,
             Address       = user.Address,
-            Password      = user.Password,          // plain-text value stored at registration
+            Password      = user.Password,
             Role          = user.Role.ToString(),
             CreatedAt     = user.CreatedAt,
 
-            // Account Status
             IsActive       = user.IsActive,
             IdStatus       = user.IdStatus,
             IsKycCompleted = user.IsKycCompleted,
             SelectedPlan   = user.SelectedPlan ?? string.Empty,
 
-            // Sponsor / Tree
             SponsorId   = user.SponsorId,
             SponsorName = user.SponsorIdName,
             ParentId    = user.ParentId,
             Position    = user.Position,
             TreeLevel   = user.TreeLevel,
 
-            // Business Volume (live counter from User row)
             TotalBV = user.BusinessVolume,
 
-            // KYC
+            // KYC — resolves whichever image format this particular
+            // request was saved with (legacy base64 string or new byte[])
             Kyc = kyc == null ? null : new KycSummaryDto
             {
                 Id                  = kyc.Id,
@@ -121,13 +109,12 @@ public class AdminSearchInfoController : ControllerBase
                 SubmittedAt         = kyc.SubmittedAt,
                 ReviewedAt          = kyc.ReviewedAt,
                 RejectionReason     = kyc.RejectionReason,
-                AadharFrontImageUrl = kyc.AadharFrontImageUrl,
-                AadharBackImageUrl  = kyc.AadharBackImageUrl,
-                PanCardImageUrl     = kyc.PanCardImageUrl,
-                BankProofImageUrl   = kyc.BankProofImageUrl,
+                AadharFrontImageUrl = ImageResolver.ToDataUri(kyc.AadharFrontImageUrl, kyc.AadharFrontImage, kyc.AadharFrontImageContentType),
+                AadharBackImageUrl  = ImageResolver.ToDataUri(kyc.AadharBackImageUrl, kyc.AadharBackImage, kyc.AadharBackImageContentType),
+                PanCardImageUrl     = ImageResolver.ToDataUri(kyc.PanCardImageUrl, kyc.PanCardImage, kyc.PanCardImageContentType),
+                BankProofImageUrl   = ImageResolver.ToDataUri(kyc.BankProofImageUrl, kyc.BankProofImage, kyc.BankProofImageContentType),
             },
 
-            // Banking (populated by admin when KYC is approved)
             Banking = (!user.IsKycCompleted) ? null : new BankingDto
             {
                 BankName    = user.BankName,
@@ -136,7 +123,6 @@ public class AdminSearchInfoController : ControllerBase
                 AccountType = user.AccountType,
             },
 
-            // Wallets
             Wallets = wallets.Select(w => new WalletSummaryDto
             {
                 PlanType       = w.PlanType,
@@ -146,7 +132,6 @@ public class AdminSearchInfoController : ControllerBase
                 UpdatedAt      = w.UpdatedAt,
             }).ToList(),
 
-            // Plans
             Plans = plans.Select(p => new PlanSummaryDto
             {
                 Id          = p.Id,
@@ -157,7 +142,6 @@ public class AdminSearchInfoController : ControllerBase
                 CreatedAt   = p.CreatedAt,
             }).ToList(),
 
-            // Withdrawals
             Withdrawals = withdrawals.Select(w => new WithdrawalSummaryDto
             {
                 Id           = w.Id,
@@ -169,7 +153,6 @@ public class AdminSearchInfoController : ControllerBase
                 AdminRemarks = w.AdminRemarks,
             }).ToList(),
 
-            // Recent Transactions
             RecentTransactions = transactions.Select(t => new TransactionSummaryDto
             {
                 Id           = t.Id,
@@ -186,10 +169,6 @@ public class AdminSearchInfoController : ControllerBase
         return Ok(response);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // GET /api/Admin/search-user?query=<name|mobile|aadhar>
-    // Fuzzy search — useful for the admin search-box autocomplete
-    // ──────────────────────────────────────────────────────────────────────
     [HttpGet("search-user")]
     public async Task<IActionResult> SearchUsers([FromQuery] string query)
     {

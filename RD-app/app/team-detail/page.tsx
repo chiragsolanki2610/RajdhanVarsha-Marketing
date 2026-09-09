@@ -27,7 +27,7 @@ import Sidebar from "@/components/Sidebar";
  * -----------------------------------------------------------------------
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://rd-api-j7zj.onrender.com";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:56187";
 
 type TeamType = "dream" | "binary";
 const PAGE_SIZE = 10;

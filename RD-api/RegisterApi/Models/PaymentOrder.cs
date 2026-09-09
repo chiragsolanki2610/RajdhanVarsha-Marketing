@@ -49,4 +49,11 @@ public class PaymentOrder
     // Only once this is true does the receipt become visible/downloadable to the user
     public bool ReceiptFinalized { get; set; } = false;
     public DateTime? ReceiptFinalizedAt { get; set; }
+
+    public string? SelectedPucId { get; set; }
+
+    // Separate from admin payment verification. The selected pickup center can
+    // accept or reject its own fulfillment request without approving payment.
+    public string? PickupCenterDecision { get; set; }
+    public bool CommissionDistributed { get; set; } = false;
 }

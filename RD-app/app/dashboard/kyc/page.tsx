@@ -40,12 +40,15 @@ export default function KycVerificationPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Max allowed size per uploaded image (in MB). Adjust to match your API/server limits.
+  const MAX_FILE_SIZE_MB = 8;
+
   useEffect(() => {
     const fetchProfileToSeed = async () => {
       try {
         const token = localStorage.getItem('authToken');
         
-        const response = await fetch('https://rd-api-j7zj.onrender.com/api/Auth/profile', {
+        const response = await fetch('https://localhost:56187/api/Auth/profile', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -73,23 +76,26 @@ export default function KycVerificationPage() {
     router.push('/profile'); 
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setFile: React.Dispatch<React.SetStateAction<File | null>>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
-  };
+  const handleFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setFile: React.Dispatch<React.SetStateAction<File | null>>,
+    fieldLabel: string
+  ) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
 
-  // Helper function to transform physical files into Base64 strings for JSON transport
-  const convertFileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const base64String = reader.result as string;
-        resolve(base64String);
-      };
-      reader.onerror = (error) => reject(error);
-    });
+    // Validate size up-front so we fail fast with a clear message instead of
+    // discovering a huge/corrupt file mid-submit.
+    const sizeMB = file.size / 1024 / 1024;
+    if (sizeMB > MAX_FILE_SIZE_MB) {
+      setError(`"${fieldLabel}" is ${sizeMB.toFixed(1)}MB, which exceeds the ${MAX_FILE_SIZE_MB}MB limit. Please choose a smaller image.`);
+      e.target.value = '';
+      setFile(null);
+      return;
+    }
+
+    setError(null);
+    setFile(file);
   };
 
   const handleSubmitKyc = async (e: React.FormEvent) => {
@@ -110,6 +116,27 @@ export default function KycVerificationPage() {
       setError(null);
       const token = localStorage.getItem('authToken');
 
+      // Build a multipart/form-data payload instead of base64-encoded JSON.
+      // This avoids the ~33% size inflation of base64 and the large in-memory
+      // strings that were causing failures on some mobile devices.
+      const formData = new FormData();
+      formData.append('fullName', fullName);
+      formData.append('mobileNo', mobileNo);
+      formData.append('age', String(parseInt(age, 10)));
+      formData.append('dob', dob);
+      formData.append('address', address);
+      formData.append('aadharNo', aadharNo);
+      formData.append('panNo', panNo.toUpperCase());
+      formData.append('accountHolderName', accountHolderName);
+      formData.append('accountNo', accountNo);
+      formData.append('bankName', bankName);
+      formData.append('ifscCode', ifscCode.toUpperCase());
+      formData.append('isKycCompleted', 'true');
+      formData.append('aadharFrontImage', aadharFront, aadharFront.name);
+      formData.append('aadharBackImage', aadharBack, aadharBack.name);
+      formData.append('panCardImage', panCardImg, panCardImg.name);
+      formData.append('bankProofImage', bankProofImg, bankProofImg.name);
+
       // DEBUG: log file sizes so we can see if mobile photos are huge
       console.log("=== FILE SIZES BEFORE UPLOAD ===");
       console.log("Aadhaar Front:", (aadharFront.size / 1024 / 1024).toFixed(2), "MB", aadharFront.type);
@@ -117,47 +144,14 @@ export default function KycVerificationPage() {
       console.log("PAN Card:", (panCardImg.size / 1024 / 1024).toFixed(2), "MB", panCardImg.type);
       console.log("Bank Proof:", (bankProofImg.size / 1024 / 1024).toFixed(2), "MB", bankProofImg.type);
 
-      // Convert all loaded imagery files concurrently to base64
-      const [aadharFrontBase64, aadharBackBase64, panCardBase64, bankProofBase64] = await Promise.all([
-        convertFileToBase64(aadharFront),
-        convertFileToBase64(aadharBack),
-        convertFileToBase64(panCardImg),
-        convertFileToBase64(bankProofImg)
-      ]);
-
-      // Construct a standardized JSON schema object payload matching pure Appliaction/JSON content specifications
-      const kycPayload = {
-        fullName,
-        mobileNo,
-        age: parseInt(age, 10),
-        dob,
-        address,
-        aadharNo,
-        panNo: panNo.toUpperCase(),
-        accountHolderName,
-        accountNo,
-        bankName,
-        ifscCode: ifscCode.toUpperCase(),
-        aadharFrontImageUrl: aadharFrontBase64,
-        aadharBackImageUrl: aadharBackBase64,
-        panCardImageUrl: panCardBase64,
-        bankProofImageUrl: bankProofBase64,
-        isKycCompleted: true
-      };
-
-      const bodyString = JSON.stringify(kycPayload);
-
-      // DEBUG: log total payload size being sent
-      console.log("=== TOTAL PAYLOAD SIZE ===");
-      console.log((new Blob([bodyString]).size / 1024 / 1024).toFixed(2), "MB");
-
-      const response = await fetch('https://rd-api-j7zj.onrender.com/api/Kyc/submit', {
-        method: 'POST', 
+      const response = await fetch('https://localhost:56187/api/Kyc/submit', {
+        method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          // NOTE: do NOT set Content-Type manually for FormData — the browser
+          // sets it automatically, including the multipart boundary.
           ...(token && { 'Authorization': `Bearer ${token}` })
         },
-        body: bodyString
+        body: formData
       });
 
       // DEBUG: log full response details regardless of success/failure
@@ -185,9 +179,15 @@ export default function KycVerificationPage() {
       console.error("Error message:", err?.message);
       console.error("Full error object:", err);
 
-      // TEMPORARY: show the real error on screen so we can see it on mobile too
-      // (revert this to the generic message once we've diagnosed the issue)
-      setError(`DEBUG INFO: ${err?.message || 'Unknown error'}`);
+      // Build a human-readable message. Network failures (offline, DNS,
+      // CORS, server unreachable) surface as a generic "Failed to fetch" —
+      // call that out explicitly since users on mobile networks hit this a lot.
+      let displayMessage = err?.message;
+      if (!displayMessage || displayMessage === 'Failed to fetch') {
+        displayMessage = 'Could not reach the server. Please check your internet connection and try again.';
+      }
+
+      setError(`DEBUG INFO: ${displayMessage}`);
     } finally {
       setSubmitting(false);
     }
@@ -278,7 +278,7 @@ export default function KycVerificationPage() {
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Aadhaar Image (Front)</label>
                         <div className="border-2 border-dashed border-gray-200 hover:border-[#2B4C7E] rounded-xl p-3 text-center transition cursor-pointer relative bg-gray-50/50">
-                          <input type="file" required accept="image/*" onChange={(e) => handleFileChange(e, setAadharFront)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                          <input type="file" required accept="image/*" onChange={(e) => handleFileChange(e, setAadharFront, 'Aadhaar Front')} className="absolute inset-0 opacity-0 cursor-pointer" />
                           <Upload size={16} className="mx-auto text-gray-400 mb-1" />
                           <p className="text-xs text-gray-600 font-medium truncate">{aadharFront ? aadharFront.name : 'Choose Front View File'}</p>
                         </div>
@@ -286,7 +286,7 @@ export default function KycVerificationPage() {
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Aadhaar Image (Back)</label>
                         <div className="border-2 border-dashed border-gray-200 hover:border-[#2B4C7E] rounded-xl p-3 text-center transition cursor-pointer relative bg-gray-50/50">
-                          <input type="file" required accept="image/*" onChange={(e) => handleFileChange(e, setAadharBack)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                          <input type="file" required accept="image/*" onChange={(e) => handleFileChange(e, setAadharBack, 'Aadhaar Back')} className="absolute inset-0 opacity-0 cursor-pointer" />
                           <Upload size={16} className="mx-auto text-gray-400 mb-1" />
                           <p className="text-xs text-gray-600 font-medium truncate">{aadharBack ? aadharBack.name : 'Choose Back View File'}</p>
                         </div>
@@ -309,7 +309,7 @@ export default function KycVerificationPage() {
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Upload PAN Card Document Image</label>
                       <div className="border-2 border-dashed border-gray-200 hover:border-[#2B4C7E] rounded-xl p-3 text-center transition cursor-pointer relative bg-gray-50/50">
-                        <input type="file" required accept="image/*" onChange={(e) => handleFileChange(e, setPanCardImg)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                        <input type="file" required accept="image/*" onChange={(e) => handleFileChange(e, setPanCardImg, 'PAN Card')} className="absolute inset-0 opacity-0 cursor-pointer" />
                         <Upload size={16} className="mx-auto text-gray-400 mb-1" />
                         <p className="text-xs text-gray-600 font-medium truncate">{panCardImg ? panCardImg.name : 'Select Panoramic Profile Copy'}</p>
                       </div>
@@ -343,7 +343,7 @@ export default function KycVerificationPage() {
                     <div className="sm:col-span-2 space-y-1.5">
                       <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Upload Bank Account Proof (Passbook / Cancelled Cheque)</label>
                       <div className="border-2 border-dashed border-gray-200 hover:border-[#2B4C7E] rounded-xl p-3 text-center transition cursor-pointer relative bg-gray-50/50">
-                        <input type="file" required accept="image/*" onChange={(e) => handleFileChange(e, setBankProofImg)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                        <input type="file" required accept="image/*" onChange={(e) => handleFileChange(e, setBankProofImg, 'Bank Proof')} className="absolute inset-0 opacity-0 cursor-pointer" />
                         <Upload size={16} className="mx-auto text-gray-400 mb-1" />
                         <p className="text-xs text-gray-600 font-medium truncate">{bankProofImg ? bankProofImg.name : 'Select Passbook Ledger Clear Image Snapshot'}</p>
                       </div>

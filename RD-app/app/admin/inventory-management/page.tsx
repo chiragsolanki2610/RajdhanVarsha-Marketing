@@ -27,7 +27,7 @@ import { useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import LoginTopbar from "@/components/loginTopbar";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://rd-api-j7zj.onrender.com";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://localhost:56187";
 
 function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;

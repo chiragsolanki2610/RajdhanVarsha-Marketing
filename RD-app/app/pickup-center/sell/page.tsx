@@ -19,7 +19,7 @@ import {
 import PickupCenterSidebar from "@/components/pickup_centersidebar";
 import PickupCenterTopbar from "@/components/pickup_centertopbar";
 
-const API_BASE = "https://rd-api-j7zj.onrender.com";
+const API_BASE = "https://localhost:56187";
 
 interface PucInfo {
   pucId: string;
