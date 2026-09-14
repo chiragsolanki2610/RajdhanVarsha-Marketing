@@ -34,6 +34,7 @@ interface CustomerInfo {
   name: string;
   phone: string;
   role: string;
+  dreamPlanActive: boolean;
 }
 
 interface Product {
@@ -197,11 +198,16 @@ export default function SellPage() {
 
     setLookingUp(true);
     try {
-      const res = await fetch(`${API_BASE}/api/Auth/${userIdInput.trim()}`, {
-        headers: {
-          Authorization: `Bearer ${puc?.token}`,
-        },
-      });
+      const res = await fetch(
+        `${API_BASE}/api/PickupCenter/plan-manager/lookup/${encodeURIComponent(
+          userIdInput.trim()
+        )}?planType=${encodeURIComponent("Dream Plan")}`,
+        {
+          headers: {
+            Authorization: `Bearer ${puc?.token}`,
+          },
+        }
+      );
 
       if (!res.ok) {
         setCustomerError("No user found with this ID");
@@ -209,11 +215,20 @@ export default function SellPage() {
       }
 
       const data = await res.json();
+
+      if (!data.alreadyActiveForPlan) {
+        setCustomerError(
+          "Dream Plan is not active for this user. Please activate the Dream Plan first."
+        );
+        return;
+      }
+
       setCustomer({
-        userId: userIdInput.trim(),
-        name: data.name || data.Name || "Unknown",
-        phone: data.phone || data.mobileNumber || data.Phone || "-",
-        role: data.role || data.Role || "User",
+        userId: data.userId || userIdInput.trim(),
+        name: data.name || "Unknown",
+        phone: data.mobileNo || "-",
+        role: "User",
+        dreamPlanActive: true,
       });
     } catch (err) {
       setCustomerError("Unable to verify user. Please try again.");
