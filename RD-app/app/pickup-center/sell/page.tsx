@@ -96,6 +96,8 @@ export default function SellPage() {
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
   const [customerError, setCustomerError] = useState("");
   const [lookingUp, setLookingUp] = useState(false);
+  const [showActivateModal, setShowActivateModal] = useState(false);
+  const [inactiveUserId, setInactiveUserId] = useState("");
 
   // Products
   const [products, setProducts] = useState<Product[]>([]);
@@ -191,6 +193,7 @@ export default function SellPage() {
   const handleLookupUser = async () => {
     setCustomerError("");
     setCustomer(null);
+    setShowActivateModal(false);
     if (!userIdInput.trim()) {
       setCustomerError("Please enter a User ID");
       return;
@@ -217,9 +220,8 @@ export default function SellPage() {
       const data = await res.json();
 
       if (!data.alreadyActiveForPlan) {
-        setCustomerError(
-          "Dream Plan is not active for this user. Please activate the Dream Plan first."
-        );
+        setInactiveUserId(data.userId || userIdInput.trim());
+        setShowActivateModal(true);
         return;
       }
 
@@ -628,6 +630,37 @@ export default function SellPage() {
           </div>
         </main>
       </div>
+
+      {showActivateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center gap-2 text-red-600">
+              <XCircle size={20} />
+              <h3 className="text-base font-bold text-gray-900">
+                Dream Plan Not Active
+              </h3>
+            </div>
+            <p className="mb-6 text-sm text-gray-600">
+              {inactiveUserId} does not have an active Dream Plan. Please
+              activate the Dream Plan for this user before making a sale.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowActivateModal(false)}
+                className="flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => router.push("/pickup-center/plan-manager")}
+                className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                Activate Plan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
