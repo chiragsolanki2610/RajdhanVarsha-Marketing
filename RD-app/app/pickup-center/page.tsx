@@ -176,14 +176,45 @@ const STATE_CITY_MAP: Record<string, string[]> = {
 
 const STATE_LIST = Object.keys(STATE_CITY_MAP).sort();
 
-function fileToBase64(file: File | null): Promise<string | null> {
-  if (!file) return Promise.resolve(null);
+// Reads a single File into a base64 data URL. On mobile browsers this can
+// fail with a NotReadableError when the picked "photo" is actually a
+// cloud-only file (e.g. a Google Photos item that hasn't been downloaded to
+// the device yet) rather than a local file — the picker hands back a valid
+// File object, but the OS can't supply the bytes when we try to read them.
+// We retry once (a transient sync hiccup sometimes clears on retry), and if
+// it still fails we name the exact file and give the user something
+// actionable instead of a generic "Failed to read file."
+function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.onerror = () => reject(reader.error ?? new Error("read error"));
     reader.readAsDataURL(file);
   });
+}
+
+async function fileToBase64WithRetry(file: File, label: string): Promise<string> {
+  try {
+    return await readFileAsDataURL(file);
+  } catch {
+    // One retry — cloud-backed files sometimes succeed on a second attempt
+    // once the OS has finished syncing them.
+    try {
+      return await readFileAsDataURL(file);
+    } catch {
+      throw new Error(
+        `Couldn't read the ${label} image (${file.name}). If you picked it from ` +
+          `Google Photos or another cloud gallery, it may not be downloaded to your ` +
+          `device yet — try taking a new photo or choosing one already saved on your ` +
+          `phone, then upload again.`
+      );
+    }
+  }
+}
+
+function fileToBase64(file: File | null, label: string): Promise<string | null> {
+  if (!file) return Promise.resolve(null);
+  return fileToBase64WithRetry(file, label);
 }
 
 // Pull a readable message out of an API error response. ASP.NET Core's
@@ -482,14 +513,33 @@ function ApplyForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.sponsorId]);
 
-  const handleFile = (key: keyof FileState) => (e: ChangeEvent<HTMLInputElement>) => {
+  const FILE_LABELS: Record<keyof FileState, string> = {
+    aadharImage: "Aadhar card",
+    panImage: "PAN card",
+    passbookImage: "passbook",
+  };
+
+  const handleFile = (key: keyof FileState) => async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
     if (file && file.size > 5 * 1024 * 1024) {
       setError("Each image must be under 5MB.");
+      e.target.value = "";
       return;
     }
     setError(null);
     setFiles((prev) => ({ ...prev, [key]: file }));
+
+    // Try reading it right away so a cloud-only / unreadable photo is caught
+    // the moment it's picked, not after the whole form is filled in.
+    if (file) {
+      try {
+        await fileToBase64WithRetry(file, FILE_LABELS[key]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to read that file.");
+        setFiles((prev) => ({ ...prev, [key]: null }));
+        e.target.value = "";
+      }
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -513,11 +563,12 @@ function ApplyForm({
 
     setSubmitting(true);
     try {
-      const [aadharImageBase64, panImageBase64, passbookImageBase64] = await Promise.all([
-        fileToBase64(files.aadharImage),
-        fileToBase64(files.panImage),
-        fileToBase64(files.passbookImage),
-      ]);
+      // Read files one at a time (not Promise.all) so that if one fails we
+      // know immediately which document caused it, and don't leave the
+      // other two reads dangling.
+      const aadharImageBase64 = await fileToBase64(files.aadharImage, "Aadhar card");
+      const panImageBase64 = await fileToBase64(files.panImage, "PAN card");
+      const passbookImageBase64 = await fileToBase64(files.passbookImage, "passbook");
 
       const res = await fetch("https://rd-api-j7zj.onrender.com/api/PickupCenter/apply", {
         method: "POST",
