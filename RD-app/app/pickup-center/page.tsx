@@ -3,7 +3,7 @@
 import { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { UploadCloud, CheckCircle2, Loader2, Eye, EyeOff } from "lucide-react";
+import { UploadCloud, CheckCircle2, Loader2, Eye, EyeOff, Camera } from "lucide-react";
 
 type CredentialsState = {
   username: string;
@@ -1008,19 +1008,51 @@ function FileField({
       <label className="mb-1.5 block text-sm font-semibold text-gray-700">
         {label}
       </label>
-      <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-500 transition hover:border-blue-500 hover:bg-blue-50">
-        <UploadCloud size={18} className="shrink-0 text-blue-600" />
-        <span className="truncate">
-          {file ? file.name : "Click to upload image (JPG/PNG, max 5MB)"}
-        </span>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={onChange}
-          required={required}
-          className="hidden"
-        />
-      </label>
+
+      {file && (
+        <p className="mb-1.5 truncate text-xs text-gray-500">
+          Selected: {file.name}
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        {/* Take Photo — opens the device camera directly. Camera captures
+            are always saved locally, so they never hit the "cloud-only
+            file" read failure that gallery picks (e.g. from Google Photos)
+            can run into. */}
+        <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 transition hover:border-blue-500 hover:bg-blue-50">
+          <Camera size={18} className="shrink-0 text-blue-600" />
+          <span>Take Photo</span>
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={onChange}
+            required={required && !file}
+            className="hidden"
+          />
+        </label>
+
+        {/* Choose File — falls back to the regular gallery / file picker
+            for users who already have a scanned copy saved. */}
+        <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 transition hover:border-blue-500 hover:bg-blue-50">
+          <UploadCloud size={18} className="shrink-0 text-blue-600" />
+          <span>Choose File</span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={onChange}
+            required={required && !file}
+            className="hidden"
+          />
+        </label>
+      </div>
+
+      <p className="mt-1 text-xs text-gray-400">
+        JPG/PNG, max 5MB. Tip: &quot;Take Photo&quot; avoids upload issues with
+        cloud-only gallery photos.
+      </p>
     </div>
   );
+}
 }
