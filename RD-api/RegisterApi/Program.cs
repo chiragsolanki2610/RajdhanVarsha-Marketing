@@ -97,6 +97,7 @@ try
     builder.Services.AddScoped<IPasswordService, PasswordService>();
     builder.Services.AddScoped<IReceiptService, ReceiptService>();
     builder.Services.AddScoped<IBinaryPlanService, BinaryPlanService>();  // ← ADDED
+    builder.Services.AddScoped<IPickupCenterIdGenerator, PickupCenterIdGenerator>();  // ← ADDED (fixes 500 on AdminPickupCenterController)
 
     // Auto-runs pair reconciliation on startup + every 6h afterwards, so
     // stuck/incorrect MatchedPairs counts (like the "1 pair" bug) get fixed
