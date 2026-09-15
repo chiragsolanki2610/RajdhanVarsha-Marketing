@@ -262,11 +262,11 @@ export default function Navbar({ transparent = false }: NavbarProps) {
 
           {/* Mobile Redirect to Delivery Center page */}
           <Link
-            href="/delivery-center"
+            href="/pickup-center"
             onClick={() => setMobileOpen(false)}
             className="text-left text-sm font-semibold p-2.5 hover:bg-gray-50 rounded-lg block text-gray-800 transition-colors no-underline"
           >
-            Delivery Center
+            Pickup Center
           </Link>
 
           {/* Mobile Redirect to Join Now / Register page */}
