@@ -176,37 +176,50 @@ const STATE_CITY_MAP: Record<string, string[]> = {
 
 const STATE_LIST = Object.keys(STATE_CITY_MAP).sort();
 
-// Reads a single File into a base64 data URL. On mobile browsers this can
-// fail with a NotReadableError when the picked "photo" is actually a
-// cloud-only file (e.g. a Google Photos item that hasn't been downloaded to
-// the device yet) rather than a local file — the picker hands back a valid
-// File object, but the OS can't supply the bytes when we try to read them.
-// We retry once (a transient sync hiccup sometimes clears on retry), and if
-// it still fails we name the exact file and give the user something
-// actionable instead of a generic "Failed to read file."
-function readFileAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error ?? new Error("read error"));
-    reader.readAsDataURL(file);
-  });
+// Reads a single File into a base64 data URL.
+//
+// On Android, picking a photo through the Google Photos picker can hand back
+// a valid File object whose bytes the OS can't supply (cloud-only item that
+// hasn't been downloaded yet), which makes FileReader fail with a
+// NotReadableError. FileReader and Blob.arrayBuffer() use different code
+// paths, so when one fails the other sometimes succeeds. We try FileReader
+// first and fall back to arrayBuffer() -> base64.
+async function readFileAsDataURL(file: File): Promise<string> {
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error ?? new Error("read error"));
+      reader.readAsDataURL(file);
+    });
+  } catch {
+    // Fallback: arrayBuffer -> base64
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    return `data:${file.type || "image/jpeg"};base64,${btoa(binary)}`;
+  }
 }
 
+// Retries once (a transient sync hiccup sometimes clears on retry), and if it
+// still fails, names the exact file and gives the user something actionable
+// instead of a generic "Failed to read file."
 async function fileToBase64WithRetry(file: File, label: string): Promise<string> {
   try {
     return await readFileAsDataURL(file);
   } catch {
-    // One retry — cloud-backed files sometimes succeed on a second attempt
-    // once the OS has finished syncing them.
     try {
       return await readFileAsDataURL(file);
     } catch {
       throw new Error(
         `Couldn't read the ${label} image (${file.name}). If you picked it from ` +
           `Google Photos or another cloud gallery, it may not be downloaded to your ` +
-          `device yet — try taking a new photo or choosing one already saved on your ` +
-          `phone, then upload again.`
+          `device yet. Open the photo in Google Photos, tap the ⋮ menu and choose ` +
+          `"Download", or use "Take Photo" instead, then upload again.`
       );
     }
   }
@@ -491,7 +504,7 @@ function ApplyForm({
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://rd-api-j7zj.onrender.com/api/Auth/sponsor-lookup/${encodeURIComponent(id)}`
+          `https://localhost:56187/api/Auth/sponsor-lookup/${encodeURIComponent(id)}`
         );
 
         if (!res.ok) {
@@ -520,10 +533,11 @@ function ApplyForm({
   };
 
   const handleFile = (key: keyof FileState) => async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null;
+    const input = e.target;
+    const file = input.files?.[0] ?? null;
     if (file && file.size > 5 * 1024 * 1024) {
       setError("Each image must be under 5MB.");
-      e.target.value = "";
+      input.value = "";
       return;
     }
     setError(null);
@@ -537,7 +551,7 @@ function ApplyForm({
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to read that file.");
         setFiles((prev) => ({ ...prev, [key]: null }));
-        e.target.value = "";
+        input.value = "";
       }
     }
   };
@@ -570,7 +584,7 @@ function ApplyForm({
       const panImageBase64 = await fileToBase64(files.panImage, "PAN card");
       const passbookImageBase64 = await fileToBase64(files.passbookImage, "passbook");
 
-      const res = await fetch("https://rd-api-j7zj.onrender.com/api/PickupCenter/apply", {
+      const res = await fetch("https://localhost:56187/api/PickupCenter/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -886,7 +900,7 @@ function LoginForm() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("https://rd-api-j7zj.onrender.com/api/PickupCenter/login", {
+      const res = await fetch("https://localhost:56187/api/PickupCenter/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -1018,8 +1032,7 @@ function FileField({
       <div className="flex gap-2">
         {/* Take Photo — opens the device camera directly. Camera captures
             are always saved locally, so they never hit the "cloud-only
-            file" read failure that gallery picks (e.g. from Google Photos)
-            can run into. */}
+            file" read failure that Google Photos picks can run into. */}
         <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 transition hover:border-blue-500 hover:bg-blue-50">
           <Camera size={18} className="shrink-0 text-blue-600" />
           <span>Take Photo</span>
@@ -1033,14 +1046,17 @@ function FileField({
           />
         </label>
 
-        {/* Choose File — falls back to the regular gallery / file picker
-            for users who already have a scanned copy saved. */}
+        {/* Choose File — uses explicit extensions/MIME types instead of
+            "image/*". On Android Chrome, "image/*" opens the Google Photos
+            picker (which can hand back cloud-only files that can't be
+            read), while a specific list usually opens the system file
+            browser, where users pick files that are really on the device. */}
         <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 transition hover:border-blue-500 hover:bg-blue-50">
           <UploadCloud size={18} className="shrink-0 text-blue-600" />
           <span>Choose File</span>
           <input
             type="file"
-            accept="image/*"
+            accept=".jpg,.jpeg,.png,image/jpeg,image/png"
             onChange={onChange}
             required={required && !file}
             className="hidden"
@@ -1049,8 +1065,9 @@ function FileField({
       </div>
 
       <p className="mt-1 text-xs text-gray-400">
-        JPG/PNG, max 5MB. Tip: &quot;Take Photo&quot; avoids upload issues with
-        cloud-only gallery photos.
+        JPG/PNG, max 5MB. If &quot;Choose File&quot; opens Google Photos and
+        fails, open the photo in Google Photos, tap ⋮ and choose
+        &quot;Download&quot;, or use &quot;Take Photo&quot;.
       </p>
     </div>
   );
