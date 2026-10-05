@@ -10,8 +10,13 @@ import {
   History,
   LogOut,
   ChevronLeft,
+  ChevronDown,
   FileText,
   Layers,
+  Wallet,
+  Store,
+  Boxes,
+  type LucideIcon,
 } from 'lucide-react';
 
 interface PucInfo {
@@ -22,21 +27,67 @@ interface PucInfo {
   token: string;
 }
 
+interface NavItem {
+  label: string;
+  path: string;
+  icon: LucideIcon;
+}
+
+interface NavGroup {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
+}
+
+/* ── Dropdown groups (edit here to add / remove items) ── */
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    key: 'retail',
+    label: 'Retail',
+    icon: Store,
+    items: [
+      { label: 'Sell',          icon: ShoppingCart, path: '/pickup-center/sell' },
+      { label: 'Plan Manager',  icon: Layers,       path: '/pickup-center/plan-manager' },
+      { label: 'Order Request', icon: FileText,     path: '/pickup-center/order-request' },
+    ],
+  },
+  {
+    key: 'inventory',
+    label: 'Inventory',
+    icon: Boxes,
+    items: [
+      { label: 'Manage Inventory', icon: Package, path: '/pickup-center/manage-inventory' },
+      { label: 'Return',           icon: History, path: '/pickup-center/return' },
+    ],
+  },
+];
+
+const isPathActive = (pathname: string, path: string) =>
+  pathname === path || pathname.startsWith(path + '/');
+
+/* ───────────────────────── Mobile Bottom Nav ───────────────────────── */
 function MobileBottomNav() {
   const pathname = usePathname();
 
+  // Home + one tab per dropdown group (Retail, Inventory) + Wallet.
+  // Group tabs open a hub page (/pickup-center/retail, /pickup-center/inventory)
+  // and stay highlighted on the hub page AND on any of their sub pages.
   const navItems = [
-    { icon: Home,         label: 'Home',            path: '/pickup-center/dashboard' },
-    { icon: ShoppingCart, label: 'Sell',            path: '/pickup-center/sell' },
-    { icon: Layers,       label: 'Plan Manager',    path: '/pickup-center/plan-manager' },
-    { icon: Package,      label: 'Manage Inventory',path: '/pickup-center/manage-inventory' },
-    { icon: FileText,      label: 'Order Requests',    path: '/pickup-center/order-request' },
+    { icon: Home, label: 'Home', path: '/pickup-center/dashboard', match: ['/pickup-center/dashboard'] },
+    ...NAV_GROUPS.map((g) => ({
+      icon: g.icon,
+      label: g.label,
+      path: `/pickup-center/${g.key}`,
+      match: [`/pickup-center/${g.key}`, ...g.items.map((i) => i.path)],
+    })),
+    { icon: Wallet, label: 'Wallet', path: '/pickup-center/wallet', match: ['/pickup-center/wallet'] },
   ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around px-1 py-2 md:hidden shadow-[0_-2px_12px_rgba(0,0,0,0.08)]">
-      {navItems.map(({ icon: Icon, label, path }) => {
-        const isActive = pathname === path || (path !== '/pickup-center/dashboard' && pathname.startsWith(path));
+      {navItems.map(({ icon: Icon, label, path, match }) => {
+        const isActive = match.some((m) => isPathActive(pathname, m));
         return (
           <Link
             key={label}
@@ -65,10 +116,117 @@ function MobileBottomNav() {
   );
 }
 
+/* ───────────────────────── Single nav link ───────────────────────── */
+function SidebarLink({
+  item,
+  isOpen,
+  pathname,
+  nested = false,
+}: {
+  item: NavItem;
+  isOpen: boolean;
+  pathname: string;
+  nested?: boolean;
+}) {
+  const Icon = item.icon;
+  const active = isPathActive(pathname, item.path);
+
+  return (
+    <Link
+      href={item.path}
+      title={!isOpen ? item.label : undefined}
+      className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
+        isOpen ? `${nested ? 'pl-4 pr-3' : 'px-3'} py-2.5 gap-3` : 'p-2.5 justify-center'
+      } ${
+        active
+          ? 'bg-white text-blue-900 font-bold shadow-md'
+          : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
+      }`}
+    >
+      <Icon size={16} className={active ? 'text-blue-600' : 'text-blue-200'} />
+      {isOpen && <span className="truncate animate-fadeIn">{item.label}</span>}
+    </Link>
+  );
+}
+
+/* ───────────────────────── Dropdown group ───────────────────────── */
+function SidebarGroup({
+  group,
+  isOpen,
+  pathname,
+  expanded,
+  onToggle,
+}: {
+  group: NavGroup;
+  isOpen: boolean;
+  pathname: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const GroupIcon = group.icon;
+  const hasActiveChild = group.items.some((i) => isPathActive(pathname, i.path));
+
+  return (
+    <div className="w-full">
+      <button
+        type="button"
+        onClick={onToggle}
+        title={!isOpen ? group.label : undefined}
+        aria-expanded={expanded}
+        className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
+          isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
+        } ${
+          hasActiveChild
+            ? 'bg-blue-900/40 text-white font-bold'
+            : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
+        }`}
+      >
+        <GroupIcon size={16} className={hasActiveChild ? 'text-white' : 'text-blue-200'} />
+        {isOpen && (
+          <>
+            <span className="truncate flex-1 text-left animate-fadeIn">{group.label}</span>
+            <ChevronDown
+              size={14}
+              className={`shrink-0 text-blue-200 transition-transform duration-200 ${
+                expanded ? 'rotate-180' : ''
+              }`}
+            />
+          </>
+        )}
+      </button>
+
+      {/* Dropdown items (only when sidebar is expanded) */}
+      {isOpen && (
+        <div
+          className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${
+            expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="mt-1 ml-4 pl-2 border-l border-blue-400/30 space-y-1">
+              {group.items.map((item) => (
+                <SidebarLink
+                  key={item.path}
+                  item={item}
+                  isOpen={isOpen}
+                  pathname={pathname}
+                  nested
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────── Main Sidebar ───────────────────────── */
 export default function PickupCenterSidebar() {
   const [isOpen, setIsOpen] = useState(true);
   const [pucData, setPucData] = useState<PucInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const pathname = usePathname();
   const router = useRouter();
 
@@ -85,6 +243,29 @@ export default function PickupCenterSidebar() {
     }
   }, []);
 
+  // Auto-open the group that contains the current page
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      const next = { ...prev };
+      NAV_GROUPS.forEach((g) => {
+        if (g.items.some((i) => isPathActive(pathname, i.path))) {
+          next[g.key] = true;
+        }
+      });
+      return next;
+    });
+  }, [pathname]);
+
+  const toggleGroup = (key: string) => {
+    // If sidebar is collapsed, expand it and open the group
+    if (!isOpen) {
+      setIsOpen(true);
+      setOpenGroups((prev) => ({ ...prev, [key]: true }));
+      return;
+    }
+    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const getInitials = (nameString: string | undefined) => {
     if (!nameString) return 'PC';
     const parts = nameString.trim().split(/\s+/);
@@ -98,6 +279,9 @@ export default function PickupCenterSidebar() {
     localStorage.removeItem('pucInfo');
     router.replace('/pickup-center');
   };
+
+  const homeItem: NavItem = { label: 'Home', icon: Home, path: '/pickup-center/dashboard' };
+  const walletItem: NavItem = { label: 'Wallet', icon: Wallet, path: '/pickup-center/wallet' };
 
   return (
     <>
@@ -192,94 +376,22 @@ export default function PickupCenterSidebar() {
                 <nav className="space-y-1 w-full">
 
                   {/* Home */}
-                  <Link
-                    href="/pickup-center/dashboard"
-                    className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
-                      isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
-                    } ${
-                      pathname === '/pickup-center/dashboard'
-                        ? 'bg-white text-blue-900 font-bold shadow-md'
-                        : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
-                    }`}
-                  >
-                    <Home size={16} className={pathname === '/pickup-center/dashboard' ? 'text-blue-600' : 'text-blue-200'} />
-                    {isOpen && <span className="truncate animate-fadeIn">Home</span>}
-                  </Link>
+                  <SidebarLink item={homeItem} isOpen={isOpen} pathname={pathname} />
 
-                  {/* Sell */}
-                  <Link
-                    href="/pickup-center/sell"
-                    className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
-                      isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
-                    } ${
-                      pathname === '/pickup-center/sell'
-                        ? 'bg-white text-blue-900 font-bold shadow-md'
-                        : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
-                    }`}
-                  >
-                    <ShoppingCart size={16} className={pathname === '/pickup-center/sell' ? 'text-blue-600' : 'text-blue-200'} />
-                    {isOpen && <span className="truncate animate-fadeIn">Sell</span>}
-                  </Link>
+                  {/* Dropdown groups: Retail + Inventory */}
+                  {NAV_GROUPS.map((group) => (
+                    <SidebarGroup
+                      key={group.key}
+                      group={group}
+                      isOpen={isOpen}
+                      pathname={pathname}
+                      expanded={!!openGroups[group.key]}
+                      onToggle={() => toggleGroup(group.key)}
+                    />
+                  ))}
 
-                  {/* Plan Manager */}
-                  <Link
-                    href="/pickup-center/plan-manager"
-                    className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
-                      isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
-                    } ${
-                      pathname === '/pickup-center/plan-manager'
-                        ? 'bg-white text-blue-900 font-bold shadow-md'
-                        : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
-                    }`}
-                  >
-                    <Layers size={16} className={pathname === '/pickup-center/plan-manager' ? 'text-blue-600' : 'text-blue-200'} />
-                    {isOpen && <span className="truncate animate-fadeIn">Plan Manager</span>}
-                  </Link>
-
-                  {/* Order Request */}
-                  <Link
-                    href="/pickup-center/order-request"
-                    className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
-                      isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
-                    } ${
-                      pathname === '/pickup-center/order-request'
-                        ? 'bg-white text-blue-900 font-bold shadow-md'
-                        : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
-                    }`}
-                  >
-                    <FileText size={16} className={pathname === '/pickup-center/order-request' ? 'text-blue-600' : 'text-blue-200'} />
-                    {isOpen && <span className="truncate animate-fadeIn">Order Request</span>}
-                  </Link>
-
-                  {/* Manage Inventory */}
-                  <Link
-                    href="/pickup-center/manage-inventory"
-                    className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
-                      isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
-                    } ${
-                      pathname === '/pickup-center/manage-inventory'
-                        ? 'bg-white text-blue-900 font-bold shadow-md'
-                        : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
-                    }`}
-                  >
-                    <Package size={16} className={pathname === '/pickup-center/manage-inventory' ? 'text-blue-600' : 'text-blue-200'} />
-                    {isOpen && <span className="truncate animate-fadeIn">Manage Inventory</span>}
-                  </Link>
-
-                  {/* Order History */}
-                  <Link
-                    href="/pickup-center/history"
-                    className={`w-full flex items-center rounded-lg text-xs font-medium transition-all duration-150 ${
-                      isOpen ? 'px-3 py-2.5 gap-3' : 'p-2.5 justify-center'
-                    } ${
-                      pathname === '/pickup-center/history'
-                        ? 'bg-white text-blue-900 font-bold shadow-md'
-                        : 'text-blue-100 hover:bg-blue-700/40 hover:text-white'
-                    }`}
-                  >
-                    <History size={16} className={pathname === '/pickup-center/history' ? 'text-blue-600' : 'text-blue-200'} />
-                    {isOpen && <span className="truncate animate-fadeIn">Order History</span>}
-                  </Link>
+                  {/* Wallet */}
+                  <SidebarLink item={walletItem} isOpen={isOpen} pathname={pathname} />
 
                 </nav>
               </div>

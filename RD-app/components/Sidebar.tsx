@@ -23,7 +23,8 @@ import {
   PackagePlus,
   UserSearch,
   ClipboardList,
-  Archive
+  Archive,
+  Undo2
 } from 'lucide-react';
 
 interface UserData {
@@ -222,6 +223,7 @@ export default function Sidebar() {
     { icon: Banknote,      label: 'Withdrawal Requests',    path: '/admin/withdrawal-requests' },
     { icon: MapPin,        label: 'Pickup Center Requests', path: '/admin/pickup-center-requests' },
     { icon: ClipboardList, label: 'Order Requests',         path: '/admin/order-requests' },
+    { icon: Undo2,         label: 'Return Products',        path: '/admin/return-products' },
     { icon: PackagePlus,   label: 'Add Products',           path: '/admin/add-products' },
     { icon: Archive,       label: 'Inventory Management',   path: '/admin/inventory-management' },
     { icon: UserSearch,    label: 'Search User Info',       path: '/admin/search-user-info' },

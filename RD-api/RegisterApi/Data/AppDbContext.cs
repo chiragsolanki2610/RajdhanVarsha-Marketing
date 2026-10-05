@@ -15,6 +15,9 @@ public class AppDbContext : DbContext
     public DbSet<PickupCenter> PickupCenters => Set<PickupCenter>();
     public DbSet<PickupCenterOrder> PickupCenterOrders => Set<PickupCenterOrder>();
     public DbSet<PickupCenterInventoryItem> PickupCenterInventoryItems => Set<PickupCenterInventoryItem>();
+    public DbSet<PickupCenterReturnRequest> PickupCenterReturnRequests => Set<PickupCenterReturnRequest>();
+    public DbSet<PickupCenterWallet> PickupCenterWallets => Set<PickupCenterWallet>();
+    public DbSet<PickupCenterWalletTransaction> PickupCenterWalletTransactions => Set<PickupCenterWalletTransaction>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<PlanItem> PlanItems => Set<PlanItem>();
@@ -99,6 +102,45 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => new { e.PickupCenterId, e.ProductId }).IsUnique();
+        });
+
+        // --- Pickup center returns + wallet ---
+        modelBuilder.Entity<PickupCenterReturnRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
+            entity.Property(e => e.SubTotalDp).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.DeductionPercent).HasColumnType("decimal(5,2)");
+            entity.Property(e => e.DeductionAmount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.CreditAmount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.RequestedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.PickupCenterId);
+            entity.HasIndex(e => e.Status);
+        });
+
+        modelBuilder.Entity<PickupCenterWallet>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Balance).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.TotalEarned).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.TotalWithdrawn).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.PickupCenterId).IsUnique();
+            entity.UseXminAsConcurrencyToken();   // same lost-update protection as BinaryWallet
+        });
+
+        modelBuilder.Entity<PickupCenterWalletTransaction>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Type).HasConversion<string>().HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.BalanceAfter).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Source).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ReferenceId).HasMaxLength(50);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.PickupCenterId);
+            entity.HasIndex(e => e.CreatedAt);
         });
 
         modelBuilder.Entity<Product>(entity =>
