@@ -399,6 +399,44 @@ namespace RegisterApi.Controllers
         }
 
         // ─────────────────────────────────────────────────────────────────────
+        // GET /api/PickupCenter/company-products
+        // "Buy from Company" shop list: only active products the company
+        // actually has in stock (Quantity > 0), with the available quantity.
+        // Out-of-stock products are never shown to the pickup center.
+        // ─────────────────────────────────────────────────────────────────────
+        [HttpGet("company-products")]
+        [Authorize(Roles = "PickupCenter")]
+        public async Task<IActionResult> GetCompanyProducts([FromQuery] string? category = null)
+        {
+            var query = _db.Products.Where(p => p.IsActive && p.Quantity > 0);
+
+            if (!string.IsNullOrWhiteSpace(category))
+                query = query.Where(p => p.Category == category);
+
+            var products = await query
+                .OrderByDescending(p => p.CreatedAt)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.ProductNo,
+                    p.ProductName,
+                    p.Category,
+                    p.Description,
+                    p.Mrp,
+                    p.Gst,
+                    p.Dp,
+                    p.Bv,
+                    p.ImageUrl,
+                    p.CreatedAt,
+                    p.IsActive,
+                    AvailableQuantity = p.Quantity
+                })
+                .ToListAsync();
+
+            return Ok(products);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
         // POST /api/PickupCenter/orders
         // Pickup center buys stock from the company. Multipart form: utr,
         // screenshot (file), items (JSON [{productId, quantity}]), totalAmount.

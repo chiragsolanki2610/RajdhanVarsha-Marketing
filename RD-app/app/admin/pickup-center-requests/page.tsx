@@ -632,6 +632,11 @@ function OrdersSection() {
                     >
                       {order.status}
                     </span>
+                    {order.utrNumber?.startsWith("WALLET-") && (
+                      <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">
+                        Paid via Wallet
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex gap-2">

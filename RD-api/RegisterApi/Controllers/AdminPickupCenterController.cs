@@ -253,13 +253,58 @@ namespace RegisterApi.Controllers
 
                 if (dto.Status == "Rejected")
                 {
+                    var now = DateTime.UtcNow;
                     order.Status = PickupCenterOrderStatus.Rejected;
-                    order.ProcessedAt = DateTime.UtcNow;
+                    order.ProcessedAt = now;
                     order.ProcessedByAdminId = adminId;
                     order.RejectionReason = dto.RejectionReason;
 
+                    // Orders paid from the wallet were already debited at checkout,
+                    // so give that money back (status is guaranteed Pending here,
+                    // which prevents a double refund).
+                    bool paidFromWallet = order.UtrNumber.StartsWith("WALLET-", StringComparison.Ordinal);
+                    if (paidFromWallet)
+                    {
+                        var wallet = await _db.PickupCenterWallets
+                            .FirstOrDefaultAsync(w => w.PickupCenterId == order.PickupCenterId);
+                        if (wallet == null)
+                        {
+                            wallet = new PickupCenterWallet
+                            {
+                                PickupCenterId = order.PickupCenterId,
+                                PucId = order.PucId,
+                                Balance = 0,
+                                CreatedAt = now
+                            };
+                            _db.PickupCenterWallets.Add(wallet);
+                        }
+
+                        wallet.Balance += order.TotalAmount;
+                        wallet.UpdatedAt = now;
+
+                        _db.PickupCenterWalletTransactions.Add(new PickupCenterWalletTransaction
+                        {
+                            PickupCenterId = order.PickupCenterId,
+                            PucId = order.PucId,
+                            Type = WalletTransactionType.Credit,
+                            Amount = order.TotalAmount,
+                            BalanceAfter = wallet.Balance,
+                            Source = "Stock Purchase Refund",
+                            Description = $"Order #{order.Id} rejected by admin — amount refunded",
+                            ReferenceId = $"order-{order.Id}-refund",
+                            CreatedAt = now
+                        });
+                    }
+
+                    // order status + refund are saved together in one SaveChanges (atomic)
                     await _db.SaveChangesAsync();
-                    return Ok(new { message = "Order rejected.", id });
+                    return Ok(new
+                    {
+                        message = paidFromWallet
+                            ? $"Order rejected. ₹{order.TotalAmount:N2} refunded to the pickup center's wallet."
+                            : "Order rejected.",
+                        id
+                    });
                 }
 
                 // --- Accept: move stock from company -> pickup center ---

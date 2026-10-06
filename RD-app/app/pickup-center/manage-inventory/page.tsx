@@ -22,6 +22,7 @@ import {
   UploadCloud,
   Check,
   BadgePercent,
+  Wallet,
 } from "lucide-react";
 import PickupCenterSidebar from "@/components/pickup_centersidebar";
 import PickupCenterTopbar from "@/components/pickup_centertopbar";
@@ -59,6 +60,7 @@ interface Product {
   bv: number;
   imageUrl: string | null;
   isActive: boolean;
+  availableQty: number; // company stock
 }
 
 interface PucStockItem {
@@ -86,6 +88,7 @@ function mapProduct(p: any): Product {
     bv: Number(p.bv ?? p.Bv ?? 0),
     imageUrl: p.imageUrl ?? p.ImageUrl ?? null,
     isActive: p.isActive ?? p.IsActive ?? true,
+    availableQty: Number(p.availableQuantity ?? p.AvailableQuantity ?? 0),
   };
 }
 
@@ -199,6 +202,17 @@ export default function ManageInventoryPage() {
   const [utrNumber, setUtrNumber] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // Pay-with-wallet
+  const [payMethod, setPayMethod] = useState<"wallet" | "upi">("wallet");
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  // Snapshot for the success screen (the cart is cleared before it shows)
+  const [receipt, setReceipt] = useState<{
+    amount: number;
+    discount: number;
+    bv: number;
+    paidWith: "wallet" | "upi";
+  } | null>(null);
+
   useEffect(() => {
     const raw = localStorage.getItem("pucInfo");
     const token = localStorage.getItem("pucToken");
@@ -223,7 +237,22 @@ export default function ManageInventoryPage() {
     fetchPucStock();
     fetchProducts();
     fetchOrderHistoryFlag();
+    fetchWalletBalance();
   }, [puc]);
+
+  // GET /api/PickupCenter/wallet
+  const fetchWalletBalance = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/PickupCenter/wallet`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("pucToken") ?? ""}` },
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setWalletBalance(Number(data?.balance ?? data?.Balance ?? 0));
+    } catch {
+      setWalletBalance(null);
+    }
+  };
 
   // GET /api/PickupCenter/inventory
   // NOTE: the PUC is identified server-side from the JWT (CurrentPucId) —
@@ -256,7 +285,7 @@ export default function ManageInventoryPage() {
     setLoadingProducts(true);
     setProductError("");
     try {
-      const res = await fetch(`${API_BASE}/api/Products`, {
+      const res = await fetch(`${API_BASE}/api/PickupCenter/company-products`, {
         headers: { Authorization: `Bearer ${puc?.token}` },
       });
 
@@ -267,7 +296,11 @@ export default function ManageInventoryPage() {
 
       const data = await res.json();
       const list = Array.isArray(data) ? data : data.products || data.data || [];
-      setProducts(list.map(mapProduct).filter((p: Product) => p.isActive));
+      setProducts(
+        list
+          .map(mapProduct)
+          .filter((p: Product) => p.isActive && p.availableQty > 0)
+      );
     } catch (err) {
       console.warn("Failed to load products", err);
       setProductError("Failed to load products.");
@@ -308,6 +341,10 @@ export default function ManageInventoryPage() {
     setOrderCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
+        if (existing.orderQty >= product.availableQty) {
+          setErrorMsg(`Only ${product.availableQty} unit(s) of '${product.productName}' available.`);
+          return prev;
+        }
         return prev.map((item) =>
           item.id === product.id
             ? { ...item, orderQty: item.orderQty + 1 }
@@ -325,6 +362,10 @@ export default function ManageInventoryPage() {
           if (item.id !== id) return item;
           const newQty = item.orderQty + delta;
           if (newQty <= 0) return null;
+          if (newQty > item.availableQty) {
+            setErrorMsg(`Only ${item.availableQty} unit(s) of '${item.productName}' available.`);
+            return item;
+          }
           return { ...item, orderQty: newQty };
         })
         .filter(Boolean) as OrderCartItem[]
@@ -488,6 +529,12 @@ export default function ManageInventoryPage() {
 
       const data = await res.json().catch(() => null);
       setLastOrderId(data?.id ?? data?.orderId ?? "");
+      setReceipt({
+        amount: totalOrderCost,
+        discount: discountAmount,
+        bv: totalOrderBV,
+        paidWith: "upi",
+      });
       setSuccessMsg(
         `Your payment is under review. You'll be notified once it's verified by our team.`
       );
@@ -498,6 +545,68 @@ export default function ManageInventoryPage() {
       setStep("success");
       // This was (very likely) their first order — refresh the flag so the
       // minimum requirement is lifted for whatever they buy next.
+      fetchOrderHistoryFlag();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // POST /api/PickupCenter/orders/wallet  — JSON { items: [{ productId, quantity }] }
+  // Debits the wallet immediately and creates a PENDING order. Stock is added to
+  // the inventory only after admin approves; if admin rejects, the amount is
+  // refunded to the wallet. The server recomputes every amount itself.
+  const handlePayWithWallet = async () => {
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    if (!meetsMinimum) {
+      setErrorMsg(
+        `Minimum order value for your first order is ₹${MIN_ORDER_VALUE.toLocaleString()}.`
+      );
+      return;
+    }
+    if (walletBalance !== null && walletBalance < totalOrderCost) {
+      setErrorMsg(
+        `Insufficient wallet balance. Add ₹${(totalOrderCost - walletBalance).toFixed(2)} more to your wallet.`
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/PickupCenter/orders/wallet`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${puc?.token}`,
+        },
+        body: JSON.stringify({
+          items: orderCart.map((item) => ({
+            productId: item.id,
+            quantity: item.orderQty,
+          })),
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.message || "Wallet payment failed");
+
+      setLastOrderId(data?.id ?? "");
+      setReceipt({
+        amount: Number(data?.totalAmount ?? totalOrderCost),
+        discount: Number(data?.discountAmount ?? discountAmount),
+        bv: Number(data?.totalBv ?? totalOrderBV),
+        paidWith: "wallet",
+      });
+      if (typeof data?.walletBalance === "number") setWalletBalance(data.walletBalance);
+      setSuccessMsg(
+        data?.message ?? "Amount deducted from your wallet. Your order is awaiting admin approval."
+      );
+      setOrderCart([]);
+      setStep("success");
+      fetchWalletBalance();
       fetchOrderHistoryFlag();
     } catch (err: any) {
       setErrorMsg(err.message || "Something went wrong. Please try again.");
@@ -997,7 +1106,7 @@ export default function ManageInventoryPage() {
                       <div className="flex justify-between text-sm text-gray-600">
                         <span>Total BV</span>
                         <span className="font-semibold text-green-600">
-                          {totalOrderBV} BV
+                          {receipt?.bv ?? 0} BV
                         </span>
                       </div>
                       <div className="flex justify-between text-sm text-gray-600">
@@ -1041,6 +1150,116 @@ export default function ManageInventoryPage() {
 
                   <OrderStepper step="payment" />
 
+                  {errorMsg && (
+                    <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-700">
+                      <XCircle size={14} className="mt-0.5 shrink-0" />
+                      {errorMsg}
+                    </div>
+                  )}
+
+                  {/* Payment method */}
+                  <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-gray-200 bg-white p-1.5 shadow-sm">
+                    {([
+                      ["wallet", "Pay with Wallet", Wallet],
+                      ["upi", "Scan & Pay (UPI)", QrCode],
+                    ] as const).map(([key, label, Icon]) => (
+                      <button
+                        key={key}
+                        onClick={() => { setPayMethod(key); setErrorMsg(""); }}
+                        className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition ${
+                          payMethod === key
+                            ? "bg-blue-600 text-white shadow"
+                            : "text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        <Icon size={15} />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Pay with wallet */}
+                  {payMethod === "wallet" && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                      <h2 className="mb-1 flex items-center gap-2 text-base font-bold text-gray-900">
+                        <Wallet size={18} className="text-blue-600" />
+                        Pay with Wallet
+                      </h2>
+                      <p className="mb-4 text-xs text-gray-500">
+                        The amount is deducted from your wallet now and the order goes
+                        to admin for approval. Products are added to your inventory once
+                        approved; if rejected, the amount is refunded to your wallet.
+                      </p>
+
+                      <div className="mb-4 space-y-2 rounded-xl border border-gray-200 p-4 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Wallet balance</span>
+                          <span className="font-semibold text-gray-900">
+                            {walletBalance === null ? "…" : `₹${walletBalance.toFixed(2)}`}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Order total</span>
+                          <span className="font-semibold text-gray-900">
+                            ₹{totalOrderCost.toFixed(2)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-green-600">
+                          Includes {DISCOUNT_PERCENT}% discount (-₹{discountAmount.toFixed(2)})
+                        </p>
+                        {walletBalance !== null && (
+                          <div className="flex justify-between border-t border-gray-100 pt-2">
+                            <span className="text-gray-500">Balance after payment</span>
+                            <span
+                              className={`font-bold ${
+                                walletBalance >= totalOrderCost ? "text-gray-900" : "text-red-600"
+                              }`}
+                            >
+                              {walletBalance >= totalOrderCost
+                                ? `₹${(walletBalance - totalOrderCost).toFixed(2)}`
+                                : "Insufficient"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {walletBalance !== null && walletBalance < totalOrderCost && (
+                        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] text-amber-700">
+                          <span className="flex items-start gap-1.5">
+                            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                            You need ₹{(totalOrderCost - walletBalance).toFixed(2)} more in your
+                            wallet. Add money, or pay by UPI instead.
+                          </span>
+                          <button
+                            onClick={() => router.push("/pickup-center/wallet")}
+                            className="shrink-0 font-bold underline"
+                          >
+                            Add money
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={handlePayWithWallet}
+                        disabled={
+                          submitting ||
+                          walletBalance === null ||
+                          walletBalance < totalOrderCost
+                        }
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {submitting ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Wallet size={16} />
+                        )}
+                        Pay ₹{totalOrderCost.toFixed(2)} from Wallet
+                      </button>
+                    </div>
+                  )}
+
+                  {payMethod === "upi" && (
+                  <>
                   {/* Scan & Pay card */}
                   <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                     <h2 className="mb-1 flex items-center gap-2 text-base font-bold text-gray-900">
@@ -1170,6 +1389,8 @@ export default function ManageInventoryPage() {
                       Submit Payment
                     </button>
                   </div>
+                  </>
+                  )}
                 </div>
               )}
 
@@ -1184,7 +1405,7 @@ export default function ManageInventoryPage() {
                       className="mx-auto mb-3 text-green-600"
                     />
                     <h2 className="mb-1 text-lg font-bold text-gray-900">
-                      Payment Submitted!
+                      {receipt?.paidWith === "wallet" ? "Order Submitted!" : "Payment Submitted!"}
                     </h2>
                     <p className="mb-6 text-sm text-gray-600">{successMsg}</p>
 
@@ -1198,13 +1419,15 @@ export default function ManageInventoryPage() {
                       <div className="flex justify-between">
                         <span className="text-gray-500">Discount Applied</span>
                         <span className="font-semibold text-green-600">
-                          {DISCOUNT_PERCENT}% (-₹{discountAmount.toFixed(2)})
+                          {DISCOUNT_PERCENT}% (-₹{(receipt?.discount ?? 0).toFixed(2)})
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Amount Paid</span>
+                        <span className="text-gray-500">
+                          {receipt?.paidWith === "wallet" ? "Paid from Wallet" : "Amount Paid"}
+                        </span>
                         <span className="font-semibold text-blue-700">
-                          ₹{totalOrderCost.toFixed(2)}
+                          ₹{(receipt?.amount ?? 0).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -1216,7 +1439,7 @@ export default function ManageInventoryPage() {
                       <div className="flex justify-between">
                         <span className="text-gray-500">Status</span>
                         <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
-                          Pending Verification
+                          {receipt?.paidWith === "wallet" ? "Processing — Awaiting Admin Approval" : "Pending Verification"}
                         </span>
                       </div>
                     </div>

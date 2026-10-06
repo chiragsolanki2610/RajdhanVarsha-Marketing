@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<PickupCenterReturnRequest> PickupCenterReturnRequests => Set<PickupCenterReturnRequest>();
     public DbSet<PickupCenterWallet> PickupCenterWallets => Set<PickupCenterWallet>();
     public DbSet<PickupCenterWalletTransaction> PickupCenterWalletTransactions => Set<PickupCenterWalletTransaction>();
+    public DbSet<PickupCenterTopUpRequest> PickupCenterTopUpRequests => Set<PickupCenterTopUpRequest>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<PlanItem> PlanItems => Set<PlanItem>();
@@ -141,6 +142,20 @@ public class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasIndex(e => e.PickupCenterId);
             entity.HasIndex(e => e.CreatedAt);
+        });
+
+        // --- Pickup center wallet top-ups (UPI payment proof, admin approves) ---
+        modelBuilder.Entity<PickupCenterTopUpRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.UtrNumber).HasMaxLength(30).IsRequired();
+            entity.Property(e => e.ScreenshotContentType).HasMaxLength(50);
+            entity.Property(e => e.RequestedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => e.PucId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.UtrNumber);
         });
 
         modelBuilder.Entity<Product>(entity =>
