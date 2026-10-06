@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckSquare, Banknote, MapPin, ShieldCheck, ChevronRight, PackagePlus, UserSearch, ShoppingCart, Boxes, Undo2 } from 'lucide-react';
+import { CheckSquare, Banknote, MapPin, ShieldCheck, ChevronRight, PackagePlus, UserSearch, ShoppingCart, Boxes, Undo2, Wallet } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import LoginTopbar from '@/components/loginTopbar';
 
@@ -17,6 +17,12 @@ const adminOptions = [
     label: 'Withdrawal Requests',
     description: 'Approve or reject member withdrawal requests.',
     path: '/admin/withdrawal-requests',
+  },
+  {
+    icon: Wallet,
+    label: 'Wallet Top-ups',
+    description: 'Review and approve member wallet top-up requests.',
+    path: '/admin/wallet-topups',
   },
   {
     icon: MapPin,
