@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ChangeEvent, FormEvent, useEffect } from "react";
+import { useState, ChangeEvent, FormEvent, useEffect, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { UploadCloud, CheckCircle2, Loader2, Eye, EyeOff, Camera } from "lucide-react";
@@ -26,10 +26,18 @@ type FormState = {
   centerCity: string;
 };
 
+// We keep a processed (compressed) copy of each image in memory instead of the
+// raw File object. On Android a File is only a temporary pointer that can stop
+// working later; the data URL below is the real image data and always works.
+type StoredImage = {
+  name: string;
+  dataUrl: string;
+};
+
 type FileState = {
-  aadharImage: File | null;
-  panImage: File | null;
-  passbookImage: File | null;
+  aadharImage: StoredImage | null;
+  panImage: StoredImage | null;
+  passbookImage: StoredImage | null;
 };
 
 const initialCredentials: CredentialsState = {
@@ -225,9 +233,228 @@ async function fileToBase64WithRetry(file: File, label: string): Promise<string>
   }
 }
 
-function fileToBase64(file: File | null, label: string): Promise<string | null> {
-  if (!file) return Promise.resolve(null);
-  return fileToBase64WithRetry(file, label);
+// ---------------------------------------------------------------------------
+// Image compression
+//
+// Phone cameras produce 4-12MB photos. Holding them in memory (and again as a
+// base64 string) is heavy, and on low-RAM Android phones it is one reason the
+// browser gets killed while the camera app is open. We shrink every photo to
+// at most 1600px and save it as a JPEG (usually 200-500KB) right after it is
+// picked. This also means the original file is only touched ONCE, at the
+// moment of picking, so a "cloud-only"/expired file can't fail later at submit.
+// ---------------------------------------------------------------------------
+const MAX_IMAGE_DIMENSION = 1600;
+const JPEG_QUALITY = 0.8;
+const MAX_PICKED_FILE_BYTES = 25 * 1024 * 1024; // sanity limit on the original
+
+async function compressImage(file: File): Promise<string> {
+  let bitmap: ImageBitmap | null = null;
+  let objectUrl: string | null = null;
+
+  try {
+    let source: CanvasImageSource;
+    let width: number;
+    let height: number;
+
+    if (typeof createImageBitmap === "function") {
+      try {
+        bitmap = await createImageBitmap(file);
+      } catch {
+        bitmap = null;
+      }
+    }
+
+    if (bitmap) {
+      source = bitmap;
+      width = bitmap.width;
+      height = bitmap.height;
+    } else {
+      // Older browsers: decode through a normal <img> element instead.
+      objectUrl = URL.createObjectURL(file);
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("decode error"));
+        el.src = objectUrl as string;
+      });
+      source = img;
+      width = img.naturalWidth;
+      height = img.naturalHeight;
+    }
+
+    if (!width || !height) throw new Error("empty image");
+
+    const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height));
+    const targetW = Math.round(width * scale);
+    const targetH = Math.round(height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("no canvas");
+
+    // White background so transparent PNGs don't turn black as JPEG.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, targetW, targetH);
+    ctx.drawImage(source, 0, 0, targetW, targetH);
+
+    const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+    canvas.width = 0; // release canvas memory
+    canvas.height = 0;
+
+    if (!dataUrl.startsWith("data:image/")) throw new Error("encode error");
+    return dataUrl;
+  } finally {
+    if (bitmap) bitmap.close();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
+// Turns a picked file into a StoredImage. Tries compression first; if the
+// browser can't decode it, falls back to the plain read (small files only).
+async function processPickedImage(file: File, label: string): Promise<StoredImage> {
+  try {
+    const dataUrl = await compressImage(file);
+    return { name: file.name, dataUrl };
+  } catch {
+    if (file.size <= 5 * 1024 * 1024) {
+      const dataUrl = await fileToBase64WithRetry(file, label);
+      return { name: file.name, dataUrl };
+    }
+    throw new Error(
+      `Couldn't read the ${label} image (${file.name}). Please try "Take Photo" ` +
+        `or pick a photo that is saved on your phone (not only in Google Photos).`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Draft saving (survives the browser being closed / reloaded)
+//
+// On many Android phones the browser is killed in the background while the
+// camera app is open, and the page reloads when the user comes back. React
+// state is lost on reload, so we save the form as the user types and restore
+// it on load.
+//   - text fields      -> localStorage  (small)
+//   - images           -> IndexedDB     (localStorage is too small for images)
+//   - password         -> sessionStorage only (never kept on disk long-term)
+// Every helper below fails silently (private mode, storage full, etc.) so the
+// form still works normally if storage isn't available.
+// ---------------------------------------------------------------------------
+const DRAFT_ACCOUNT_KEY = "pickupCenterDraft_account_v1";
+const DRAFT_FORM_KEY = "pickupCenterDraft_form_v1";
+const DRAFT_PASSWORD_KEY = "pickupCenterDraft_pw_v1";
+const DRAFT_DB_NAME = "pickupCenterDraft";
+const DRAFT_DB_STORE = "images";
+
+function readJson<T>(storage: Storage | undefined, key: string): T | null {
+  try {
+    const raw = storage?.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(storage: Storage | undefined, key: string, value: unknown) {
+  try {
+    storage?.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage full or blocked - ignore */
+  }
+}
+
+function openDraftDb(): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
+    try {
+      if (typeof indexedDB === "undefined") return resolve(null);
+      const req = indexedDB.open(DRAFT_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(DRAFT_DB_STORE)) {
+          req.result.createObjectStore(DRAFT_DB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function saveDraftImage(key: keyof FileState, value: StoredImage | null) {
+  const db = await openDraftDb();
+  if (!db) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(DRAFT_DB_STORE, "readwrite");
+      const store = tx.objectStore(DRAFT_DB_STORE);
+      if (value) store.put(value, key);
+      else store.delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+  db.close();
+}
+
+async function loadDraftImages(): Promise<Partial<FileState>> {
+  const db = await openDraftDb();
+  if (!db) return {};
+  const keys: (keyof FileState)[] = ["aadharImage", "panImage", "passbookImage"];
+  const result: Partial<FileState> = {};
+  await Promise.all(
+    keys.map(
+      (key) =>
+        new Promise<void>((resolve) => {
+          try {
+            const req = db
+              .transaction(DRAFT_DB_STORE, "readonly")
+              .objectStore(DRAFT_DB_STORE)
+              .get(key);
+            req.onsuccess = () => {
+              const v = req.result as StoredImage | undefined;
+              if (v && typeof v.dataUrl === "string") result[key] = v;
+              resolve();
+            };
+            req.onerror = () => resolve();
+          } catch {
+            resolve();
+          }
+        })
+    )
+  );
+  db.close();
+  return result;
+}
+
+async function clearAllDrafts() {
+  try {
+    localStorage.removeItem(DRAFT_ACCOUNT_KEY);
+    localStorage.removeItem(DRAFT_FORM_KEY);
+    sessionStorage.removeItem(DRAFT_PASSWORD_KEY);
+  } catch {
+    /* ignore */
+  }
+  const db = await openDraftDb();
+  if (!db) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(DRAFT_DB_STORE, "readwrite");
+      tx.objectStore(DRAFT_DB_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+  db.close();
 }
 
 // Pull a readable message out of an API error response. ASP.NET Core's
@@ -311,6 +538,52 @@ function ApplyFlow() {
   const [credError, setCredError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+
+  // Restore a saved draft (if the browser was closed/reloaded mid-way).
+  // Done in an effect so server and client render the same HTML first.
+  useEffect(() => {
+    const saved = readJson<{ step: "credentials" | "details"; username: string; phone: string }>(
+      localStorage,
+      DRAFT_ACCOUNT_KEY
+    );
+    const savedPw = readJson<{ password: string; confirmPassword: string }>(
+      typeof sessionStorage === "undefined" ? undefined : sessionStorage,
+      DRAFT_PASSWORD_KEY
+    );
+    if (saved) {
+      const restored: CredentialsState = {
+        username: saved.username ?? "",
+        phone: saved.phone ?? "",
+        password: savedPw?.password ?? "",
+        confirmPassword: savedPw?.confirmPassword ?? "",
+      };
+      setCredentials(restored);
+      if (saved.step === "details") {
+        if (restored.password.length >= 6 && restored.password === restored.confirmPassword) {
+          setStep("details");
+        } else {
+          // Password is not kept on disk, so ask for it again.
+          setCredError("Your session was restored. Please re-enter your password to continue.");
+        }
+      }
+    }
+    setDraftLoaded(true);
+  }, []);
+
+  // Save account step as the user types (only after the restore has run).
+  useEffect(() => {
+    if (!draftLoaded) return;
+    writeJson(localStorage, DRAFT_ACCOUNT_KEY, {
+      step,
+      username: credentials.username,
+      phone: credentials.phone,
+    });
+    writeJson(typeof sessionStorage === "undefined" ? undefined : sessionStorage, DRAFT_PASSWORD_KEY, {
+      password: credentials.password,
+      confirmPassword: credentials.confirmPassword,
+    });
+  }, [draftLoaded, step, credentials]);
 
   const handleCredChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -466,6 +739,34 @@ function ApplyForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [processingImage, setProcessingImage] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const submittedRef = useRef(false); // stops the auto-save from re-saving after a successful submit
+
+  // Restore saved text fields + images after a browser restart/reload.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const savedForm = readJson<Partial<FormState>>(localStorage, DRAFT_FORM_KEY);
+      if (savedForm && !cancelled) {
+        setForm((prev) => ({ ...prev, ...savedForm }));
+      }
+      const savedImages = await loadDraftImages();
+      if (!cancelled && Object.keys(savedImages).length) {
+        setFiles((prev) => ({ ...prev, ...savedImages }));
+      }
+      if (!cancelled) setDraftLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Auto-save text fields on every change.
+  useEffect(() => {
+    if (!draftLoaded || submittedRef.current) return;
+    writeJson(localStorage, DRAFT_FORM_KEY, form);
+  }, [draftLoaded, form]);
 
   // --- sponsor lookup state ---
   type SponsorLookupStatus = "idle" | "loading" | "found" | "not-found";
@@ -535,30 +836,40 @@ function ApplyForm({
   const handleFile = (key: keyof FileState) => async (e: ChangeEvent<HTMLInputElement>) => {
     const input = e.target;
     const file = input.files?.[0] ?? null;
-    if (file && file.size > 5 * 1024 * 1024) {
-      setError("Each image must be under 5MB.");
+    if (!file) return;
+
+    if (file.size > MAX_PICKED_FILE_BYTES) {
+      setError("That image is too large. Please choose a smaller photo.");
       input.value = "";
       return;
     }
-    setError(null);
-    setFiles((prev) => ({ ...prev, [key]: file }));
 
-    // Try reading it right away so a cloud-only / unreadable photo is caught
-    // the moment it's picked, not after the whole form is filled in.
-    if (file) {
-      try {
-        await fileToBase64WithRetry(file, FILE_LABELS[key]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to read that file.");
-        setFiles((prev) => ({ ...prev, [key]: null }));
-        input.value = "";
-      }
+    setError(null);
+    setProcessingImage(true);
+    try {
+      // Read + shrink the photo right now, while the file is still readable,
+      // and keep the result. Submit will use this copy, not the original file.
+      const stored = await processPickedImage(file, FILE_LABELS[key]);
+      setFiles((prev) => ({ ...prev, [key]: stored }));
+      void saveDraftImage(key, stored); // survive a browser restart
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to read that file.");
+      setFiles((prev) => ({ ...prev, [key]: null }));
+      void saveDraftImage(key, null);
+    } finally {
+      setProcessingImage(false);
+      input.value = ""; // lets the user pick the same photo again if needed
     }
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (processingImage) {
+      setError("Please wait, your photo is still being processed.");
+      return;
+    }
 
     if (!files.aadharImage || !files.panImage || !files.passbookImage) {
       setError("Please upload Aadhar card, PAN card, and passbook images.");
@@ -577,12 +888,11 @@ function ApplyForm({
 
     setSubmitting(true);
     try {
-      // Read files one at a time (not Promise.all) so that if one fails we
-      // know immediately which document caused it, and don't leave the
-      // other two reads dangling.
-      const aadharImageBase64 = await fileToBase64(files.aadharImage, "Aadhar card");
-      const panImageBase64 = await fileToBase64(files.panImage, "PAN card");
-      const passbookImageBase64 = await fileToBase64(files.passbookImage, "passbook");
+      // The images were already read and compressed when they were picked,
+      // so there is nothing left to read from the phone here.
+      const aadharImageBase64 = files.aadharImage.dataUrl;
+      const panImageBase64 = files.panImage.dataUrl;
+      const passbookImageBase64 = files.passbookImage.dataUrl;
 
       const res = await fetch("https://rd-api-j7zj.onrender.com/api/PickupCenter/apply", {
         method: "POST",
@@ -616,6 +926,8 @@ function ApplyForm({
         throw new Error(message);
       }
 
+      submittedRef.current = true;
+      void clearAllDrafts();
       setSubmitted(true);
       setForm(initialForm);
       setFiles(initialFiles);
@@ -876,11 +1188,15 @@ function ApplyForm({
 
       <button
         type="submit"
-        disabled={submitting}
+        disabled={submitting || processingImage}
         className="flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {submitting && <Loader2 size={16} className="animate-spin" />}
-        {submitting ? "Submitting..." : "Submit Application"}
+        {(submitting || processingImage) && <Loader2 size={16} className="animate-spin" />}
+        {submitting
+          ? "Submitting..."
+          : processingImage
+          ? "Processing photo..."
+          : "Submit Application"}
       </button>
     </form>
   );
@@ -1013,7 +1329,7 @@ function FileField({
   required,
 }: {
   label: string;
-  file: File | null;
+  file: { name: string } | null;
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
   required?: boolean;
 }) {
@@ -1046,17 +1362,16 @@ function FileField({
           />
         </label>
 
-        {/* Choose File — uses explicit extensions/MIME types instead of
-            "image/*". On Android Chrome, "image/*" opens the Google Photos
-            picker (which can hand back cloud-only files that can't be
-            read), while a specific list usually opens the system file
-            browser, where users pick files that are really on the device. */}
+        {/* Choose File — plain "image/*" gives the normal gallery picker on
+            every phone. Photos are read and compressed the moment they are
+            picked (see handleFile), so cloud-only/expired files are caught
+            immediately and never fail later at submit. */}
         <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 transition hover:border-blue-500 hover:bg-blue-50">
           <UploadCloud size={18} className="shrink-0 text-blue-600" />
           <span>Choose File</span>
           <input
             type="file"
-            accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+            accept="image/*"
             onChange={onChange}
             required={required && !file}
             className="hidden"
@@ -1065,8 +1380,8 @@ function FileField({
       </div>
 
       <p className="mt-1 text-xs text-gray-400">
-        JPG/PNG, max 5MB. If &quot;Choose File&quot; opens Google Photos and
-        fails, open the photo in Google Photos, tap ⋮ and choose
+        JPG/PNG photos. Large photos are shrunk automatically. If a photo from
+        Google Photos fails, open it in Google Photos, tap ⋮ and choose
         &quot;Download&quot;, or use &quot;Take Photo&quot;.
       </p>
     </div>
