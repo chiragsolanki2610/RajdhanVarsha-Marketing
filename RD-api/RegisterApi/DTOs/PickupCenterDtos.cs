@@ -210,6 +210,48 @@ namespace RegisterApi.DTOs
         public decimal TotalBv { get; set; }
         public bool ReceiptAvailable { get; set; }
     }
+    // GET /api/PickupCenter/sell-history — one line item inside a sale
+    public class PucSellHistoryItemDto
+    {
+        public string ProductName { get; set; } = string.Empty;
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+
+    // GET /api/PickupCenter/sell-history — one sale (one PaymentOrder)
+    public class PucSellHistoryRowDto
+    {
+        public int OrderId { get; set; }
+        public string OrderNo { get; set; } = string.Empty;
+        public string Source { get; set; } = string.Empty;   // "Counter Sale" | "Plan Activation" | "Online Order"
+        public string PlanType { get; set; } = string.Empty;
+        public string CustomerId { get; set; } = string.Empty;
+        public string CustomerName { get; set; } = string.Empty;
+        public string? CustomerPhone { get; set; }
+        public string? PaymentMethod { get; set; }
+        public List<PucSellHistoryItemDto> Items { get; set; } = new();
+        public decimal TotalItems { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal TotalBv { get; set; }
+        public DateTime SoldAt { get; set; }
+        public bool ReceiptAvailable { get; set; }
+    }
+
+    public class PucSellHistorySummaryDto
+    {
+        public int TotalSales { get; set; }
+        public decimal TotalItemsSold { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal TotalBv { get; set; }
+    }
+
+    public class PucSellHistoryResponseDto
+    {
+        public PucSellHistorySummaryDto Summary { get; set; } = new();
+        public List<PucSellHistoryRowDto> Sales { get; set; } = new();
+    }
+
     public class PickupCenterSummaryDto
     {
         public string PucId { get; set; } = string.Empty;

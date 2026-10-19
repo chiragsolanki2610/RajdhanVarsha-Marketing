@@ -16,6 +16,7 @@ import {
   Wallet,
   Store,
   Boxes,
+  ClipboardList,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -50,6 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Sell',          icon: ShoppingCart, path: '/pickup-center/sell' },
       { label: 'Plan Manager',  icon: Layers,       path: '/pickup-center/plan-manager' },
       { label: 'Order Request', icon: FileText,     path: '/pickup-center/order-request' },
+      { label: 'Sell History',  icon: ClipboardList, path: '/pickup-center/sell-history' },
     ],
   },
   {

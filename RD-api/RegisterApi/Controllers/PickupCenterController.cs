@@ -957,6 +957,157 @@ namespace RegisterApi.Controllers
             });
         }
 
+        // ─────────────────────────────────────────────────────────────────────
+        // GET /api/PickupCenter/sell-history
+        // Every completed sale of THIS pickup center:
+        //   • Counter Sale     – instant sales from the Sell page      (SoldByPucId)
+        //   • Plan Activation  – sales made via Plan Manager           (SoldByPucId)
+        //   • Online Order     – customer orders routed to this center
+        //                        that the center ACCEPTED              (SelectedPucId)
+        // No new table: all of this already lives in PaymentOrders.
+        // ─────────────────────────────────────────────────────────────────────
+        [HttpGet("sell-history")]
+        [Authorize(Roles = "PickupCenter")]
+        public async Task<IActionResult> GetSellHistory()
+        {
+            var pucId = CurrentPucId;
+
+            var center = await _db.PickupCenters.AsNoTracking().FirstOrDefaultAsync(c => c.PucId == pucId);
+            if (center == null) return NotFound(new { message = "Pickup center not found." });
+
+            // History window: only the last 2 months are ever returned.
+            var cutoffUtc = DateTime.UtcNow.AddMonths(-2);
+
+            // Project only the columns we need — NEVER load ReceiptPdf / ScreenshotUrl here
+            // (they are large blobs and would make this list very slow).
+            var orders = await _db.PaymentOrders
+                .AsNoTracking()
+                .Where(o => o.Status == PaymentOrderStatus.Approved &&
+                            (o.SoldByPucId == pucId ||
+                             (o.SelectedPucId == pucId && o.PickupCenterDecision == "Accepted")) &&
+                            (o.ProcessedAt ?? o.RequestedAt) >= cutoffUtc)
+                .OrderByDescending(o => o.ProcessedAt ?? o.RequestedAt)
+                .Take(2000)
+                .Select(o => new
+                {
+                    o.Id,
+                    o.UserId,
+                    o.PlanType,
+                    o.TotalAmount,
+                    o.TotalBv,
+                    o.CartItemsJson,
+                    o.ReceiptItemsJson,
+                    o.RequestedAt,
+                    o.ProcessedAt,
+                    o.SoldByPucId,
+                    o.AdminRemarks,
+                    HasReceipt = o.ReceiptPdf != null
+                })
+                .ToListAsync();
+
+            var userIds = orders.Select(o => o.UserId).Distinct().ToList();
+            var users = await _db.Users
+                .AsNoTracking()
+                .Where(u => userIds.Contains(u.UserId))
+                .Select(u => new { u.UserId, u.Name, u.MobileNo })
+                .ToDictionaryAsync(u => u.UserId);
+
+            var rows = new List<PucSellHistoryRowDto>();
+            foreach (var o in orders)
+            {
+                // Prefer the normalized receipt snapshot (has product names for every
+                // flow); fall back to the original cart JSON for online orders.
+                var parsed = CartItemParser.Parse(o.ReceiptItemsJson);
+                if (parsed.Count == 0) parsed = CartItemParser.Parse(o.CartItemsJson);
+
+                var items = parsed.Select(i =>
+                {
+                    var qty = i.Quantity ?? 0;
+                    var price = i.UnitPrice ?? 0;
+                    return new PucSellHistoryItemDto
+                    {
+                        ProductName = i.Name,
+                        Quantity = qty,
+                        UnitPrice = price,
+                        LineTotal = qty * price
+                    };
+                }).ToList();
+
+                string source;
+                string? paymentMethod = null;
+                if (!string.IsNullOrEmpty(o.SoldByPucId))
+                {
+                    var remarks = o.AdminRemarks ?? string.Empty;
+                    source = remarks.StartsWith("Plan activated", StringComparison.OrdinalIgnoreCase)
+                        ? "Plan Activation"
+                        : "Counter Sale";
+
+                    // Remarks end with "— cash." / "— upi." / "— wallet."
+                    var idx = remarks.LastIndexOf('—');
+                    if (idx >= 0)
+                        paymentMethod = remarks[(idx + 1)..].Trim().TrimEnd('.').ToLowerInvariant();
+                }
+                else
+                {
+                    source = "Online Order";
+                }
+
+                users.TryGetValue(o.UserId, out var u);
+
+                rows.Add(new PucSellHistoryRowDto
+                {
+                    OrderId = o.Id,
+                    OrderNo = $"ORD-{o.Id:D6}",
+                    Source = source,
+                    PlanType = o.PlanType,
+                    CustomerId = o.UserId,
+                    CustomerName = u?.Name ?? o.UserId,
+                    CustomerPhone = u?.MobileNo,
+                    PaymentMethod = paymentMethod,
+                    Items = items,
+                    TotalItems = items.Sum(i => i.Quantity),
+                    TotalAmount = o.TotalAmount,
+                    TotalBv = o.TotalBv,
+                    SoldAt = o.ProcessedAt ?? o.RequestedAt,
+                    // Receipt PDFs are only downloadable here for sales this center made itself.
+                    ReceiptAvailable = o.HasReceipt && !string.IsNullOrEmpty(o.SoldByPucId)
+                });
+            }
+
+            return Ok(new PucSellHistoryResponseDto
+            {
+                Summary = new PucSellHistorySummaryDto
+                {
+                    TotalSales = rows.Count,
+                    TotalItemsSold = rows.Sum(r => r.TotalItems),
+                    TotalAmount = rows.Sum(r => r.TotalAmount),
+                    TotalBv = rows.Sum(r => r.TotalBv)
+                },
+                Sales = rows
+            });
+        }
+
+        // GET /api/PickupCenter/sell-history/{id}/receipt
+        // Lets a pickup center re-download the receipt of a sale IT made.
+        // (The existing /api/Orders/{id}/receipt only allows the buyer or an admin.)
+        [HttpGet("sell-history/{id:int}/receipt")]
+        [Authorize(Roles = "PickupCenter")]
+        public async Task<IActionResult> DownloadSaleReceipt(int id)
+        {
+            var pucId = CurrentPucId;
+
+            var pdf = await _db.PaymentOrders
+                .AsNoTracking()
+                .Where(o => o.Id == id && o.SoldByPucId == pucId)
+                .Select(o => o.ReceiptPdf)
+                .FirstOrDefaultAsync();
+
+            if (pdf == null)
+                return NotFound(new { message = "Receipt is not available for this sale." });
+
+            return File(pdf, "application/pdf", $"Receipt-ORD-{id:D6}.pdf");
+        }
+
         public static PickupCenterOrderDto MapOrderToDto(PickupCenterOrder o)
         {
             var items = new List<PickupCenterOrderItemDto>();

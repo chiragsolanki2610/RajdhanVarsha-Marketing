@@ -14,6 +14,7 @@ const DESCRIPTIONS: Record<string, string> = {
   "/pickup-center/sell": "Create a new sale for a customer",
   "/pickup-center/plan-manager": "Activate a Dream or Binary Plan for a member",
   "/pickup-center/order-request": "View and handle incoming order requests",
+  "/pickup-center/sell-history": "See every item your center has sold",
   "/pickup-center/manage-inventory": "Check your stock and buy from the company",
   "/pickup-center/return": "Process product returns",
 };
