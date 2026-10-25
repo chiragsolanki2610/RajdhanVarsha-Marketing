@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -54,6 +54,10 @@ namespace RegisterApi.Controllers
         public async Task<IActionResult> Apply([FromBody] PickupCenterApplyDto dto)
         {
             var username = dto.Username.Trim();
+            var phone = dto.Phone.Trim();
+
+            if (await IsPhoneTakenAsync(phone))
+                return Conflict(new { message = "This phone number is already registered with another pickup center." });
 
             bool takenByCenter = await _db.PickupCenters.AnyAsync(p => p.Username == username);
             bool takenByPendingRequest = await _db.PickupCenterRequests
@@ -66,7 +70,7 @@ namespace RegisterApi.Controllers
             {
                 Username = username,
                 PasswordHash = _passwordService.HashPassword(dto.Password),
-                Phone = dto.Phone.Trim(),
+                Phone = phone,
                 FullName = dto.FullName.Trim(),
                 SponsorId = string.IsNullOrWhiteSpace(dto.SponsorId) ? null : dto.SponsorId.Trim(),
                 SponsorName = string.IsNullOrWhiteSpace(dto.SponsorName) ? null : dto.SponsorName.Trim(),
@@ -91,18 +95,45 @@ namespace RegisterApi.Controllers
             return Ok(new { message = "Application submitted successfully. You'll be able to log in once it's approved.", id = request.Id });
         }
 
+        // A phone number is "taken" if an existing center uses it, or a still-pending
+        // application uses it. Rejected applications free the number up again.
+        private async Task<bool> IsPhoneTakenAsync(string phone)
+        {
+            return await _db.PickupCenters.AnyAsync(p => p.Phone == phone)
+                || await _db.PickupCenterRequests.AnyAsync(r => r.Phone == phone && r.Status == "Pending");
+        }
+
+        // GET /api/PickupCenter/check-phone?phone=9876543210
+        [HttpGet("check-phone")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CheckPhone([FromQuery] string phone)
+        {
+            if (string.IsNullOrWhiteSpace(phone))
+                return BadRequest(new { message = "Phone is required." });
+            return Ok(new { available = !await IsPhoneTakenAsync(phone.Trim()) });
+        }
+
         // POST /api/PickupCenter/login
+        // The login field accepts the Pickup Center ID (e.g. RDPUC2001) or the phone number. Username login is not allowed.
         [HttpPost("login")]
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] PickupCenterLoginDto dto)
         {
-            var username = dto.Username.Trim();
+            var identifier = dto.Username.Trim();
+            var identifierUpper = identifier.ToUpper();
 
-            var center = await _db.PickupCenters.FirstOrDefaultAsync(p => p.Username == username);
+            // Older data may have several centers sharing one phone number, so load every
+            // match and pick the one whose password is correct.
+            var candidates = await _db.PickupCenters
+                .Where(p => p.PucId.ToUpper() == identifierUpper || p.Phone == identifier)
+                .ToListAsync();
+
+            var center = candidates.FirstOrDefault(c => _passwordService.VerifyPassword(dto.Password, c.PasswordHash))
+                         ?? candidates.FirstOrDefault();
             if (center != null)
             {
                 if (!_passwordService.VerifyPassword(dto.Password, center.PasswordHash))
-                    return Unauthorized(new { message = "Invalid username or password." });
+                    return Unauthorized(new { message = "Invalid login details or password." });
 
                 if (center.Status != "Active")
                     return Unauthorized(new { message = "Your pickup center account is suspended. Contact support." });
@@ -119,7 +150,7 @@ namespace RegisterApi.Controllers
             }
 
             var latestRequest = await _db.PickupCenterRequests
-                .Where(r => r.Username == username)
+                .Where(r => r.Phone == identifier)
                 .OrderByDescending(r => r.SubmittedAt)
                 .FirstOrDefaultAsync();
 
@@ -132,7 +163,7 @@ namespace RegisterApi.Controllers
                     return Unauthorized(new { message = "Your request is rejected, try again." });
             }
 
-            return Unauthorized(new { message = "Invalid username or password." });
+            return Unauthorized(new { message = "Invalid login details or password." });
         }
 
         [HttpGet("profile")]
