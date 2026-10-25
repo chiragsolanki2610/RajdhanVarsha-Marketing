@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import jsPDF from 'jspdf';
 import { useRouter } from 'next/navigation';
 import {
   RefreshCw,
@@ -27,6 +28,7 @@ interface SaleItem {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  bv?: number;
 }
 
 interface Sale {
@@ -53,6 +55,224 @@ const sourceStyles: Record<Source, { badge: string; dot: string }> = {
 };
 
 const SOURCES: Source[] = ['Counter Sale', 'Plan Activation', 'Online Order'];
+
+
+// ─── Tax-invoice receipt (same layout as the member order-history invoice) ────
+const COMPANY = {
+  name: 'RAJ DHANVARSHA',
+  address1: 'Gali No.3 Near Tailor Market, Azad Nagar, Hisar, Haryana',
+  contact: 'Contact No.: +91-7404526380  |  Email: info@rajdhanvarsha.in',
+  gstNo: 'YOUR-GST-NUMBER',
+};
+
+function buildInvoicePDF(sale: Sale): jsPDF {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 40;
+  let y = 36;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(0, 0, 0);
+  doc.text(COMPANY.name, pageW / 2, y, { align: 'center' });
+  y += 18;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(50, 50, 50);
+  doc.text(COMPANY.address1, pageW / 2, y, { align: 'center' });
+  y += 12;
+  doc.text(COMPANY.contact, pageW / 2, y, { align: 'center' });
+  y += 13;
+
+  doc.setTextColor(0, 0, 0);
+  doc.text(`GST No.: ${COMPANY.gstNo}`, margin, y);
+  doc.text('FSSAI Licence No.: 20821006001885', pageW - margin, y, { align: 'right' });
+  y += 10;
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(1);
+  doc.line(margin, y, pageW - margin, y);
+  y += 2;
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageW - margin, y);
+  y += 12;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('TAX INVOICE', pageW / 2, y, { align: 'center' });
+  y += 6;
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageW - margin, y);
+  y += 14;
+
+  const labelX = margin + 5;
+  const colonX = margin + 115;
+  const valueX = margin + 122;
+
+  const invoiceDate = new Date(sale.soldAt).toLocaleDateString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+
+  const infoRows: [string, string][] = [
+    ['ID/Reference No.', sale.customerId || '—'],
+    ['Name', sale.customerName || '—'],
+    ['Phone', sale.customerPhone || '—'],
+    ['Invoice No.', String(sale.orderId)],
+    ['Invoice Date', invoiceDate],
+    ['UTR / Ref No.', (sale.paymentMethod || '—').toUpperCase()],
+  ];
+
+  doc.setFontSize(9.5);
+  infoRows.forEach(([label, value]) => {
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(40, 40, 40);
+    doc.text(label, labelX, y);
+    doc.text(':', colonX, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text(value, valueX, y);
+    y += 15;
+  });
+
+  y += 4;
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
+  y += 12;
+
+  const C = {
+    product: margin + 2, qty: margin + 175, rate: margin + 215, bv: margin + 265,
+    sgst: margin + 305, cess: margin + 345, totalTax: margin + 385,
+    hsn: margin + 2, amount: margin + 175, totalBv: margin + 215, cgst: margin + 305,
+    totalAmt: pageW - margin - 5,
+  };
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('Product Name', C.product, y);
+  doc.text('Qty', C.qty, y);
+  doc.text('Rate', C.rate, y);
+  doc.text('B.V.', C.bv, y);
+  doc.text('SGST%', C.sgst, y);
+  doc.text('Cess%', C.cess, y);
+  doc.text('Total Tax', C.totalTax, y);
+  y += 11;
+  doc.text('HSNCode', C.hsn, y);
+  doc.text('Amount', C.amount, y);
+  doc.text('Total B.V.', C.totalBv, y);
+  doc.text('CGST%', C.cgst, y);
+  doc.text('Total Amount', C.totalAmt, y, { align: 'right' });
+  y += 6;
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
+  y += 10;
+
+  let sumBv = 0;
+  let sumAmt = 0;
+
+  sale.items.forEach((item) => {
+    if (y > pageH - 160) {
+      doc.addPage();
+      y = 40;
+    }
+    const qty = item.quantity;
+    const rate = item.unitPrice;
+    const lineAmt = rate * qty;
+    const bvUnit = item.bv ?? 0;
+    const bvTotal = bvUnit * qty;
+    sumBv += bvTotal;
+    sumAmt += lineAmt;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+    const productLines = doc.splitTextToSize(item.productName, 160) as string[];
+    doc.text(productLines, C.product, y);
+    y += productLines.length > 1 ? 12 : 0;
+
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(qty), C.qty, y);
+    doc.text(rate.toFixed(2), C.rate, y);
+    doc.text(String(bvUnit), C.bv, y);
+    doc.text('0.00', C.sgst, y);
+    doc.text('0.00', C.cess, y);
+    doc.text('0.00', C.totalTax, y);
+    y += 12;
+
+    doc.text('15159040', C.hsn, y);
+    doc.text(lineAmt.toFixed(2), C.amount, y);
+    doc.text(String(bvTotal), C.totalBv, y);
+    doc.text('0.00', C.cgst, y);
+    doc.text(lineAmt.toFixed(2), C.totalAmt, y, { align: 'right' });
+    y += 14;
+
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y, pageW - margin, y);
+    doc.setDrawColor(0, 0, 0);
+    y += 8;
+  });
+
+  y += 4;
+  const sumLabelX = margin + 10;
+  const sumColon = pageW - margin - 90;
+  const sumValX = pageW - margin - 5;
+  const total = sale.totalAmount ?? sumAmt;
+  const totalBv = sale.totalBv ?? sumBv;
+
+  const summaryRows: [string, string, boolean][] = [
+    ['Total Amount', total.toFixed(2), false],
+    ['CGST Amount', '0', false],
+    ['SGST Amount', '0', false],
+    ['Other Tax/Cess', '0.00', false],
+    ['Total B.V.', totalBv.toFixed(1), true],
+    ['Bill Value', total.toFixed(2), true],
+  ];
+
+  doc.setFontSize(9);
+  summaryRows.forEach(([label, value, bold]) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.text(label, sumLabelX, y);
+    doc.text(':', sumColon, y);
+    doc.text(value, sumValX, y, { align: 'right' });
+    y += 13;
+  });
+
+  y += 4;
+  doc.setLineWidth(0.8);
+  doc.line(margin, y, pageW - margin, y);
+  y += 13;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Net Amount Payable', sumLabelX, y);
+  doc.text(':', sumColon, y);
+  doc.text(total.toFixed(2), sumValX, y, { align: 'right' });
+  y += 5;
+  doc.line(margin, y, pageW - margin, y);
+  y += 20;
+
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(80, 80, 80);
+  doc.text(`Remarks: ${sale.source}${sale.paymentMethod ? ' — ' + sale.paymentMethod : ''}`, margin + 5, y);
+
+  const sigY = Math.max(y + 40, pageH - 80);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(pageW - margin - 110, sigY, pageW - margin, sigY);
+  doc.text('Authorised Signatory', pageW - margin, sigY + 12, { align: 'right' });
+
+  doc.setFontSize(7.5);
+  doc.setTextColor(120, 120, 120);
+  doc.text(
+    `Raj Dhan Varsha  |  Computer-generated receipt  |  Generated: ${new Date().toLocaleString('en-IN')}`,
+    pageW / 2, pageH - 18, { align: 'center' },
+  );
+  return doc;
+}
 
 const inr = (n: number) => `₹${(n ?? 0).toLocaleString('en-IN')}`;
 
@@ -214,24 +434,14 @@ export default function SellHistoryPage() {
   };
 
   const downloadReceipt = async (sale: Sale) => {
-    const token = getToken();
-    if (!token) {
-      router.replace('/pickup-center');
-      return;
-    }
     setDownloadingId(sale.orderId);
     try {
-      const res = await fetch(
-        `${API_BASE}/api/PickupCenter/sell-history/${sale.orderId}/receipt`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) throw new Error('Receipt is not available for this sale.');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const doc = buildInvoicePDF(sale);
+      const url = URL.createObjectURL(doc.output('blob'));
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e: any) {
-      alert(e?.message || 'Could not download receipt.');
+      alert(e?.message || 'Could not open receipt.');
     } finally {
       setDownloadingId(null);
     }
