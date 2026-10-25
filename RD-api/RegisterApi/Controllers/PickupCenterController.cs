@@ -1043,6 +1043,14 @@ namespace RegisterApi.Controllers
                 .Select(u => new { u.UserId, u.Name, u.MobileNo })
                 .ToDictionaryAsync(u => u.UserId);
 
+            // BV per unit by product name (the stored item JSON has no BV), for the invoice receipt.
+            var bvByName = (await _db.Products
+                    .AsNoTracking()
+                    .Select(p => new { p.ProductName, p.Bv })
+                    .ToListAsync())
+                .GroupBy(p => p.ProductName)
+                .ToDictionary(g => g.Key, g => g.First().Bv);
+
             var rows = new List<PucSellHistoryRowDto>();
             foreach (var o in orders)
             {
@@ -1060,7 +1068,8 @@ namespace RegisterApi.Controllers
                         ProductName = i.Name,
                         Quantity = qty,
                         UnitPrice = price,
-                        LineTotal = qty * price
+                        LineTotal = qty * price,
+                        Bv = bvByName.TryGetValue(i.Name, out var unitBv) ? unitBv : 0
                     };
                 }).ToList();
 
