@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RegisterApi.Data;
@@ -109,6 +109,9 @@ namespace RegisterApi.Controllers
                 if (request == null) return NotFound(new { message = "Pickup center request not found." });
                 if (request.Status != "Pending")
                     return BadRequest(new { message = $"This request has already been {request.Status.ToLower()}." });
+
+                if (await _db.PickupCenters.AnyAsync(c => c.Phone == request.Phone))
+                    return Conflict(new { message = "A pickup center with this phone number already exists. Reject this request." });
 
                 var pucId = await _idGenerator.GenerateNextPucIdAsync();
 
