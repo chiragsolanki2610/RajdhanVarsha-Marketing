@@ -590,7 +590,7 @@ function ApplyFlow() {
     setCredentials((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleCredSubmit = (e: FormEvent) => {
+  const handleCredSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setCredError(null);
 
@@ -609,6 +609,21 @@ function ApplyFlow() {
     if (credentials.password !== credentials.confirmPassword) {
       setCredError("Passwords do not match.");
       return;
+    }
+
+    try {
+      const res = await fetch(
+        `https://rd-api-j7zj.onrender.com/api/PickupCenter/check-phone?phone=${encodeURIComponent(credentials.phone.trim())}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.available === false) {
+          setCredError("This phone number is already registered with another pickup center.");
+          return;
+        }
+      }
+    } catch {
+      /* network hiccup - the server re-checks on submit */
     }
 
     setStep("details");
@@ -1214,16 +1229,24 @@ function LoginForm() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Only a Pickup Center ID (e.g. RDPUC2001) or a 10-digit phone number is accepted.
+    const loginId = username.trim();
+    if (!/^RDPUC\d+$/i.test(loginId) && !/^[0-9]{10}$/.test(loginId)) {
+      setError("Enter your Pickup Center ID (e.g. RDPUC2001) or your 10-digit phone number.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch("https://rd-api-j7zj.onrender.com/api/PickupCenter/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: loginId, password }),
       });
 
       if (!res.ok) {
-        const message = await extractErrorMessage(res, "Invalid username or password.");
+        const message = await extractErrorMessage(res, "Invalid login details or password.");
         throw new Error(message);
       }
 
@@ -1248,11 +1271,11 @@ function LoginForm() {
       </h3>
 
       <TextField
-        label="Username"
+        label="Pickup Center ID / Phone Number"
         name="username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
-        placeholder="Enter your username"
+        placeholder="Enter Pickup Center ID or phone number"
         required
       />
 
