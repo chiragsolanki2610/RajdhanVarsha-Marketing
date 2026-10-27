@@ -1115,6 +1115,8 @@ namespace RegisterApi.Controllers
                     CustomerName = u?.Name ?? o.UserId,
                     CustomerPhone = u?.MobileNo,
                     PaymentMethod = paymentMethod,
+                    PickupCenterId = center.PucId,
+                    PickupCenterName = center.CenterName,
                     Items = items,
                     TotalItems = items.Sum(i => i.Quantity),
                     TotalAmount = rowTotal,
