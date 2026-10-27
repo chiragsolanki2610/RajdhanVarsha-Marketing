@@ -269,10 +269,11 @@ namespace RegisterApi.Controllers
             foreach (var item in dto.Items)
             {
                 var product = products.First(p => p.Id == item.ProductId);
-                totalAmount += product.Mrp * item.Quantity;
+                // Selling price is DP (not MRP) — receipts and history show DP as the rate.
+                totalAmount += product.Dp * item.Quantity;
                 totalBv += product.Bv * item.Quantity;
-                receiptItems.Add(new ReceiptItemData(product.ProductName, item.Quantity, product.Mrp));
-                itemSnapshots.Add(new { productId = product.Id, productName = product.ProductName, quantity = item.Quantity, price = product.Mrp });
+                receiptItems.Add(new ReceiptItemData(product.ProductName, item.Quantity, product.Dp));
+                itemSnapshots.Add(new { productId = product.Id, productName = product.ProductName, quantity = item.Quantity, price = product.Dp });
             }
 
             // ── Hard rule for BOTH plans: minimum 600 BV to activate ──
