@@ -40,6 +40,8 @@ interface Sale {
   customerName: string;
   customerPhone?: string | null;
   paymentMethod?: string | null;
+  pickupCenterId?: string | null;
+  pickupCenterName?: string | null;
   items: SaleItem[];
   totalItems: number;
   totalAmount: number;
@@ -115,6 +117,14 @@ function buildInvoicePDF(sale: Sale): jsPDF {
     day: '2-digit', month: 'short', year: 'numeric',
   });
 
+  // Fallback to the logged-in pickup center (saved at login) if the API did not send it.
+  let pucFallback: { centerName?: string; pucId?: string } = {};
+  try {
+    pucFallback = JSON.parse(localStorage.getItem('pucInfo') || '{}');
+  } catch {
+    pucFallback = {};
+  }
+
   const infoRows: [string, string][] = [
     ['ID/Reference No.', sale.customerId || '—'],
     ['Name', sale.customerName || '—'],
@@ -122,6 +132,8 @@ function buildInvoicePDF(sale: Sale): jsPDF {
     ['Invoice No.', String(sale.orderId)],
     ['Invoice Date', invoiceDate],
     ['UTR / Ref No.', (sale.paymentMethod || '—').toUpperCase()],
+    ['Pickup Center Name', sale.pickupCenterName || pucFallback.centerName || '—'],
+    ['Pickup Center ID', sale.pickupCenterId || pucFallback.pucId || '—'],
   ];
 
   doc.setFontSize(9.5);
