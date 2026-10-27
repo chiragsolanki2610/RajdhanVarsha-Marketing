@@ -882,14 +882,15 @@ namespace RegisterApi.Controllers
             }
 
             // Recompute price/BV from the DB — never trust client-sent totals.
+            // Selling price is DP (not MRP) — receipts and history show DP as the rate.
             decimal totalAmount = 0, totalBv = 0;
             var receiptItems = new List<ReceiptItemData>();
             foreach (var item in dto.Items)
             {
                 var product = products.First(p => p.Id == item.ProductId);
-                totalAmount += product.Mrp * item.Quantity;
+                totalAmount += product.Dp * item.Quantity;
                 totalBv += product.Bv * item.Quantity;
-                receiptItems.Add(new ReceiptItemData(product.ProductName, item.Quantity, product.Mrp));
+                receiptItems.Add(new ReceiptItemData(product.ProductName, item.Quantity, product.Dp));
             }
 
             // Deduct from this PUC's own inventory (never from Product.Quantity —
@@ -1043,13 +1044,14 @@ namespace RegisterApi.Controllers
                 .Select(u => new { u.UserId, u.Name, u.MobileNo })
                 .ToDictionaryAsync(u => u.UserId);
 
-            // BV per unit by product name (the stored item JSON has no BV), for the invoice receipt.
-            var bvByName = (await _db.Products
+            // BV and DP per unit by product name (the stored item JSON has neither BV nor
+            // reliable DP — older sales were saved at MRP), for the history list and invoice.
+            var productInfoByName = (await _db.Products
                     .AsNoTracking()
-                    .Select(p => new { p.ProductName, p.Bv })
+                    .Select(p => new { p.ProductName, p.Bv, p.Dp })
                     .ToListAsync())
-                .GroupBy(p => p.ProductName)
-                .ToDictionary(g => g.Key, g => g.First().Bv);
+                .GroupBy(p => p.ProductName.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
             var rows = new List<PucSellHistoryRowDto>();
             foreach (var o in orders)
@@ -1059,19 +1061,28 @@ namespace RegisterApi.Controllers
                 var parsed = CartItemParser.Parse(o.ReceiptItemsJson);
                 if (parsed.Count == 0) parsed = CartItemParser.Parse(o.CartItemsJson);
 
+                // Every product is sold at DP (older rows were saved at MRP), so the history,
+                // popup and invoice always show DP, taken from the Products table.
                 var items = parsed.Select(i =>
                 {
                     var qty = i.Quantity ?? 0;
-                    var price = i.UnitPrice ?? 0;
+                    productInfoByName.TryGetValue((i.Name ?? string.Empty).Trim(), out var info);
+                    var price = info != null && info.Dp > 0
+                        ? info.Dp
+                        : (i.UnitPrice ?? 0);
                     return new PucSellHistoryItemDto
                     {
                         ProductName = i.Name,
                         Quantity = qty,
                         UnitPrice = price,
                         LineTotal = qty * price,
-                        Bv = bvByName.TryGetValue(i.Name, out var unitBv) ? unitBv : 0
+                        Bv = info?.Bv ?? 0
                     };
                 }).ToList();
+
+                var rowTotal = items.Count > 0
+                    ? items.Sum(i => i.LineTotal)
+                    : o.TotalAmount;
 
                 string source;
                 string? paymentMethod = null;
@@ -1106,7 +1117,7 @@ namespace RegisterApi.Controllers
                     PaymentMethod = paymentMethod,
                     Items = items,
                     TotalItems = items.Sum(i => i.Quantity),
-                    TotalAmount = o.TotalAmount,
+                    TotalAmount = rowTotal,
                     TotalBv = o.TotalBv,
                     SoldAt = o.ProcessedAt ?? o.RequestedAt,
                     // Receipt PDFs are only downloadable here for sales this center made itself.
