@@ -231,6 +231,8 @@ namespace RegisterApi.DTOs
         public string CustomerName { get; set; } = string.Empty;
         public string? CustomerPhone { get; set; }
         public string? PaymentMethod { get; set; }
+        public string PickupCenterId { get; set; } = string.Empty;     // PUC ID the product was purchased from
+        public string PickupCenterName { get; set; } = string.Empty;   // PUC (center) name, shown on the invoice
         public List<PucSellHistoryItemDto> Items { get; set; } = new();
         public decimal TotalItems { get; set; }
         public decimal TotalAmount { get; set; }
