@@ -132,7 +132,7 @@ export default function PlanManagerPage() {
       const p = products.find((p) => p.productId === line.productId);
       if (!p) continue;
       bv += p.bv * line.quantity;
-      amount += p.mrp * line.quantity;
+      amount += p.dp * line.quantity;
     }
     return { bv, amount };
   }, [cartLines, products]);
@@ -423,7 +423,7 @@ export default function PlanManagerPage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-slate-900">{p.productName}</p>
                         <p className="text-xs text-slate-500">
-                          ₹{p.mrp} · <span className="font-medium" style={{ color: BRAND }}>{p.bv} BV</span> · {p.quantity} in stock
+                          ₹{p.dp} · <span className="font-medium" style={{ color: BRAND }}>{p.bv} BV</span> · {p.quantity} in stock
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
