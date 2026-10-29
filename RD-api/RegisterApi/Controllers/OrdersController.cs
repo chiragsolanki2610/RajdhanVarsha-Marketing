@@ -476,9 +476,22 @@ public class OrdersController : ControllerBase
               o.RequestedAt,
               o.ProcessedAt,
               o.AdminRemarks,
-              o.ReceiptFinalized
+              o.ReceiptFinalized,
+              o.SelectedPucId
           })
           .ToListAsync();
+
+        // Batch-fetch pickup center names (for the Tax Invoice PDF) in one round-trip
+        var pucIds = orders
+          .Where(o => !string.IsNullOrWhiteSpace(o.SelectedPucId))
+          .Select(o => o.SelectedPucId!)
+          .Distinct()
+          .ToList();
+        var pucNames = pucIds.Count == 0
+          ? new Dictionary<string, string>()
+          : await _db.PickupCenters
+              .Where(p => pucIds.Contains(p.PucId))
+              .ToDictionaryAsync(p => p.PucId, p => p.CenterName);
 
         var result = orders.Select(o => new PaymentOrderDto
         {
@@ -495,7 +508,9 @@ public class OrdersController : ControllerBase
             RequestedAt = o.RequestedAt,
             ProcessedAt = o.ProcessedAt,
             AdminRemarks = o.AdminRemarks,
-            ReceiptAvailable = o.ReceiptFinalized
+            ReceiptAvailable = o.ReceiptFinalized,
+            SelectedPucId = o.SelectedPucId,
+            SelectedPucCenterName = o.SelectedPucId != null && pucNames.TryGetValue(o.SelectedPucId, out var pn) ? pn : null
         });
 
         return Ok(result);
