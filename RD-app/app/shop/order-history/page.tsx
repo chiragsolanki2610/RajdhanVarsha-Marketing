@@ -1,926 +1,1018 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using RegisterApi.Data;
-using RegisterApi.DTOs;
-using RegisterApi.Models;
-using RegisterApi.Services;
-using System.Text.Json;
+'use client';
 
-namespace RegisterApi.Controllers;
+import React, { useState, useEffect, useCallback } from 'react';
+import jsPDF from 'jspdf';
+import {
+  History,
+  Search,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Package,
+  X,
+  Loader2,
+  AlertCircle,
+  ShoppingCart,
+  Hash,
+  Link as LinkIcon,
+  FileText,
+  Download,
+  Filter,
+} from 'lucide-react';
 
-[ApiController]
-[Route("api/Orders")]
-public class OrdersController : ControllerBase
-{
-    private readonly AppDbContext _db;
-    private readonly IReceiptService _receiptService;
-    private readonly ICommissionService _commissionService;
-    private readonly IBinaryPlanService _binaryService;
+import Sidebar from '@/components/Sidebar';
+import LoginTopbar from '@/components/loginTopbar';
 
-    public OrdersController(
-        AppDbContext db,
-        IReceiptService receiptService,
-        ICommissionService commissionService,
-        IBinaryPlanService binaryService)
-    {
-        _db = db;
-        _receiptService = receiptService;
-        _commissionService = commissionService;
-        _binaryService = binaryService;
+// ─── BASE URL ─────────────────────────────────────────────────────────────────
+const BASE_URL = 'https://rd-api-j7zj.onrender.com'; // Updated to match your Swagger UI port
+
+// ─── Company Constants ────────────────────────────────────────────────────────
+const COMPANY = {
+  name:     'RAJ DHANVARSHA',
+  address1: 'Gali No.3 Near Tailor Market, Azad Nagar, Hisar, Haryana',
+  contact:  'Contact No.: +91-7404526380  |  Email: info@rajdhanvarsha.in',
+  gstNo:    'YOUR-GST-NUMBER',
+  fssaiNo:  'YOUR-FSSAI-NUMBER: 20821006001885',
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type OrderStatus = 'Pending' | 'Approved' | 'Rejected' | 'Processing' | 'Delivered';
+
+interface ApiOrderItem {
+  productId?: string | number;
+  productName?: string;
+  name?: string;
+  quantity?: number;
+  price?: number;
+  unitPrice?: number;
+  amount?: number;
+  dp?: number;
+  bv?: number;
+  hsnCode?: string;
+  sgst?: number;
+  cgst?: number;
+  cess?: number;
+}
+
+interface ApiOrder {
+  id: string | number;
+  userId?: string;
+  memberId?: string;
+  memberName?: string;
+  userName?: string;
+  name?: string;
+  phone?: string;
+  phoneNumber?: string;
+  address?: string;
+  deliveryAddress?: string;
+  utrNumber?: string;
+  screenshotUrl?: string;
+  totalAmount?: number;
+  totalBv?: number;
+  cartItemsJson?: string;
+  status?: string;
+  requestedAt?: string;
+  processedAt?: string;
+  updatedAt?: string;
+  adminRemarks?: string;
+  receiptAvailable?: boolean;
+  selectedPucId?: string | null;
+  selectedPucCenterName?: string | null;
+  items?: ApiOrderItem[];
+}
+
+interface OrderItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  bv: number;
+  hsnCode?: string;
+  sgst?: number;
+  cgst?: number;
+  cess?: number;
+}
+
+interface MyOrder {
+  orderId: string;
+  memberId?: string;
+  memberName?: string;
+  phone?: string;
+  address?: string;
+  utrNumber: string;
+  screenshotUrl?: string;
+  items: OrderItem[];
+  totalAmount: number;
+  totalBv: number;
+  status: OrderStatus;
+  requestedAt: string;
+  processedAt?: string;
+  adminRemarks?: string;
+  receiptAvailable: boolean;
+  pickupCenterId?: string;
+  pickupCenterName?: string;
+}
+
+// ─── Auth Headers ─────────────────────────────────────────────────────────────
+function getAuthHeaders(): HeadersInit {
+  const token =
+    typeof window !== 'undefined'
+      ? localStorage.getItem('authToken') ?? localStorage.getItem('token')
+      : null;
+  return {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+// ─── Profile Type ─────────────────────────────────────────────────────────────
+interface UserProfile {
+  name:     string;
+  memberId: string;
+  mobileNo: string;
+}
+
+// ─── Extract profile robustly ─────────────────────────────────────────────────
+function extractProfile(data: Record<string, unknown>): UserProfile {
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : '');
+
+  const name =
+    str(data.name) || str(data.fullName) || str(data.full_name) ||
+    str(data.userName) || str(data.username) || str(data.displayName) || '—';
+
+  const memberId =
+    str(data.memberId) || str(data.member_id) || str(data.memberCode) ||
+    str(data.member_code) || str(data.referralCode) || str(data.userId) ||
+    str(data.id) || '—';
+
+  const mobileNo =
+    str(data.mobileNo) || str(data.mobile) || str(data.phone) ||
+    str(data.phoneNumber) || str(data.contactNo) || str(data.contact) || '—';
+
+  return { name, memberId, mobileNo };
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function parseCartItems(cartItemsJson?: string): ApiOrderItem[] {
+  if (!cartItemsJson) return [];
+  try {
+    const parsed = JSON.parse(cartItemsJson);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normaliseStatus(raw: string | undefined): OrderStatus {
+  const map: Record<string, OrderStatus> = {
+    pending: 'Pending', approved: 'Approved', rejected: 'Rejected',
+    processing: 'Processing', delivered: 'Delivered',
+  };
+  return map[(raw ?? '').toLowerCase()] ?? 'Pending';
+}
+
+function normaliseOrder(o: ApiOrder, profile: UserProfile | null): MyOrder {
+  const rawItems: ApiOrderItem[] =
+    o.items?.length ? o.items : parseCartItems(o.cartItemsJson);
+
+  const items: OrderItem[] = rawItems.map((it, idx) => ({
+    productId:   String(it.productId ?? idx),
+    productName: it.productName ?? it.name ?? '—',
+    quantity:    it.quantity ?? 1,
+    price:       it.dp ?? it.price ?? it.unitPrice ?? it.amount ?? 0,
+    bv:          it.bv ?? 0,
+    hsnCode:     it.hsnCode,
+    sgst:        it.sgst,
+    cgst:        it.cgst,
+    cess:        it.cess,
+  }));
+
+  const totalAmount =
+    o.totalAmount ?? items.reduce((s, it) => s + it.price * it.quantity, 0);
+
+  const memberName =
+    (o.memberName ?? o.userName ?? o.name ?? '').trim() || profile?.name || '—';
+  const phone =
+    (o.phone ?? o.phoneNumber ?? '').trim() || profile?.mobileNo || '—';
+  const memberId =
+    (o.memberId ?? o.userId ?? '').trim() || profile?.memberId || '—';
+
+  return {
+    orderId:          String(o.id),
+    memberId,
+    memberName,
+    phone,
+    address:          o.address ?? o.deliveryAddress,
+    utrNumber:        o.utrNumber ?? '—',
+    screenshotUrl:    o.screenshotUrl,
+    items,
+    totalAmount,
+    totalBv:          o.totalBv ?? 0,
+    status:           normaliseStatus(o.status),
+    requestedAt:      o.requestedAt ?? new Date().toISOString(),
+    processedAt:      o.processedAt ?? o.updatedAt,
+    adminRemarks:     o.adminRemarks,
+    receiptAvailable: o.receiptAvailable ?? false,
+    pickupCenterId:   o.selectedPucId ?? undefined,
+    pickupCenterName: o.selectedPucCenterName ?? undefined,
+  };
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  });
+}
+
+function formatCurrency(amount: number) {
+  return `₹${amount.toLocaleString('en-IN')}`;
+}
+
+const STATUS_CONFIG: Record<
+  OrderStatus,
+  { label: string; color: string; bg: string; border: string; icon: React.ElementType; desc: string }
+> = {
+  Pending:    { label: 'Pending',    color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200',  icon: Clock,       desc: 'Awaiting admin review'    },
+  Approved:   { label: 'Approved',   color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200',   icon: CheckCircle, desc: 'Payment verified'         },
+  Processing: { label: 'Processing', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', icon: RefreshCw,   desc: 'Order being processed'    },
+  Delivered:  { label: 'Delivered',  color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200',  icon: Package,     desc: 'Order delivered'          },
+  Rejected:   { label: 'Rejected',   color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200',    icon: XCircle,     desc: 'Payment rejected'         },
+};
+
+// ─── Receipt PDF Generator ────────────────────────────────────────────────────
+
+function buildReceiptPDF(order: MyOrder): jsPDF {
+  const doc   = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 40;
+  let y = 36;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(0, 0, 0);
+  doc.text(COMPANY.name, pageW / 2, y, { align: 'center' });
+  y += 18;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(50, 50, 50);
+  doc.text(COMPANY.address1, pageW / 2, y, { align: 'center' });
+  y += 12;
+  doc.text(COMPANY.contact, pageW / 2, y, { align: 'center' });
+  y += 13;
+
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`GST No.: ${COMPANY.gstNo}`, margin, y);
+  doc.text(`FSSAI Licence No.: 20821006001885`, pageW - margin, y, { align: 'right' });
+  y += 10;
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(1);
+  doc.line(margin, y, pageW - margin, y);
+  y += 2;
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageW - margin, y);
+  y += 12;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+  doc.text('TAX INVOICE', pageW / 2, y, { align: 'center' });
+  y += 6;
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageW - margin, y);
+  y += 14;
+
+  const labelX = margin + 5;
+  const colonX = margin + 115;
+  const valueX = margin + 122;
+
+  const invoiceDate = new Date(order.requestedAt).toLocaleDateString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+
+  const infoRows: [string, string][] = [
+    ['ID/Reference No.', order.memberId   ?? '—'],
+    ['Name',             order.memberName ?? '—'],
+    ['Phone',            order.phone      ?? '—'],
+    ['Invoice No.',      order.orderId],
+    ['Invoice Date',     invoiceDate],
+    ['UTR / Ref No.',    order.utrNumber],
+    ['Pickup Center Name', order.pickupCenterName || '—'],
+    ['Pickup Center ID',   order.pickupCenterId   || '—'],
+  ];
+
+  doc.setFontSize(9.5);
+  infoRows.forEach(([label, value]) => {
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(40, 40, 40);
+    doc.text(label, labelX, y);
+    doc.text(':', colonX, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text(value, valueX, y);
+    y += 15;
+  });
+
+  y += 4;
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
+  y += 12;
+
+  const C = {
+    product:  margin + 2,
+    qty:      margin + 175,
+    rate:     margin + 215,
+    bv:       margin + 265,
+    sgst:     margin + 305,
+    cess:     margin + 345,
+    totalTax: margin + 385,
+    hsn:      margin + 2,
+    amount:   margin + 175,
+    totalBv:  margin + 215,
+    cgst:     margin + 305,
+    totalAmt: pageW - margin - 5,
+  };
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Product Name', C.product,  y);
+  doc.text('Qty',          C.qty,      y);
+  doc.text('Rate',         C.rate,     y);
+  doc.text('B.V.',         C.bv,       y);
+  doc.text('SGST%',        C.sgst,     y);
+  doc.text('Cess%',        C.cess,     y);
+  doc.text('Total Tax',    C.totalTax, y);
+  y += 11;
+
+  doc.text('HSNCode',      C.hsn,      y);
+  doc.text('Amount',       C.amount,   y);
+  doc.text('Total B.V.',   C.totalBv,  y);
+  doc.text('CGST%',        C.cgst,     y);
+  doc.text('Total Amount', C.totalAmt, y, { align: 'right' });
+  y += 6;
+
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
+  y += 10;
+
+  order.items.forEach((item) => {
+    const qty     = item.quantity;
+    const rate    = item.price;
+    const lineAmt = rate * qty;
+    const bvUnit  = item.bv;
+    const bvTotal = bvUnit * qty;
+    const sgst    = item.sgst  ?? 0;
+    const cgst    = item.cgst  ?? 0;
+    const cess    = item.cess  ?? 0.00;
+    const taxAmt  = parseFloat(((lineAmt * (sgst + cgst)) / 100).toFixed(2));
+    const billAmt = parseFloat((lineAmt + taxAmt).toFixed(2));
+    const hsn     = item.hsnCode ?? '15159040';
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+    const productLines = doc.splitTextToSize(item.productName, 160) as string[];
+    doc.text(productLines, C.product, y);
+    y += productLines.length > 1 ? 12 : 0;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.text(String(qty),        C.qty,      y);
+    doc.text(rate.toFixed(2),    C.rate,     y);
+    doc.text(String(bvUnit),     C.bv,       y);
+    doc.text(sgst.toFixed(2),    C.sgst,     y);
+    doc.text(cess.toFixed(2),    C.cess,     y);
+    doc.text(taxAmt.toFixed(2),  C.totalTax, y);
+    y += 12;
+
+    doc.text(hsn,                C.hsn,      y);
+    doc.text(lineAmt.toFixed(2), C.amount,   y);
+    doc.text(String(bvTotal),    C.totalBv,  y);
+    doc.text(cgst.toFixed(2),    C.cgst,     y);
+    doc.text(billAmt.toFixed(2), C.totalAmt, y, { align: 'right' });
+    y += 14;
+
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y, pageW - margin, y);
+    doc.setDrawColor(0, 0, 0);
+    y += 8;
+  });
+
+  y += 4;
+
+  const sumLabelX = margin + 10;
+  const sumColon  = pageW - margin - 90;
+  const sumValX   = pageW - margin - 5;
+
+  const cgstRate = order.items[0]?.cgst ?? 0;
+  const sgstRate = order.items[0]?.sgst ?? 0;
+  const cgstAmt  = parseFloat(((order.totalAmount * cgstRate) / (100 + cgstRate + sgstRate)).toFixed(2));
+  const sgstAmt  = parseFloat(((order.totalAmount * sgstRate) / (100 + cgstRate + sgstRate)).toFixed(2));
+  const totalBv = order.totalBv;
+
+  const summaryRows: [string, string, boolean][] = [
+    ['Total Amount',   order.totalAmount.toFixed(2), false],
+    ['CGST Amount',    cgstAmt.toFixed(0),           false],
+    ['SGST Amount',    sgstAmt.toFixed(0),           false],
+    ['Other Tax/Cess', '0.00',                       false],
+    ['Total B.V.',     totalBv.toFixed(1),           true ],
+    ['Bill Value',     order.totalAmount.toFixed(2), true ],
+  ];
+
+  doc.setFontSize(9);
+  summaryRows.forEach(([label, value, bold]) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setTextColor(0, 0, 0);
+    doc.text(label,  sumLabelX, y);
+    doc.text(':',    sumColon,  y);
+    doc.text(value,  sumValX,   y, { align: 'right' });
+    y += 13;
+  });
+
+  y += 4;
+  doc.setLineWidth(0.8);
+  doc.line(margin, y, pageW - margin, y);
+  y += 13;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Net Amount Payable', sumLabelX, y);
+  doc.text(':',                  sumColon,  y);
+  doc.text(order.totalAmount.toFixed(2), sumValX, y, { align: 'right' });
+  y += 5;
+  doc.setLineWidth(0.8);
+  doc.line(margin, y, pageW - margin, y);
+  y += 20;
+
+  // Remarks line is always shown (same as the pickup-center invoice).
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(80, 80, 80);
+  doc.text(`Remarks: ${order.adminRemarks?.trim() || 'Online Order'}`, margin + 5, y);
+  y += 18;
+
+  const sigY = Math.max(y + 30, pageH - 80);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.line(pageW - margin - 110, sigY, pageW - margin, sigY);
+  doc.text('Authorised Signatory', pageW - margin, sigY + 12, { align: 'right' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(120, 120, 120);
+  doc.text(
+    `Raj Dhan Varsha  |  Computer-generated receipt  |  Generated: ${new Date().toLocaleString('en-IN')}`,
+    pageW / 2, pageH - 18, { align: 'center' },
+  );
+
+  return doc;
+}
+
+// ─── Status Badge ─────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: OrderStatus }) {
+  const cfg = STATUS_CONFIG[status];
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+      <Icon size={11} />
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+function Toast({ message, type }: { message: string; type: 'success' | 'error' }) {
+  return (
+    <div className={`fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold text-white ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+      {type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+      {message}
+    </div>
+  );
+}
+
+// ─── Order Detail Modal ───────────────────────────────────────────────────────
+
+function OrderDetailModal({
+  order,
+  onClose,
+}: {
+  order: MyOrder;
+  onClose: () => void;
+}) {
+  const [isLightboxOpen, setIsLightboxOpen]         = useState(false);
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
+  const cfg = STATUS_CONFIG[order.status];
+
+  const handleDownloadReceipt = () => {
+    setDownloadingReceipt(true);
+    try {
+      const doc = buildReceiptPDF(order);
+      doc.save(`Receipt-ORD-${order.orderId.padStart(6, '0')}.pdf`);
+    } catch {
+      alert('Could not generate the receipt. Please try again.');
+    } finally {
+      setDownloadingReceipt(false);
     }
+  };
 
-    // ── Helper: get logged-in userId from JWT ──
-    private string CurrentUserId =>
-    User.FindFirst("userId")?.Value
-    ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-    ?? throw new UnauthorizedAccessException("userId claim missing from token.");
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] sm:max-h-[90vh] overflow-y-auto relative">
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // POST /api/Orders/payment
-    // Accepts multipart/form-data: utr, screenshot (file), totalAmount, totalBv, cartItems
-    // Screenshot is stored as Base64 string directly in the database
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpPost("payment")]
-    [Authorize]
-    public async Task<IActionResult> SubmitPayment([FromForm] SubmitPaymentFormDto dto)
-    {
-        // 1. Basic validation
-        if (string.IsNullOrWhiteSpace(dto.Utr))
-            return BadRequest(new { message = "UTR / Transaction ID is required." });
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Order Details</h2>
+            <p className="text-xs text-gray-400 font-mono mt-0.5"># {order.orderId}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+            <X size={18} className="text-gray-500" />
+          </button>
+        </div>
 
-        var planType = string.IsNullOrWhiteSpace(dto.PlanType) ? "Dream Plan" : dto.PlanType.Trim();
-        if (planType != "Dream Plan" && planType != "Binary Plan")
-            return BadRequest(new { message = $"Unknown plan '{dto.PlanType}'." });
+        <div className="px-4 sm:px-6 py-5 space-y-5">
 
-        if (dto.Screenshot == null || dto.Screenshot.Length == 0)
-            return BadRequest(new { message = "Payment screenshot is required." });
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${cfg.bg} ${cfg.border}`}>
+            <cfg.icon size={18} className={cfg.color} />
+            <div>
+              <p className={`text-xs font-bold ${cfg.color}`}>{cfg.label}</p>
+              <p className="text-[11px] text-gray-500">{cfg.desc}</p>
+            </div>
+            <div className="ml-auto">
+              <StatusBadge status={order.status} />
+            </div>
+          </div>
 
-        // 2. File size check (max 5MB)
-        if (dto.Screenshot.Length > 5 * 1024 * 1024)
-            return BadRequest(new { message = "Screenshot must be smaller than 5MB." });
+          {order.adminRemarks && order.status === 'Rejected' && (
+            <div className="flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-xl">
+              <AlertCircle size={14} className="text-red-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide mb-0.5">Rejection Reason</p>
+                <p className="text-xs text-red-700">{order.adminRemarks}</p>
+              </div>
+            </div>
+          )}
 
-        // 3. File type check
-        var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/webp" };
-        if (!allowedTypes.Contains(dto.Screenshot.ContentType?.ToLower()))
-            return BadRequest(new { message = "Screenshot must be a JPG, PNG, or WEBP image." });
+          {order.adminRemarks && order.status === 'Approved' && (
+            <div className="flex items-start gap-2 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl">
+              <CheckCircle size={14} className="text-blue-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wide mb-0.5">Admin Note</p>
+                <p className="text-xs text-blue-700">{order.adminRemarks}</p>
+              </div>
+            </div>
+          )}
 
-        var userId = CurrentUserId;
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-[10px] text-gray-400 font-medium mb-0.5">Requested</p>
+              <p className="text-xs font-semibold text-gray-700">{formatDate(order.requestedAt)}</p>
+            </div>
+            {order.processedAt && (
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-[10px] text-gray-400 font-medium mb-0.5">Processed</p>
+                <p className="text-xs font-semibold text-gray-700">{formatDate(order.processedAt)}</p>
+              </div>
+            )}
+          </div>
 
-        var selectedCenter = string.IsNullOrWhiteSpace(dto.PucId)
-            ? null
-            : await _db.PickupCenters.FirstOrDefaultAsync(p => p.PucId == dto.PucId.Trim() && p.Status == "Active");
+          <div className="bg-blue-50/40 rounded-xl p-4 border border-blue-100/60 space-y-3">
+            <p className="text-[11px] font-bold text-blue-600/80 uppercase tracking-widest">Payment Info</p>
 
-        if (!string.IsNullOrWhiteSpace(dto.PucId) && selectedCenter == null)
-            return BadRequest(new { message = "The selected pickup center is not active." });
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 bg-white p-2.5 rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+              <span className="text-xs font-medium text-gray-500 flex items-center gap-1 shrink-0">
+                <LinkIcon size={12} className="text-blue-500" /> UTR / Ref:
+              </span>
+              <span className="font-mono font-bold text-xs text-gray-800 tracking-wide select-all bg-gray-50 px-2 py-0.5 rounded border border-gray-200 break-all">
+                {order.utrNumber}
+              </span>
+            </div>
 
-        if (selectedCenter != null && selectedCenter.PucStatus == "Closed")
-            return BadRequest(new { message = "This pickup center is currently offline. Please choose another pickup center or try again later." });
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
+                <FileText size={12} className="text-blue-500" /> Payment Screenshot:
+              </span>
+              {order.screenshotUrl ? (
+                <div
+                  onClick={() => setIsLightboxOpen(true)}
+                  className="relative group border border-gray-200 rounded-lg overflow-hidden cursor-zoom-in bg-white h-32 sm:h-36 flex items-center justify-center hover:border-blue-400 shadow-sm transition-all"
+                >
+                  <img
+                    src={order.screenshotUrl}
+                    alt="Payment screenshot"
+                    className="h-full w-full object-contain p-2"
+                  />
+                  <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <span className="bg-black/70 text-white text-[10px] px-2.5 py-1 rounded-md font-medium">Tap to expand</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="border border-dashed border-gray-200 rounded-lg bg-gray-50 h-14 flex items-center justify-center">
+                  <p className="text-xs text-gray-400 italic">No screenshot uploaded</p>
+                </div>
+              )}
+            </div>
+          </div>
 
-        string screenshotUrl;
+          <div>
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Ordered Items</p>
+            <div className="space-y-2">
+              {order.items.length > 0 ? order.items.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 sm:px-4 py-3 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ShoppingCart size={13} className="text-[#3B5998] shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 truncate">{item.productName}</p>
+                      <p className="text-[10px] text-gray-400">Qty: {item.quantity} × {formatCurrency(item.price)}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs font-bold text-gray-800 shrink-0">{formatCurrency(item.quantity * item.price)}</p>
+                </div>
+              )) : (
+                <p className="text-xs text-gray-400 text-center py-3 italic">No item details available</p>
+              )}
+            </div>
 
-        // 4. Convert screenshot to Base64 — stored directly in DB (no bucket needed)
-        try
-        {
-            using var ms = new MemoryStream();
-            await dto.Screenshot.CopyToAsync(ms);
-            var fileBytes = ms.ToArray();
-            var base64 = Convert.ToBase64String(fileBytes);
-            var mimeType = dto.Screenshot.ContentType ?? "image/jpeg";
-            screenshotUrl = $"data:{mimeType};base64,{base64}";
+            <div className="mt-3 rounded-xl border border-[#3B5998]/10 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-[#3B5998]/5">
+                <span className="text-xs font-bold text-[#3B5998]">Total Amount</span>
+                <span className="text-sm font-black text-[#3B5998]">{formatCurrency(order.totalAmount)}</span>
+              </div>
+              {order.totalBv > 0 && (
+                <div className="flex items-center justify-between px-4 py-2.5 bg-[#3B5998]/[0.03] border-t border-[#3B5998]/10">
+                  <span className="text-xs text-gray-500">Business Volume (BV)</span>
+                  <span className="text-xs font-bold text-gray-700">{order.totalBv} BV</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {order.status === 'Approved' && (
+            <button
+              onClick={handleDownloadReceipt}
+              disabled={downloadingReceipt}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-60"
+            >
+              {downloadingReceipt
+                ? <Loader2 size={14} className="animate-spin" />
+                : <Download size={14} />}
+              {downloadingReceipt ? 'Preparing…' : 'Download Tax Invoice PDF'}
+            </button>
+          )}
+
+        </div>
+      </div>
+
+      {isLightboxOpen && order.screenshotUrl && (
+        <div
+          className="fixed inset-0 bg-black/95 z-[60] flex flex-col items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setIsLightboxOpen(false)}
+        >
+          <button className="absolute top-4 right-4 text-white bg-white/10 w-9 h-9 rounded-full flex items-center justify-center">✕</button>
+          <div
+            className="max-w-4xl max-h-[80vh] w-full h-full flex items-center justify-center"
+            onClick={e => e.stopPropagation()}
+          >
+            <img
+              src={order.screenshotUrl}
+              alt="Payment screenshot full"
+              className="max-w-full max-h-full object-contain rounded-md shadow-2xl"
+            />
+          </div>
+          <p className="text-gray-400 text-xs mt-4 font-mono">UTR: {order.utrNumber}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function OrderHistoryPage() {
+  const [orders, setOrders]               = useState<MyOrder[]>([]);
+  const [filtered, setFiltered]           = useState<MyOrder[]>([]);
+  const [profile, setProfile]             = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading]         = useState(true);
+  const [error, setError]                 = useState<string | null>(null);
+  const [search, setSearch]               = useState('');
+  const [statusFilter, setStatusFilter]   = useState<OrderStatus | 'All'>('All');
+  const [sortDir, setSortDir]             = useState<'asc' | 'desc'>('desc');
+
+  // ── KEY FIX: store ID not object ──────────────────────────────────────────
+  // Storing the whole order object caused a stale-closure bug: the modal would
+  // hold the OLD order reference (name/phone = '—') even after orders state was
+  // updated with real profile data. Storing only the ID and deriving the order
+  // from the live orders array ensures the modal always shows fresh data.
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const selectedOrder = selectedOrderId
+    ? orders.find(o => o.orderId === selectedOrderId) ?? null
+    : null;
+
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // ── KEY FIX: single sequential loader ────────────────────────────────────
+  // All previous versions had a race condition: two separate useEffects fired
+  // profile and orders fetches concurrently. Orders always resolved before
+  // profile, so normaliseOrder always received null for profile → blank PDF.
+  //
+  // The fix: one async function that awaits profile, THEN fetches orders.
+  // `resolvedProfile` is a local variable (not React state) so it is
+  // guaranteed to have the real value when normaliseOrder is called —
+  // no timing issues, no stale closures, no second render needed.
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Step 1: fetch profile and wait for it
+      let resolvedProfile: UserProfile | null = null;
+      try {
+        const profileRes = await fetch(`${BASE_URL}/api/Auth/profile`, {
+          method: 'GET',
+          headers: getAuthHeaders(),
+        });
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          console.log('[OrderHistory] raw profile response:', profileData);
+          resolvedProfile = extractProfile(profileData as Record<string, unknown>);
+          setProfile(resolvedProfile);
+        } else {
+          console.warn('[OrderHistory] profile fetch returned', profileRes.status);
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Screenshot Error] {ex.Message}");
-            return StatusCode(500, new { message = "Failed to process screenshot. Please try again." });
-        }
+      } catch (e) {
+        console.warn('[OrderHistory] profile fetch failed:', e);
+        // Non-fatal — orders will still load, name/phone may show '—'
+      }
 
-        // 5. Parse + validate the cart, then recompute totals from the database —
-        //    never trust totalAmount/totalBv sent by the client.
-        List<CartItemSubmissionDto>? cartItems;
-        try
-        {
-            cartItems = JsonSerializer.Deserialize<List<CartItemSubmissionDto>>(
-              dto.CartItems ?? "[]",
-              new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        }
-        catch (JsonException)
-        {
-            return BadRequest(new { message = "Cart data is invalid." });
-        }
-
-        if (cartItems == null || cartItems.Count == 0)
-            return BadRequest(new { message = "Your cart is empty." });
-
-        if (cartItems.Any(i => i.Quantity <= 0))
-            return BadRequest(new { message = "Item quantity must be at least 1." });
-
-        var productIds = cartItems.Select(i => i.ProductId).Distinct().ToList();
-        var products = await _db.Products
-          .Where(p => productIds.Contains(p.Id) && p.IsActive)
-          .ToListAsync();
-
-        if (products.Count != productIds.Count)
-            return BadRequest(new { message = "One or more products in your cart are no longer available." });
-
-        decimal totalAmount = 0, totalBv = 0;
-        foreach (var item in cartItems)
-        {
-            var product = products.First(p => p.Id == item.ProductId);
-            totalAmount += product.Dp * item.Quantity;
-            totalBv += product.Bv * item.Quantity;
-        }
-
-        decimal.TryParse(dto.TotalAmount, out var clientTotalAmount);
-        decimal.TryParse(dto.TotalBv, out var clientTotalBv);
-        if (Math.Abs(clientTotalAmount - totalAmount) > 0.01m || Math.Abs(clientTotalBv - totalBv) > 0.01m)
-        {
-            Console.WriteLine(
-              $"[Cart Mismatch] user={userId} clientAmount={clientTotalAmount} serverAmount={totalAmount} " +
-              $"clientBv={clientTotalBv} serverBv={totalBv} cartItems={dto.CartItems}");
-        }
-
-
-        // 5b. Binary Plan: must already be joined into the tree, must not
-        //     already be activated (one-time purchase only), and must clear
-        //     the 600 BV activation threshold. Checked here so we don't even
-        //     create a pending order an admin would have to reject later.
-        if (planType == "Binary Plan")
-        {
-            var binaryNode = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == userId);
-            if (binaryNode == null)
-                return BadRequest(new { message = "You must join the Binary Plan first via POST /api/binary/join." });
-
-            if (binaryNode.IsActive)
-                return BadRequest(new { message = "Your Binary Plan ID is already active. Binary Plan is a one-time purchase." });
-
-            const decimal binaryActivationBv = 600m;
-            if (totalBv < binaryActivationBv)
-                return BadRequest(new
-                {
-                    message = $"Binary Plan requires at least {binaryActivationBv} BV. You selected {totalBv} BV.",
-                    required = binaryActivationBv,
-                    selected = totalBv
-                });
-        }
-
-        // 5c. Dream Plan: must clear the same 600 BV threshold as the UI enforces
-        //     client-side -- but ONLY on the first (activation) purchase, same
-        //     one-time rule as Binary Plan. Once buyer.IsActive is true, the
-        //     600 BV gate no longer applies to later shop purchases under
-        //     Dream Plan; they're regular purchases at any BV level.
-        //     Checked here so someone can't bypass the frontend's bvMet gate
-        //     by calling the API directly with a smaller cart on their first order.
-        //
-        //     Also: must have a SponsorId set. Legacy-imported accounts start
-        //     with SponsorId = null, and the frontend routes those users through
-        //     the sponsor gate (POST /api/Auth/set-sponsor) before ever reaching
-        //     checkout -- this is the server-side backstop for that same rule,
-        //     so a call straight to this endpoint can't skip it. Without a
-        //     SponsorId, DistributeProductPurchaseCommissionAsync has no upline
-        //     to walk and every level of commission would silently go unpaid.
-        if (planType == "Dream Plan")
-        {
-            var buyerForSponsorCheck = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
-            if (buyerForSponsorCheck == null)
-                return BadRequest(new { message = "User not found." });
-
-            if (!buyerForSponsorCheck.IsActive)
-            {
-                const decimal dreamPlanBvTarget = 600m;
-                if (totalBv < dreamPlanBvTarget)
-                    return BadRequest(new
-                    {
-                        message = $"Dream Plan requires at least {dreamPlanBvTarget} BV. You selected {totalBv} BV.",
-                        required = dreamPlanBvTarget,
-                        selected = totalBv
-                    });
-            }
-
-            if (string.IsNullOrWhiteSpace(buyerForSponsorCheck.SponsorId))
-                return BadRequest(new { message = "Set your Sponsor ID before purchasing the Dream Plan." });
-        }
-
-        // 6. Save payment order to database
-        try
-        {
-            var order = new PaymentOrder
-            {
-                UserId = userId,
-                UtrNumber = dto.Utr.Trim(),
-                PlanType = planType,
-                ScreenshotUrl = screenshotUrl,
-                TotalAmount = totalAmount,
-                TotalBv = totalBv,
-                CartItemsJson = dto.CartItems ?? "[]",
-                SelectedPucId = selectedCenter?.PucId,
-                Status = PaymentOrderStatus.Pending,
-                RequestedAt = DateTime.UtcNow
-            };
-
-            _db.PaymentOrders.Add(order);
-            await _db.SaveChangesAsync();
-
-            return Ok(new
-            {
-                success = true,
-                orderId = order.Id,
-                message = "Payment submitted successfully. Awaiting admin verification."
-            });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[DB Error] {ex.Message}");
-            Console.WriteLine($"[DB Error Inner] {ex.InnerException?.Message}");
-            return StatusCode(500, new { message = "Failed to save order. Please try again." });
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/payment-requests?status=Pending&page=1&pageSize=20
-    // Admin: view all payment submissions
-    // OPTIMIZED: excludes Base64 screenshot + ReceiptPdf from list query,
-    //            adds pagination, fetches userNames in one batched query.
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("payment-requests")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> GetPaymentRequests(
-    [FromQuery] PaymentOrderStatus? status = null,
-    [FromQuery] int page = 1,
-    [FromQuery] int pageSize = 20)
-    {
-        // Orders routed to a pickup center (SelectedPucId set) are handled and
-        // approved on the pickup center's own Order Requests page, not here --
-        // otherwise the same order could be actioned (and BV/commission paid)
-        // twice, from two different places.
-        var query = _db.PaymentOrders.Where(o => o.SelectedPucId == null);
-
-        if (status.HasValue)
-            query = query.Where(o => o.Status == status.Value);
-
-        // ── Project at the DB level so EF never reads ScreenshotUrl or ReceiptPdf bytes ──
-        var projected = query
-      .OrderByDescending(o => o.RequestedAt)
-      .Select(o => new
-      {
-          o.Id,
-          o.UserId,
-          o.UtrNumber,
-          o.PlanType,
-          o.TotalAmount,
-          o.TotalBv,
-          o.CartItemsJson,
-          o.Status,
-          o.RequestedAt,
-          o.ProcessedAt,
-          o.AdminRemarks,
-          o.ReceiptFinalized,
-          HasReceiptPdf = o.ReceiptPdf != null   // bool only — never load the bytes
+      // Step 2: fetch orders — profile is NOW resolved in the local variable
+      const ordersRes = await fetch(`${BASE_URL}/api/Orders/my-orders`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
       });
 
-        var total = await projected.CountAsync();
-        var orders = await projected
-          .Skip((page - 1) * pageSize)
-          .Take(pageSize)
-          .ToListAsync();
+      if (ordersRes.status === 401) {
+        throw new Error('Session expired. Please log out and log back in.');
+      }
 
-        // Batch-fetch user names in one round-trip
-        var userIds = orders.Select(o => o.UserId).Distinct().ToList();
-        var userNames = await _db.Users
-          .Where(u => userIds.Contains(u.UserId))
-          .ToDictionaryAsync(u => u.UserId, u => u.Name);
-        var userPhones = await _db.Users
-          .Where(u => userIds.Contains(u.UserId))
-          .ToDictionaryAsync(u => u.UserId, u => u.MobileNo);
+      if (!ordersRes.ok) {
+        const text = await ordersRes.text().catch(() => '');
+        let msg = `HTTP ${ordersRes.status}`;
+        try { msg = JSON.parse(text).message ?? msg; } catch { msg = text || msg; }
+        throw new Error(msg);
+      }
 
-        var result = orders.Select(o => new PaymentOrderDto
-        {
-            Id = o.Id,
-            UserId = o.UserId,
-            UserName = userNames.TryGetValue(o.UserId, out var n) ? n : o.UserId,
-            Phone = userPhones.TryGetValue(o.UserId, out var ph) ? ph : string.Empty,
-            UtrNumber = o.UtrNumber,
-            PlanType = o.PlanType,
-            ScreenshotUrl = null,          // loaded on-demand via GET .../screenshot
-            TotalAmount = o.TotalAmount,
-            TotalBv = o.TotalBv,
-            CartItemsJson = o.CartItemsJson,
-            Status = o.Status.ToString(),
-            RequestedAt = o.RequestedAt,
-            ProcessedAt = o.ProcessedAt,
-            AdminRemarks = o.AdminRemarks,
-            ReceiptAvailable = o.ReceiptFinalized,
-            ReceiptDraftReady = o.HasReceiptPdf
-        });
+      const ordersData = await ordersRes.json();
+      console.log('[OrderHistory] raw orders response:', ordersData);
+      const raw: ApiOrder[] = Array.isArray(ordersData) ? ordersData : ordersData.data ?? [];
 
-        return Ok(new
-        {
-            total,
-            page,
-            pageSize,
-            data = result
-        });
+      // Pass resolvedProfile (local var) — always has the real value here
+      setOrders(raw.map(o => normaliseOrder(o, resolvedProfile)));
+
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load orders';
+      setError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setIsLoading(false);
     }
-
-    // -----------------------------------------------------------------------
-    // GET /api/Orders/payment-requests/pickup-center
-    // Admin: read-only visibility into orders routed to a pickup center.
-    // These are accepted/rejected on the pickup center's own Order Requests
-    // page, not here -- this endpoint is just for admins to see them.
-    // -----------------------------------------------------------------------
-    [HttpGet("payment-requests/pickup-center")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> GetPickupCenterRoutedRequests(
-    [FromQuery] int page = 1,
-    [FromQuery] int pageSize = 20)
-    {
-        var query = _db.PaymentOrders.Where(o => o.SelectedPucId != null);
-
-        var total = await query.CountAsync();
-        var orders = await query
-          .OrderByDescending(o => o.RequestedAt)
-          .Skip((page - 1) * pageSize)
-          .Take(pageSize)
-          .Select(o => new
-          {
-              o.Id,
-              o.UserId,
-              o.UtrNumber,
-              o.PlanType,
-              o.TotalAmount,
-              o.TotalBv,
-              o.CartItemsJson,
-              o.SelectedPucId,
-              PickupCenterDecision = o.PickupCenterDecision ?? "Pending",
-              o.RequestedAt
-          })
-          .ToListAsync();
-
-        var userIds = orders.Select(o => o.UserId).Distinct().ToList();
-        var userNames = await _db.Users
-          .Where(u => userIds.Contains(u.UserId))
-          .ToDictionaryAsync(u => u.UserId, u => u.Name);
-
-        var result = orders.Select(o => new
-        {
-            o.Id,
-            o.UserId,
-            UserName = userNames.TryGetValue(o.UserId, out var n) ? n : o.UserId,
-            o.UtrNumber,
-            o.PlanType,
-            o.TotalAmount,
-            o.TotalBv,
-            o.CartItemsJson,
-            o.SelectedPucId,
-            o.PickupCenterDecision,
-            o.RequestedAt
-        });
-
-        return Ok(new { total, page, pageSize, data = result });
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/payment-requests/{id}
-    // Admin: fetch ONE full order (includes screenshot — fine for single-order view)
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("payment-requests/{id}")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> GetPaymentRequestById(int id)
-    {
-        try
-        {
-            var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
-            if (order == null)
-                return NotFound(new { message = "Payment order not found." });
-
-            var userRow = await _db.Users
-              .Where(u => u.UserId == order.UserId)
-              .Select(u => new { u.Name, u.MobileNo })
-              .FirstOrDefaultAsync();
-
-            var result = new PaymentOrderDto
-            {
-                Id = order.Id,
-                UserId = order.UserId,
-                UserName = userRow?.Name ?? order.UserId,
-                Phone = userRow?.MobileNo ?? string.Empty,
-                UtrNumber = order.UtrNumber,
-                PlanType = order.PlanType,
-                ScreenshotUrl = order.ScreenshotUrl,
-                TotalAmount = order.TotalAmount,
-                TotalBv = order.TotalBv,
-                CartItemsJson = order.CartItemsJson,
-                Status = order.Status.ToString(),
-                RequestedAt = order.RequestedAt,
-                ProcessedAt = order.ProcessedAt,
-                AdminRemarks = order.AdminRemarks,
-                ReceiptAvailable = order.ReceiptFinalized,
-                ReceiptDraftReady = order.ReceiptPdf != null
-            };
-
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[GetPaymentRequestById Error] id={id} {ex.Message}");
-            Console.WriteLine($"[GetPaymentRequestById Inner] {ex.InnerException?.Message}");
-            var realError = ex.InnerException?.Message ?? ex.Message;
-            return StatusCode(500, new { message = $"Failed to load order: {realError}" });
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/payment-requests/{id}/screenshot
-    // Admin: load the Base64 screenshot for a single order on demand
-    // (kept separate so the list never carries heavy image data)
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("payment-requests/{id}/screenshot")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> GetScreenshot(int id)
-    {
-        var screenshot = await _db.PaymentOrders
-          .Where(o => o.Id == id)
-          .Select(o => o.ScreenshotUrl)
-          .FirstOrDefaultAsync();
-
-        if (screenshot == null)
-            return NotFound(new { message = "Screenshot not found for this order." });
-
-        return Ok(new { screenshotUrl = screenshot });
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/my-orders
-    // User: view their own payment history
-    // OPTIMIZED: excludes ScreenshotUrl and ReceiptPdf from list query
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("my-orders")]
-    [Authorize]
-    public async Task<IActionResult> GetMyOrders()
-    {
-        var userId = CurrentUserId;
-
-        var orders = await _db.PaymentOrders
-          .Where(o => o.UserId == userId)
-          .OrderByDescending(o => o.RequestedAt)
-          .Select(o => new
-          {
-              o.Id,
-              o.UserId,
-              o.UtrNumber,
-              o.PlanType,
-              o.TotalAmount,
-              o.TotalBv,
-              o.CartItemsJson,
-              o.Status,
-              o.RequestedAt,
-              o.ProcessedAt,
-              o.AdminRemarks,
-              o.ReceiptFinalized,
-              o.SelectedPucId
-          })
-          .ToListAsync();
-
-        // Batch-fetch pickup center names (for the Tax Invoice PDF) in one round-trip
-        var pucIds = orders
-          .Where(o => !string.IsNullOrWhiteSpace(o.SelectedPucId))
-          .Select(o => o.SelectedPucId!)
-          .Distinct()
-          .ToList();
-        var pucNames = pucIds.Count == 0
-          ? new Dictionary<string, string>()
-          : await _db.PickupCenters
-              .Where(p => pucIds.Contains(p.PucId))
-              .ToDictionaryAsync(p => p.PucId, p => p.CenterName);
-
-        var result = orders.Select(o => new PaymentOrderDto
-        {
-            Id = o.Id,
-            UserId = o.UserId,
-            UserName = string.Empty,
-            UtrNumber = o.UtrNumber,
-            PlanType = o.PlanType,
-            ScreenshotUrl = null,          // loaded on-demand if the user needs to view it
-            TotalAmount = o.TotalAmount,
-            TotalBv = o.TotalBv,
-            CartItemsJson = o.CartItemsJson,
-            Status = o.Status.ToString(),
-            RequestedAt = o.RequestedAt,
-            ProcessedAt = o.ProcessedAt,
-            AdminRemarks = o.AdminRemarks,
-            ReceiptAvailable = o.ReceiptFinalized,
-            SelectedPucId = o.SelectedPucId,
-            SelectedPucCenterName = o.SelectedPucId != null && pucNames.TryGetValue(o.SelectedPucId, out var pn) ? pn : null
-        });
-
-        return Ok(result);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // POST /api/Orders/payment-requests/{id}/approve
-    // Admin: approve a pending payment
-    // Body: { "adminRemarks": "Verified UTR" }
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpPost("payment-requests/{id}/approve")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> ApprovePayment(int id, [FromBody] ProcessPaymentOrderDto dto)
-    {
-        var adminId = CurrentUserId;
-        var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
-
-        if (order == null)
-            return NotFound(new { message = "Payment order not found." });
-
-        if (order.Status != PaymentOrderStatus.Pending)
-            return BadRequest(new { message = "This order has already been processed." });
-
-        if (!string.IsNullOrWhiteSpace(order.SelectedPucId))
-            return BadRequest(new { message = "This order was routed to a pickup center and must be accepted/rejected from the pickup center's Order Requests page." });
-
-        order.Status = PaymentOrderStatus.Approved;
-        order.ProcessedAt = DateTime.UtcNow;
-        order.ProcessedByAdminId = adminId;
-        order.AdminRemarks = dto.AdminRemarks;
-
-        // --- Look up the buyer once ---
-        var buyer = await _db.Users.FirstOrDefaultAsync(u => u.UserId == order.UserId);
-        if (buyer == null)
-        {
-            Console.WriteLine($"[BV Error] Could not find user {order.UserId} to credit BV for order {order.Id}.");
-        }
-
-        // --- Reduce stock for every product in the order. Uses the ORIGINAL
-        // trusted CartItemsJson (ProductId + Quantity, validated server-side at
-        // submission time) rather than the admin-editable ReceiptItemsJson.
-        // Stock is allowed to go negative -- treat that as a "restock now" signal
-        // rather than blocking an already-verified payment. ---
-        try
-        {
-            var purchasedItems = JsonSerializer.Deserialize<List<CartItemSubmissionDto>>(
-                order.CartItemsJson ?? "[]",
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
-
-            var purchasedProductIds = purchasedItems.Select(i => i.ProductId).Distinct().ToList();
-            var purchasedProducts = await _db.Products
-                .Where(p => purchasedProductIds.Contains(p.Id))
-                .ToListAsync();
-
-            foreach (var item in purchasedItems)
-            {
-                var product = purchasedProducts.FirstOrDefault(p => p.Id == item.ProductId);
-                if (product == null)
-                {
-                    Console.WriteLine($"[Stock Warning] Product {item.ProductId} on order {order.Id} no longer exists -- skipping stock update.");
-                    continue;
-                }
-
-                product.Quantity -= item.Quantity;
-                product.UpdatedAt = DateTime.UtcNow;
-
-                if (product.Quantity < 0)
-                {
-                    Console.WriteLine($"[Stock Alert] Product '{product.ProductName}' (Id={product.Id}) went negative ({product.Quantity}) after approving order {order.Id}. Restock needed.");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Stock Error] Failed to update stock for order {order.Id}: {ex.Message}");
-        }
-
-        bool commissionDistributed = false;
-
-        if (order.PlanType == "Binary Plan")
-        {
-            // --- BINARY PLAN: one-time activation only. BV is tracked purely on
-            // the BinaryNode tree -- never touches user.BusinessVolume (that's the
-            // Dream Plan's counter). No commission of any kind is paid here. ---
-            var binaryNode = await _db.BinaryNodes.FirstOrDefaultAsync(n => n.UserId == order.UserId);
-            if (binaryNode == null)
-            {
-                Console.WriteLine($"[Binary Error] {order.UserId} has no BinaryNode -- cannot activate for order {order.Id}.");
-            }
-            else if (binaryNode.IsActive)
-            {
-                Console.WriteLine($"[Binary Error] {order.UserId} is already Binary-active -- skipping re-activation for order {order.Id}.");
-            }
-            else
-            {
-                try
-                {
-                    await _binaryService.ActivateBinaryNodeAsync(order.UserId, order.TotalBv, awardPairs: true);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Binary Activation Error] order={order.Id} user={order.UserId} {ex.Message}");
-                    Console.WriteLine($"[Binary Activation Inner] {ex.InnerException?.Message}");
-                    // TEMP DEBUG: surface the real cause instead of letting it
-                    // hit the global exception handler and return a generic
-                    // "Server error" message. Revert to silent catch once fixed.
-                    var realError = ex.InnerException?.Message ?? ex.Message;
-                    return StatusCode(500, new
-                    {
-                        message = $"Failed to activate binary node: {realError}"
-                    });
-                }
-
-                if (buyer != null)
-                {
-                    buyer.IsActive = true;
-                    buyer.SelectedPlan = "Binary Plan";
-                    buyer.IdStatus = "active";
-                }
-            }
-        }
-        else
-        {
-            // --- DREAM PLAN: BV accumulates on user.BusinessVolume every time,
-            // and full self + 12-level upline commission is paid every time. ---
-            if (buyer != null && !order.CommissionDistributed)
-            {
-                buyer.BusinessVolume += (int)order.TotalBv;
-
-                if (!buyer.IsActive)
-                {
-                    buyer.IsActive = true;
-                    buyer.SelectedPlan = "Dream Plan";
-                    buyer.IdStatus = "active";
-                }
-            }
-
-            try
-            {
-                if (!order.CommissionDistributed)
-                {
-                    await _commissionService.DistributeProductPurchaseCommissionAsync(
-                        order.UserId, order.TotalBv, $"order-{order.Id}");
-                    order.CommissionDistributed = true;
-                }
-                commissionDistributed = order.CommissionDistributed;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Commission Error] Failed to distribute commission for order {order.Id}: {ex.Message}");
-            }
-        }
-
-        // ── Auto-build a receipt DRAFT for admin to review/edit ──
-        var customerName = await _db.Users
-      .Where(u => u.UserId == order.UserId)
-      .Select(u => u.Name)
-      .FirstOrDefaultAsync() ?? order.UserId;
-
-        try
-        {
-            var items = CartItemParser.Parse(order.CartItemsJson);
-
-            order.ReceiptItemsJson = JsonSerializer.Serialize(items);
-            order.ReceiptTotalAmount = order.TotalAmount;
-            order.ReceiptTotalBv = order.TotalBv;
-            order.ReceiptNotes = dto.AdminRemarks;
-
-            order.ReceiptPdf = _receiptService.GenerateReceiptPdf(BuildReceiptData(order, items, customerName));
-            order.ReceiptGeneratedAt = DateTime.UtcNow;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Receipt Error] Failed to generate receipt draft for order {order.Id}: {ex.Message}");
-        }
-
-        try
-        {
-            await _db.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Approve SaveChanges Error] order={order.Id} {ex.Message}");
-            Console.WriteLine($"[Approve SaveChanges Inner] {ex.InnerException?.Message}");
-            // TEMP DEBUG: this endpoint is Admin-only, so it's safe to surface the
-            // real exception message here while we track down the root cause.
-            // Revert to a generic message once fixed.
-            var realError = ex.InnerException?.Message ?? ex.Message;
-            return StatusCode(500, new
-            {
-                message = $"Failed to save approval: {realError}"
-            });
-        }
-
-        return Ok(new
-        {
-            success = true,
-            message = "Payment approved. A receipt draft was generated — review and finalize it to send to the user.",
-            receiptDraftReady = order.ReceiptPdf != null,
-            commissionDistributed
-        });
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // POST /api/Orders/payment-requests/{id}/reject
-    // Admin: reject a pending payment
-    // Body: { "adminRemarks": "Invalid UTR number" }
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpPost("payment-requests/{id}/reject")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> RejectPayment(int id, [FromBody] ProcessPaymentOrderDto dto)
-    {
-        try
-        {
-            var adminId = CurrentUserId;
-            var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
-
-            if (order == null)
-                return NotFound(new { message = "Payment order not found." });
-
-            if (order.Status != PaymentOrderStatus.Pending)
-                return BadRequest(new { message = "This order has already been processed." });
-
-            if (!string.IsNullOrWhiteSpace(order.SelectedPucId))
-                return BadRequest(new { message = "This order was routed to a pickup center and must be accepted/rejected from the pickup center's Order Requests page." });
-
-            order.Status = PaymentOrderStatus.Rejected;
-            order.ProcessedAt = DateTime.UtcNow;
-            order.ProcessedByAdminId = adminId;
-            order.AdminRemarks = dto.AdminRemarks;
-
-            await _db.SaveChangesAsync();
-
-            return Ok(new { success = true, message = "Payment rejected." });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[RejectPayment Error] id={id} {ex.Message}");
-            Console.WriteLine($"[RejectPayment Inner] {ex.InnerException?.Message}");
-            var realError = ex.InnerException?.Message ?? ex.Message;
-            return StatusCode(500, new { message = $"Failed to reject order: {realError}" });
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/{id}/receipt
-    // User: download their own FINALIZED receipt PDF
-    // Admin: download any order's latest receipt PDF (draft or final)
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("{id}/receipt")]
-    [Authorize]
-    public async Task<IActionResult> DownloadReceipt(int id)
-    {
-        var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
-
-        if (order == null)
-            return NotFound(new { message = "Payment order not found." });
-
-        var isAdmin = User.IsInRole("Admin");
-        if (!isAdmin && order.UserId != CurrentUserId)
-            return Forbid();
-
-        if (order.ReceiptPdf == null || (!isAdmin && !order.ReceiptFinalized))
-            return NotFound(new { message = "Receipt is not available for this order yet." });
-
-        return File(order.ReceiptPdf, "application/pdf", $"Receipt-ORD-{order.Id:D6}.pdf");
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/payment-requests/{id}/receipt/draft
-    // Admin: fetch the editable receipt draft (items, totals, notes) for review
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("payment-requests/{id}/receipt/draft")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> GetReceiptDraft(int id)
-    {
-        var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
-        if (order == null)
-            return NotFound(new { message = "Payment order not found." });
-
-        if (order.Status != PaymentOrderStatus.Approved)
-            return BadRequest(new { message = "Approve the payment before reviewing its receipt." });
-
-        var customerName = await _db.Users
-          .Where(u => u.UserId == order.UserId)
-          .Select(u => u.Name)
-          .FirstOrDefaultAsync() ?? order.UserId;
-
-        var items = CartItemParser.Parse(
-          string.IsNullOrWhiteSpace(order.ReceiptItemsJson) ? order.CartItemsJson : order.ReceiptItemsJson);
-
-        return Ok(new ReceiptDraftDto
-        {
-            OrderId = order.Id,
-            CustomerName = customerName,
-            Items = items.Select(i => new ReceiptItemDto { Name = i.Name, Quantity = i.Quantity, UnitPrice = i.UnitPrice }).ToList(),
-            TotalAmount = order.ReceiptTotalAmount ?? order.TotalAmount,
-            TotalBv = order.ReceiptTotalBv ?? order.TotalBv,
-            Notes = order.ReceiptNotes,
-            ReceiptFinalized = order.ReceiptFinalized,
-            ReceiptFinalizedAt = order.ReceiptFinalizedAt
-        });
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // PUT /api/Orders/payment-requests/{id}/receipt/draft
-    // Admin: edit the receipt's items / totals / notes and regenerate the PDF preview.
-    // Editing an already-finalized receipt un-finalizes it.
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpPut("payment-requests/{id}/receipt/draft")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> UpdateReceiptDraft(int id, [FromBody] UpdateReceiptDraftDto dto)
-    {
-        var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
-        if (order == null)
-            return NotFound(new { message = "Payment order not found." });
-
-        if (order.Status != PaymentOrderStatus.Approved)
-            return BadRequest(new { message = "Approve the payment before editing its receipt." });
-
-        if (dto.Items == null || dto.Items.Count == 0)
-            return BadRequest(new { message = "Receipt must have at least one item." });
-
-        var items = dto.Items
-          .Select(i => new ReceiptItemData(string.IsNullOrWhiteSpace(i.Name) ? "Item" : i.Name.Trim(), i.Quantity, i.UnitPrice))
-          .ToList();
-
-        order.ReceiptItemsJson = JsonSerializer.Serialize(items);
-        order.ReceiptTotalAmount = dto.TotalAmount;
-        order.ReceiptTotalBv = dto.TotalBv;
-        order.ReceiptNotes = dto.Notes;
-
-        order.ReceiptFinalized = false;
-        order.ReceiptFinalizedAt = null;
-
-        var customerName = await _db.Users
-          .Where(u => u.UserId == order.UserId)
-          .Select(u => u.Name)
-          .FirstOrDefaultAsync() ?? order.UserId;
-
-        try
-        {
-            order.ReceiptPdf = _receiptService.GenerateReceiptPdf(BuildReceiptData(order, items, customerName));
-            order.ReceiptGeneratedAt = DateTime.UtcNow;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Receipt Error] Failed to regenerate receipt for order {order.Id}: {ex.Message}");
-            return StatusCode(500, new { message = "Failed to regenerate the receipt preview. Please try again." });
-        }
-
-        await _db.SaveChangesAsync();
-
-        return Ok(new { success = true, message = "Receipt draft updated. Preview it, then finalize to send it to the user." });
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/Orders/payment-requests/{id}/receipt/preview
-    // Admin: download the current draft/latest PDF to check it before sending
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpGet("payment-requests/{id}/receipt/preview")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> PreviewReceipt(int id)
-    {
-        var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
-        if (order == null)
-            return NotFound(new { message = "Payment order not found." });
-
-        if (order.ReceiptPdf == null)
-            return NotFound(new { message = "No receipt has been generated for this order yet." });
-
-        return File(order.ReceiptPdf, "application/pdf", $"Receipt-Preview-ORD-{order.Id:D6}.pdf");
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // POST /api/Orders/payment-requests/{id}/receipt/finalize
-    // Admin: publish the current receipt draft — makes it visible to the user
-    // ─────────────────────────────────────────────────────────────────────────
-    [HttpPost("payment-requests/{id}/receipt/finalize")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> FinalizeReceipt(int id)
-    {
-        var order = await _db.PaymentOrders.FirstOrDefaultAsync(o => o.Id == id);
-        if (order == null)
-            return NotFound(new { message = "Payment order not found." });
-
-        if (order.Status != PaymentOrderStatus.Approved)
-            return BadRequest(new { message = "Only approved orders can have a receipt finalized." });
-
-        if (order.ReceiptPdf == null)
-            return BadRequest(new { message = "Generate or edit the receipt before finalizing it." });
-
-        order.ReceiptFinalized = true;
-        order.ReceiptFinalizedAt = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
-
-        return Ok(new { success = true, message = "Receipt finalized — the user can now see and download it." });
-    }
-
-    private static ReceiptData BuildReceiptData(PaymentOrder order, List<ReceiptItemData> items, string customerName) =>
-      new ReceiptData(
-        OrderId: order.Id,
-        UserId: order.UserId,
-        CustomerName: customerName,
-        UtrNumber: order.UtrNumber,
-        ReceiptDate: order.ProcessedAt ?? order.RequestedAt,
-        Items: items,
-        TotalAmount: order.ReceiptTotalAmount ?? order.TotalAmount,
-        TotalBv: order.ReceiptTotalBv ?? order.TotalBv,
-        Notes: order.ReceiptNotes
+  }, []);
+
+  // Load once on mount
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    let result = [...orders];
+    if (statusFilter !== 'All') result = result.filter(o => o.status === statusFilter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        o => o.orderId.toLowerCase().includes(q) || o.utrNumber.toLowerCase().includes(q),
       );
+    }
+    result.sort((a, b) => {
+      const va = new Date(a.requestedAt).getTime();
+      const vb = new Date(b.requestedAt).getTime();
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
+    setFiltered(result);
+  }, [orders, search, statusFilter, sortDir]);
+
+  const counts = {
+    total:    orders.length,
+    pending:  orders.filter(o => o.status === 'Pending').length,
+    approved: orders.filter(o => o.status === 'Approved').length,
+    rejected: orders.filter(o => o.status === 'Rejected').length,
+  };
+
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+      <Sidebar />
+
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <LoginTopbar />
+
+        <main className="flex-1 pb-24 md:pb-8 overflow-y-auto">
+          {toast && <Toast message={toast.message} type={toast.type} />}
+
+          <div className="bg-white border-b border-gray-200 px-4 md:px-8 py-4 sm:py-5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-[#3B5998]/10 flex items-center justify-center shrink-0">
+                  <History size={18} className="text-[#3B5998]" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-base sm:text-lg font-black text-gray-900 leading-tight truncate">Order History</h1>
+                  <p className="text-[11px] sm:text-xs text-gray-400 truncate">Track all your payment submissions</p>
+                </div>
+              </div>
+              <button
+                onClick={loadData}
+                disabled={isLoading}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#3B5998] hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60 shrink-0"
+              >
+                <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+                <span className="hidden xs:inline">Refresh</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="px-4 md:px-8 py-5 space-y-5">
+
+            {!isLoading && !error && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Total Orders', value: counts.total,    color: 'text-gray-700',  bg: 'bg-white'    },
+                  { label: 'Pending',      value: counts.pending,  color: 'text-amber-600', bg: 'bg-amber-50' },
+                  { label: 'Approved',     value: counts.approved, color: 'text-blue-600',  bg: 'bg-blue-50'  },
+                  { label: 'Rejected',     value: counts.rejected, color: 'text-red-600',   bg: 'bg-red-50'   },
+                ].map(card => (
+                  <div key={card.label} className={`${card.bg} rounded-xl border border-gray-100 px-4 py-3 shadow-sm`}>
+                    <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">{card.label}</p>
+                    <p className={`text-2xl font-black mt-0.5 ${card.color}`}>{card.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1 w-full">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by Order ID or UTR…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-9 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3B5998]/30 focus:border-[#3B5998]"
+                />
+                {search && (
+                  <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <X size={14} className="text-gray-400 hover:text-gray-600" />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Filter size={14} className="text-gray-400 shrink-0 hidden sm:inline" />
+                <select
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value as OrderStatus | 'All')}
+                  className="w-full sm:w-auto bg-white border border-gray-200 rounded-xl text-sm text-gray-700 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#3B5998]/30"
+                >
+                  <option value="All">All Statuses</option>
+                  {(Object.keys(STATUS_CONFIG) as OrderStatus[]).map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                  className="flex items-center gap-1 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-600 hover:border-[#3B5998] transition-colors shrink-0"
+                  title="Toggle sort order"
+                >
+                  {sortDir === 'desc' ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  <span className="hidden sm:inline">Date</span>
+                </button>
+              </div>
+            </div>
+
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <Loader2 size={28} className="animate-spin text-[#3B5998]" />
+                <p className="text-sm text-gray-400">Loading your orders…</p>
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
+                <AlertCircle size={32} className="text-red-400" />
+                <p className="text-sm font-semibold text-gray-700">Could not load orders</p>
+                <p className="text-xs text-gray-400 max-w-xs">{error}</p>
+                <button
+                  onClick={loadData}
+                  className="mt-2 px-4 py-2 bg-[#3B5998] text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+                <History size={36} className="text-gray-200" />
+                <p className="text-sm font-semibold text-gray-500">No orders yet</p>
+                <p className="text-xs text-gray-400">
+                  {orders.length === 0
+                    ? 'Your order history will appear here after your first purchase.'
+                    : 'No orders match your current filter.'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map(order => {
+                  const cfg  = STATUS_CONFIG[order.status];
+                  const Icon = cfg.icon;
+                  return (
+                    <div
+                      key={order.orderId}
+                      onClick={() => setSelectedOrderId(order.orderId)}
+                      className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm cursor-pointer hover:border-[#3B5998]/30 hover:shadow-md active:scale-[0.99] transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <Hash size={11} className="text-[#3B5998] shrink-0" />
+                            <span className="font-mono text-xs font-bold text-[#3B5998]">{order.orderId}</span>
+                          </div>
+                          <p className="text-[11px] text-gray-400 font-mono truncate">UTR: {order.utrNumber}</p>
+                        </div>
+                        <StatusBadge status={order.status} />
+                      </div>
+
+                      {order.items.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {order.items.slice(0, 2).map((item, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 text-[10px] bg-gray-50 border border-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium truncate max-w-[160px]">
+                              <ShoppingCart size={9} className="text-[#3B5998] shrink-0" />
+                              {item.productName} ×{item.quantity}
+                            </span>
+                          ))}
+                          {order.items.length > 2 && (
+                            <span className="text-[10px] text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full">
+                              +{order.items.length - 2} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                        <div className="flex items-center gap-1.5 text-[10px] text-gray-400 min-w-0">
+                          <Icon size={10} className={cfg.color} />
+                          <span className="truncate">{formatDate(order.requestedAt)}</span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          {order.status === 'Approved' && (
+                            <span className="text-[10px] text-green-600 font-semibold flex items-center gap-0.5">
+                              <Download size={10} /> Receipt
+                            </span>
+                          )}
+                          <span className="text-sm font-black text-gray-800">{formatCurrency(order.totalAmount)}</span>
+                          <Eye size={14} className="text-gray-300" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <p className="text-xs text-gray-400 text-center pt-1">
+                  Showing {filtered.length} of {orders.length} orders
+                </p>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      {selectedOrder && (
+        <OrderDetailModal
+          order={selectedOrder}
+          onClose={() => setSelectedOrderId(null)}
+        />
+      )}
+    </div>
+  );
 }
