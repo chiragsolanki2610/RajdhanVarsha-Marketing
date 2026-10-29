@@ -477,14 +477,19 @@ public class OrdersController : ControllerBase
               o.ProcessedAt,
               o.AdminRemarks,
               o.ReceiptFinalized,
-              o.SelectedPucId
+              o.SelectedPucId,
+              o.SoldByPucId,
+              o.ReceiptItemsJson
           })
           .ToListAsync();
 
         // Batch-fetch pickup center names (for the Tax Invoice PDF) in one round-trip
+        // Pickup center = the one that sold it in person (SoldByPucId) or the one the
+        // customer picked at checkout (SelectedPucId).
         var pucIds = orders
-          .Where(o => !string.IsNullOrWhiteSpace(o.SelectedPucId))
-          .Select(o => o.SelectedPucId!)
+          .Select(o => !string.IsNullOrWhiteSpace(o.SoldByPucId) ? o.SoldByPucId! : o.SelectedPucId)
+          .Where(id => !string.IsNullOrWhiteSpace(id))
+          .Select(id => id!)
           .Distinct()
           .ToList();
         var pucNames = pucIds.Count == 0
@@ -492,6 +497,16 @@ public class OrdersController : ControllerBase
           : await _db.PickupCenters
               .Where(p => pucIds.Contains(p.PucId))
               .ToDictionaryAsync(p => p.PucId, p => p.CenterName);
+
+        // Product DP / BV by name — only needed for pickup-center sales (see Items below)
+        var needsLookup = orders.Any(o => !string.IsNullOrWhiteSpace(o.SoldByPucId));
+        var productInfoByName = !needsLookup
+          ? new Dictionary<string, (decimal Dp, decimal Bv)>(StringComparer.OrdinalIgnoreCase)
+          : (await _db.Products.AsNoTracking()
+                .Select(p => new { p.ProductName, p.Dp, p.Bv })
+                .ToListAsync())
+              .GroupBy(p => p.ProductName.Trim(), StringComparer.OrdinalIgnoreCase)
+              .ToDictionary(g => g.Key, g => (g.First().Dp, g.First().Bv), StringComparer.OrdinalIgnoreCase);
 
         var result = orders.Select(o => new PaymentOrderDto
         {
@@ -509,8 +524,23 @@ public class OrdersController : ControllerBase
             ProcessedAt = o.ProcessedAt,
             AdminRemarks = o.AdminRemarks,
             ReceiptAvailable = o.ReceiptFinalized,
-            SelectedPucId = o.SelectedPucId,
-            SelectedPucCenterName = o.SelectedPucId != null && pucNames.TryGetValue(o.SelectedPucId, out var pn) ? pn : null
+            SelectedPucId = !string.IsNullOrWhiteSpace(o.SoldByPucId) ? o.SoldByPucId : o.SelectedPucId,
+            SelectedPucCenterName = pucNames.TryGetValue(
+                !string.IsNullOrWhiteSpace(o.SoldByPucId) ? o.SoldByPucId! : (o.SelectedPucId ?? string.Empty),
+                out var pn) ? pn : null,
+            Items = string.IsNullOrWhiteSpace(o.SoldByPucId)
+                ? null
+                : CartItemParser.Parse(o.ReceiptItemsJson).Select(i =>
+                  {
+                      productInfoByName.TryGetValue((i.Name ?? string.Empty).Trim(), out var info);
+                      return new PaymentOrderItemDto
+                      {
+                          ProductName = i.Name ?? string.Empty,
+                          Quantity = i.Quantity ?? 1,
+                          Dp = info.Dp > 0 ? info.Dp : (i.UnitPrice ?? 0),
+                          Bv = info.Bv
+                      };
+                  }).ToList()
         });
 
         return Ok(result);
