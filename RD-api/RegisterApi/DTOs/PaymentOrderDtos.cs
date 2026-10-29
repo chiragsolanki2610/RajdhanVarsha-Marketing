@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 
 namespace RegisterApi.DTOs;
 
@@ -27,6 +27,18 @@ public class PaymentOrderDto
     public bool ReceiptDraftReady { get; set; }
     public string? SelectedPucId { get; set; }
     public string? SelectedPucCenterName { get; set; }
+
+    // Resolved line items (name / qty / DP / BV). Filled for pickup-center sales whose
+    // CartItemsJson only holds productId + quantity; null otherwise (client falls back to CartItemsJson).
+    public List<PaymentOrderItemDto>? Items { get; set; }
+}
+
+public class PaymentOrderItemDto
+{
+    public string ProductName { get; set; } = string.Empty;
+    public decimal Quantity { get; set; }
+    public decimal Dp { get; set; }
+    public decimal Bv { get; set; }
 }
 
 // ── Admin approve / reject body ───────────────────────────────────────────────
