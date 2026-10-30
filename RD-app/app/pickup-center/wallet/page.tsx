@@ -6,6 +6,7 @@ import {
   Wallet as WalletIcon, PlusCircle, Clock,
   ArrowDownLeft, ArrowUpRight, CheckCircle2, XCircle,
   Copy, Check, UploadCloud, ImageIcon, X, Smartphone,
+  TrendingUp, TrendingDown, Receipt,
 } from "lucide-react";
 import PickupCenterTopbar from "@/components/pickup_centertopbar";
 import PickupCenterSidebar from "@/components/pickup_centersidebar";
@@ -129,8 +130,9 @@ function AddMoneyModal({ onClose, onSubmitted }: { onClose: () => void; onSubmit
     }
   };
 
+  // text-base on mobile stops iOS from zooming into the field
   const input =
-    "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#3B5998] focus:ring-2 focus:ring-[#3B5998]/20";
+    "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none transition focus:border-[#3B5998] focus:ring-2 focus:ring-[#3B5998]/20 sm:text-sm";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
@@ -139,13 +141,17 @@ function AddMoneyModal({ onClose, onSubmitted }: { onClose: () => void; onSubmit
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4 sm:px-6">
-          <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
-            <PlusCircle size={18} className="text-[#3B5998]" /> Add money to wallet
-          </h2>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-100">
-            <X size={16} className="text-slate-500" />
-          </button>
+        <div className="sticky top-0 z-10 border-b border-slate-100 bg-white px-5 pb-3 pt-2 sm:px-6 sm:py-4">
+          {/* little grab handle, mobile only */}
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+              <PlusCircle size={18} className="text-[#3B5998]" /> Add money to wallet
+            </h2>
+            <button onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200">
+              <X size={16} className="text-slate-600" />
+            </button>
+          </div>
         </div>
 
         {done ? (
@@ -156,20 +162,20 @@ function AddMoneyModal({ onClose, onSubmitted }: { onClose: () => void; onSubmit
               The company will verify your payment. Once approved, ₹{amt.toLocaleString("en-IN")} is added to your wallet.
               Track it under <b>Top-up requests</b>.
             </p>
-            <button onClick={onClose} className="mt-6 rounded-xl bg-[#3B5998] px-6 py-3 text-sm font-semibold text-white hover:bg-[#2f4779]">
+            <button onClick={onClose} className="mt-6 w-full rounded-xl bg-[#3B5998] px-6 py-3.5 text-sm font-semibold text-white hover:bg-[#2f4779] sm:w-auto">
               Done
             </button>
           </div>
         ) : (
-          <div className="grid gap-6 p-5 sm:p-6 md:grid-cols-5">
+          <div className="grid gap-6 p-5 pb-8 sm:p-6 md:grid-cols-5">
             {/* Step 1 — pay */}
             <section className="md:col-span-2">
-              <h3 className="text-sm font-semibold text-slate-900">1. Pay the company</h3>
+              <h3 className="text-sm font-bold text-slate-900">1. Pay the company</h3>
               <p className="mt-1 text-xs text-slate-500">Scan the QR with any UPI app, or pay to the UPI ID.</p>
 
               <div className="mt-4 flex justify-center rounded-2xl border border-slate-200 bg-white p-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/photos/QR.jpg" alt="Company UPI QR code" className="h-48 w-48 object-contain" />
+                <img src="/photos/QR.jpg" alt="Company UPI QR code" className="h-44 w-44 object-contain sm:h-48 sm:w-48" />
               </div>
 
               <div className="mt-4">
@@ -184,7 +190,7 @@ function AddMoneyModal({ onClose, onSubmitted }: { onClose: () => void; onSubmit
               </div>
 
               {upiLink && (
-                <a href={upiLink} className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-[#3B5998]/30 bg-[#3B5998]/5 px-4 py-2.5 text-sm font-semibold text-[#3B5998] sm:hidden">
+                <a href={upiLink} className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-[#3B5998]/30 bg-[#3B5998]/5 px-4 py-3 text-sm font-semibold text-[#3B5998] sm:hidden">
                   <Smartphone size={16} /> Open UPI app to pay ₹{amt.toLocaleString("en-IN")}
                 </a>
               )}
@@ -192,13 +198,13 @@ function AddMoneyModal({ onClose, onSubmitted }: { onClose: () => void; onSubmit
 
             {/* Step 2 — proof */}
             <form onSubmit={submit} className="md:col-span-3">
-              <h3 className="text-sm font-semibold text-slate-900">2. Submit payment proof</h3>
+              <h3 className="text-sm font-bold text-slate-900">2. Submit payment proof</h3>
               <p className="mt-1 text-xs text-slate-500">Enter exactly what you paid. The company checks it against their bank statement.</p>
 
               {error && (
                 <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  <span>{error}</span>
-                  <button type="button" onClick={() => setError(null)}><X size={16} /></button>
+                  <span className="min-w-0 break-words">{error}</span>
+                  <button type="button" onClick={() => setError(null)} aria-label="Dismiss" className="shrink-0"><X size={16} /></button>
                 </div>
               )}
 
@@ -209,7 +215,7 @@ function AddMoneyModal({ onClose, onSubmitted }: { onClose: () => void; onSubmit
                 <div className="mt-2 flex flex-wrap gap-2">
                   {QUICK_AMOUNTS.map((q) => (
                     <button key={q} type="button" onClick={() => setAmount(String(q))}
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${Number(amount) === q ? "border-[#3B5998] bg-[#3B5998] text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"}`}>
+                      className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${Number(amount) === q ? "border-[#3B5998] bg-[#3B5998] text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"}`}>
                       ₹{q.toLocaleString("en-IN")}
                     </button>
                   ))}
@@ -243,14 +249,14 @@ function AddMoneyModal({ onClose, onSubmitted }: { onClose: () => void; onSubmit
                     onDrop={(e) => { e.preventDefault(); pickFile(e.dataTransfer.files?.[0]); }}
                     className="mt-1.5 flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 px-4 py-6 text-slate-500 transition hover:border-[#3B5998] hover:bg-[#3B5998]/5">
                     <UploadCloud size={26} />
-                    <span className="text-sm font-medium text-slate-700">Click to upload or drag &amp; drop</span>
+                    <span className="text-sm font-medium text-slate-700">Tap to upload screenshot</span>
                     <span className="flex items-center gap-1 text-xs"><ImageIcon size={12} /> JPG, PNG or WebP · max 5 MB</span>
                   </button>
                 )}
               </div>
 
               <button type="submit" disabled={submitting || !info}
-                className="mt-5 w-full rounded-xl bg-[#3B5998] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-[#2f4779] disabled:cursor-not-allowed disabled:opacity-60">
+                className="mt-5 w-full rounded-xl bg-[#3B5998] px-5 py-3.5 text-sm font-bold text-white transition hover:bg-[#2f4779] disabled:cursor-not-allowed disabled:opacity-60">
                 {submitting ? "Submitting…" : "Submit for approval"}
               </button>
             </form>
@@ -296,71 +302,150 @@ export default function WalletPage() {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <PickupCenterSidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* min-w-0 + overflow-x-hidden keeps wide content from pushing the page sideways;
+          pb-24 keeps the last items clear of the fixed bottom nav on mobile */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden pb-24 md:pb-0">
         <PickupCenterTopbar title="Wallet" operatorName={operatorName} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto max-w-5xl space-y-6">
+          <div className="mx-auto max-w-5xl space-y-4 md:space-y-6">
             {error && (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
             )}
 
             {/* Balance hero */}
-            <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#3B5998] to-[#2b4373] p-6 text-white shadow-lg sm:p-8">
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-sm text-white/70">
-                    <WalletIcon size={16} /> Available balance
+            <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#3B5998] via-[#33508a] to-[#1E3A6E] p-5 text-white shadow-lg sm:p-8">
+              <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+              <div className="pointer-events-none absolute -bottom-16 right-12 h-36 w-36 rounded-full bg-white/5" />
+
+              <div className="relative">
+                <div className="flex items-center gap-2 text-sm text-white/70">
+                  <WalletIcon size={16} /> Available balance
+                </div>
+                <div className="mt-1.5 text-4xl font-extrabold tracking-tight sm:text-5xl">
+                  {loading ? "…" : inr(wallet?.balance ?? 0)}
+                </div>
+                {pending.length > 0 && (
+                  <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
+                    <Clock size={13} />
+                    {inr(pendingTotal)} awaiting approval ({pending.length})
                   </div>
-                  <div className="mt-2 text-4xl font-bold tracking-tight sm:text-5xl">
-                    {loading ? "…" : inr(wallet?.balance ?? 0)}
-                  </div>
-                  {pending.length > 0 && (
-                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
-                      <Clock size={13} />
-                      {inr(pendingTotal)} awaiting approval ({pending.length})
+                )}
+
+                {/* Earned / withdrawn */}
+                <div className="mt-5 grid grid-cols-2 gap-2.5">
+                  <div className="rounded-2xl bg-white/10 px-3.5 py-3 ring-1 ring-white/15">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-white/70">
+                      <TrendingUp size={13} className="text-emerald-300" /> Total earned
                     </div>
-                  )}
+                    <div className="mt-0.5 truncate text-sm font-bold sm:text-base">
+                      {loading ? "…" : inr(wallet?.totalEarned ?? 0)}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-white/10 px-3.5 py-3 ring-1 ring-white/15">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-white/70">
+                      <TrendingDown size={13} className="text-rose-300" /> Total withdrawn
+                    </div>
+                    <div className="mt-0.5 truncate text-sm font-bold sm:text-base">
+                      {loading ? "…" : inr(wallet?.totalWithdrawn ?? 0)}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => setShowAdd(true)}
-                    className="flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-[#3B5998] shadow-sm transition hover:bg-slate-100"
-                  >
-                    <PlusCircle size={18} /> Add money
-                  </button>
-                </div>
+
+                <button
+                  onClick={() => setShowAdd(true)}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-bold text-[#3B5998] shadow-sm transition active:scale-[0.99] hover:bg-slate-100 sm:w-auto"
+                >
+                  <PlusCircle size={18} /> Add money
+                </button>
               </div>
             </section>
 
             {/* History */}
-            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex gap-1 border-b border-slate-200 px-4 pt-3 sm:px-6">
+            <section className="space-y-4">
+              {/* Segmented tabs */}
+              <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
                 {([
-                  ["transactions", `Transactions (${txs.length})`],
-                  ["requests", `Top-up requests (${topups.length})`],
-                ] as const).map(([key, label]) => (
+                  ["transactions", "Transactions", txs.length],
+                  ["requests", "Top-ups", topups.length],
+                ] as const).map(([key, label, count]) => (
                   <button
                     key={key}
                     onClick={() => setTab(key)}
-                    className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold transition ${
-                      tab === key ? "border-[#3B5998] text-[#3B5998]" : "border-transparent text-slate-500 hover:text-slate-800"
+                    className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition sm:text-sm ${
+                      tab === key ? "bg-[#3B5998] text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                     }`}
                   >
                     {label}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                        tab === key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                    {key === "requests" && pending.length > 0 && (
+                      <span className="h-2 w-2 rounded-full bg-amber-400" />
+                    )}
                   </button>
                 ))}
               </div>
 
-              <div className="p-4 sm:p-6">
-                {loading ? (
-                  <p className="py-10 text-center text-sm text-slate-500">Loading…</p>
-                ) : tab === "transactions" ? (
-                  txs.length === 0 ? (
-                    <p className="py-10 text-center text-sm text-slate-500">
+              {loading ? (
+                <div className="space-y-3">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="h-20 animate-pulse rounded-2xl border border-slate-200 bg-white" />
+                  ))}
+                </div>
+              ) : tab === "transactions" ? (
+                txs.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+                    <Receipt size={32} className="mx-auto text-slate-300" />
+                    <p className="mt-3 text-sm text-slate-500">
                       No transactions yet. Add money or return stock to get started.
                     </p>
-                  ) : (
-                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  </div>
+                ) : (
+                  <>
+                    {/* Mobile: card list */}
+                    <ul className="space-y-2.5 md:hidden">
+                      {txs.map((t) => {
+                        const credit = t.type === "Credit";
+                        return (
+                          <li key={t.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+                            <div className="flex items-start gap-3">
+                              <span
+                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                                  credit ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+                                }`}
+                              >
+                                {credit ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                              </span>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="text-sm font-bold leading-snug text-slate-900">{t.source}</p>
+                                  <p className={`shrink-0 text-sm font-extrabold ${credit ? "text-emerald-600" : "text-red-600"}`}>
+                                    {credit ? "+" : "−"} {inr(t.amount)}
+                                  </p>
+                                </div>
+                                {t.description && (
+                                  <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500 [overflow-wrap:anywhere]">
+                                    {t.description}
+                                  </p>
+                                )}
+                                <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                                  <span>{fmtDate(t.createdAt)}</span>
+                                  <span className="shrink-0 font-medium text-slate-500">Bal {inr(t.balanceAfter)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    {/* Desktop: table */}
+                    <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
                       <table className="w-full text-sm">
                         <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-500">
                           <tr>
@@ -380,9 +465,11 @@ export default function WalletPage() {
                                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${credit ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"}`}>
                                       {credit ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
                                     </span>
-                                    <div>
+                                    <div className="min-w-0">
                                       <div className="font-medium text-slate-900">{t.source}</div>
-                                      {t.description && <div className="text-xs text-slate-500">{t.description}</div>}
+                                      {t.description && (
+                                        <div className="max-w-md text-xs text-slate-500 [overflow-wrap:anywhere]">{t.description}</div>
+                                      )}
                                     </div>
                                   </div>
                                 </td>
@@ -397,42 +484,61 @@ export default function WalletPage() {
                         </tbody>
                       </table>
                     </div>
-                  )
-                ) : topups.length === 0 ? (
-                  <div className="py-10 text-center text-sm text-slate-500">
-                    You haven&apos;t added money yet.
-                    <div className="mt-3">
-                      <button onClick={() => setShowAdd(true)} className="font-semibold text-[#3B5998] hover:underline">
-                        Add money
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-                    {topups.map((t) => {
-                      const { cls, Icon } = STATUS_STYLE[t.status];
-                      return (
-                        <li key={t.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-4">
-                          <div>
-                            <div className="font-semibold text-slate-900">{inr(t.amount)}</div>
-                            <div className="mt-0.5 text-xs text-slate-500">
-                              {t.requestNo} · UTR {t.utrNumber} · {fmtDate(t.requestedAt)}
-                            </div>
-                            {t.status === "Rejected" && (
-                              <div className="mt-1.5 text-xs text-red-600">
-                                {t.rejectionReason ? `Reason: ${t.rejectionReason}` : "Rejected by the company. No amount was credited."}
-                              </div>
-                            )}
+                  </>
+                )
+              ) : topups.length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+                  <PlusCircle size={32} className="mx-auto text-slate-300" />
+                  <p className="mt-3 text-sm text-slate-500">You haven&apos;t added money yet.</p>
+                  <button
+                    onClick={() => setShowAdd(true)}
+                    className="mt-4 rounded-xl bg-[#3B5998] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#2f4779]"
+                  >
+                    Add money
+                  </button>
+                </div>
+              ) : (
+                <ul className="space-y-2.5">
+                  {topups.map((t) => {
+                    const { cls, Icon } = STATUS_STYLE[t.status];
+                    return (
+                      <li key={t.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-lg font-extrabold text-slate-900">{inr(t.amount)}</div>
+                            <div className="mt-0.5 text-xs font-semibold text-slate-500">{t.requestNo}</div>
                           </div>
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${cls}`}>
+                          <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset ${cls}`}>
                             <Icon size={13} /> {t.status}
                           </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
+                        </div>
+
+                        <div className="mt-3 space-y-1.5 rounded-xl bg-slate-50 px-3 py-2.5 text-xs">
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-500">UTR</span>
+                            <span className="font-mono font-medium text-slate-800 [overflow-wrap:anywhere]">{t.utrNumber}</span>
+                          </div>
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-500">Requested</span>
+                            <span className="text-slate-700">{fmtDate(t.requestedAt)}</span>
+                          </div>
+                        </div>
+
+                        {t.status === "Rejected" && (
+                          <div className="mt-2.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                            {t.rejectionReason ? `Reason: ${t.rejectionReason}` : "Rejected by the company. No amount was credited."}
+                          </div>
+                        )}
+                        {t.status === "Pending" && (
+                          <div className="mt-2.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                            Waiting for the company to verify your payment.
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </section>
           </div>
         </main>
