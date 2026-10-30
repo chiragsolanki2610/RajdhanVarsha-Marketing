@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     BadgeCheck,
@@ -11,6 +11,7 @@ import {
     Landmark,
     Loader2,
     LockKeyhole,
+    LogOut,
     MapPin,
     Phone,
     QrCode,
@@ -80,14 +81,61 @@ function mask(value: string) {
     return value.length > 4 ? `${"•".repeat(Math.max(0, value.length - 4))}${value.slice(-4)}` : value;
 }
 
-function Field({ label, value, icon: Icon }: { label: string; value: string; icon: typeof UserRound }) {
+/* ---------- Small UI building blocks ---------- */
+
+function Section({ icon: Icon, title, subtitle, children }: { icon: typeof UserRound; title: string; subtitle?: string; children: ReactNode }) {
     return (
-        <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                <Icon size={14} /> {label}
+        <section className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3.5 sm:px-6">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#3B5998]">
+                    <Icon size={18} />
+                </div>
+                <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-gray-900">{title}</h3>
+                    {subtitle && <p className="truncate text-xs text-gray-500">{subtitle}</p>}
+                </div>
             </div>
-            <p className="mt-2 break-words text-sm font-semibold text-gray-800">{value || "Not provided"}</p>
+            {children}
+        </section>
+    );
+}
+
+// A single "label ... value" row, like a settings list
+function Row({ label, value, icon: Icon, href, mono }: { label: string; value: string; icon: typeof UserRound; href?: string; mono?: boolean }) {
+    const content = value || "Not provided";
+    const muted = !value || value === "Not provided";
+    return (
+        <div className="flex items-start gap-3 px-4 py-3 sm:px-6">
+            <Icon size={16} className="mt-0.5 shrink-0 text-gray-400" />
+            <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+                {href && value ? (
+                    <a href={href} className="mt-0.5 block break-words text-sm font-semibold text-[#3B5998]">{content}</a>
+                ) : (
+                    <p className={`mt-0.5 break-words text-sm font-semibold ${muted ? "text-gray-400" : "text-gray-900"} ${mono ? "font-mono" : ""}`}>{content}</p>
+                )}
+            </div>
         </div>
+    );
+}
+
+function RowGroup({ children, cols = 1 }: { children: ReactNode; cols?: 1 | 2 }) {
+    return (
+        <div className={`divide-y divide-gray-100 ${cols === 2 ? "lg:grid lg:grid-cols-2 lg:divide-y-0" : ""}`}>
+            {children}
+        </div>
+    );
+}
+
+const inputCls =
+    "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-base text-gray-900 outline-none transition focus:border-[#3B5998] focus:bg-white focus:ring-2 focus:ring-blue-100 sm:text-sm";
+
+function Input({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
+    return (
+        <label className={className}>
+            <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">{label}</span>
+            {children}
+        </label>
     );
 }
 
@@ -100,6 +148,7 @@ export default function PickupCenterProfilePage() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
+    const [confirmLogout, setConfirmLogout] = useState(false);
 
     useEffect(() => {
         const loadProfile = async () => {
@@ -180,6 +229,13 @@ export default function PickupCenterProfilePage() {
         loadProfile();
     }, [router]);
 
+    // Auto-dismiss success notice
+    useEffect(() => {
+        if (!notice || notice.startsWith("Some private")) return;
+        const t = setTimeout(() => setNotice(null), 5000);
+        return () => clearTimeout(t);
+    }, [notice]);
+
     const updateField = <Field extends keyof EditableProfile>(field: Field, value: EditableProfile[Field]) => {
         setForm((current) => ({ ...current, [field]: value }));
     };
@@ -243,6 +299,7 @@ export default function PickupCenterProfilePage() {
             setProfile(data);
             setEditing(false);
             setNotice("Profile updated successfully.");
+            window.scrollTo({ top: 0, behavior: "smooth" });
             const cached = localStorage.getItem("pucInfo");
             if (cached) localStorage.setItem("pucInfo", JSON.stringify({ ...JSON.parse(cached), fullName: data.fullName, centerName: data.centerName }));
         } catch (err) {
@@ -252,42 +309,251 @@ export default function PickupCenterProfilePage() {
         }
     };
 
+    const handleLogout = () => {
+        localStorage.removeItem("pucToken");
+        localStorage.removeItem("pucInfo");
+        router.replace("/pickup-center");
+    };
+
     if (loading) return <div className="flex min-h-screen items-center justify-center bg-gray-50 text-sm text-gray-500"><Loader2 className="mr-2 animate-spin" size={18} /> Loading profile...</div>;
 
+    const memberSince = profile?.createdAt
+        ? new Date(profile.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+        : "—";
+    const initials = (profile?.fullName || "?").trim().slice(0, 2).toUpperCase();
+    const isActive = (profile?.status || "").toLowerCase() === "active";
+
     return (
-        <div className="flex min-h-screen bg-[#f7f8fb]">
+        <div className="flex min-h-screen bg-[#f4f6fa]">
             <PickupCenterSidebar />
             <div className="min-w-0 flex-1">
                 <PickupCenterTopbar title="Pickup Center Profile" operatorName={profile?.fullName || "Operator"} />
-                <main className="mx-auto max-w-6xl space-y-6 p-4 pb-24 sm:p-6 lg:p-8">
-                    {error && <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError(null)}><X size={16} /></button></div>}
-                    {notice && <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><CheckCircle2 size={17} /> {notice}</div>}
 
-                    {profile && <>
-                        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-                            <div className="bg-[#3B5998] px-5 py-7 text-white sm:px-8">
-                                <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+                {/* big bottom padding on mobile: clears save bar + bottom nav */}
+                <main className="mx-auto max-w-5xl space-y-4 px-4 pb-40 pt-4 sm:px-6 lg:space-y-6 lg:p-8 lg:pb-12">
+                    {error && (
+                        <div className="flex items-start justify-between gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            <span>{error}</span>
+                            <button aria-label="Dismiss error" onClick={() => setError(null)}><X size={16} /></button>
+                        </div>
+                    )}
+                    {notice && (
+                        <div className="flex items-start gap-2 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                            <CheckCircle2 size={17} className="mt-0.5 shrink-0" /> {notice}
+                        </div>
+                    )}
+
+                    {profile && (
+                        <>
+                            {/* ---------- Hero card ---------- */}
+                            <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#3B5998] to-[#2d4373] text-white shadow-md">
+                                <div className="px-5 pb-5 pt-6 sm:px-8">
                                     <div className="flex items-center gap-4">
-                                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-2xl font-black uppercase ring-1 ring-white/25">{profile.fullName.slice(0, 2)}</div>
-                                        <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-100">Owner profile</p><h2 className="mt-1 text-2xl font-bold">{profile.centerName}</h2><p className="mt-1 text-sm text-blue-100">{profile.fullName} · {profile.pucId}</p></div>
-                                    </div>
-                                    {!editing ? <button onClick={() => { setNotice(null); setEditing(true); }} className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-[#3B5998] shadow-sm hover:bg-blue-50"><Edit3 size={16} /> Edit details</button> : <div className="flex gap-2"><button onClick={cancelEdit} className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/10"><X size={16} /> Cancel</button><button form="profile-form" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-[#3B5998] disabled:opacity-60"><Save size={16} /> {saving ? "Saving..." : "Save changes"}</button></div>}
-                                </div>
-                            </div>
-                            <div className="grid gap-4 p-5 sm:grid-cols-3 sm:p-8"><div><p className="text-xs font-semibold uppercase text-gray-400">Center ID</p><p className="mt-1 font-mono font-bold text-[#3B5998]">{profile.pucId}</p></div><div><p className="text-xs font-semibold uppercase text-gray-400">Account status</p><p className="mt-1 inline-flex items-center gap-1.5 text-sm font-bold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" /> {profile.status}</p></div><div><p className="text-xs font-semibold uppercase text-gray-400">Member since</p><p className="mt-1 text-sm font-semibold text-gray-800">{new Date(profile.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p></div></div>
-                        </section>
+                                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/15 text-xl font-black ring-2 ring-white/30">
+                                            {initials}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-200">Pickup center owner</p>
+                                            <h2 className="mt-0.5 truncate text-xl font-bold leading-tight">{profile.centerName}</h2>
+                                            <p className="truncate text-sm text-blue-100">{profile.fullName}</p>
+                                        </div>
 
-                        {editing ? <form id="profile-form" onSubmit={saveProfile} className="space-y-6">
-                            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><div className="mb-5"><h3 className="font-bold text-gray-900">Contact and center details</h3><p className="mt-1 text-sm text-gray-500">Keep the information customers use to find and contact your center current.</p></div><div className="grid gap-4 sm:grid-cols-2">{([['fullName', 'Owner full name'], ['phone', 'Phone number'], ['centerName', 'Center name'], ['state', 'State'], ['city', 'City'], ['centerAddress', 'Full center address']] as [keyof EditableProfile, string][]).map(([field, label]) => <label key={field} className={field === 'centerAddress' ? 'sm:col-span-2' : ''}><span className="mb-1.5 block text-sm font-semibold text-gray-700">{label}</span><input required value={form[field] || ""} onChange={(event) => updateField(field, event.target.value)} className="w-full rounded-lg border border-gray-200 px-3.5 py-3 text-sm text-gray-900 outline-none transition focus:border-[#3B5998] focus:ring-2 focus:ring-blue-100" /></label>)}</div></section>
-                            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><h3 className="font-bold text-gray-900">Bank and UPI details</h3><p className="mt-1 mb-5 text-sm text-gray-500">Add the payment details customers should use at your pickup center.</p><div className="grid gap-4 sm:grid-cols-2"><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">Account holder name</span><input value={form.accountHolderName} onChange={(event) => updateField('accountHolderName', event.target.value)} className="w-full rounded-lg border border-gray-200 px-3.5 py-3 text-sm outline-none focus:border-[#3B5998] focus:ring-2 focus:ring-blue-100" /></label><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">Bank name</span><input value={form.bankName} onChange={(event) => updateField('bankName', event.target.value)} className="w-full rounded-lg border border-gray-200 px-3.5 py-3 text-sm outline-none focus:border-[#3B5998] focus:ring-2 focus:ring-blue-100" /></label><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">Account number</span><input required value={form.accountNumber} onChange={(event) => updateField('accountNumber', event.target.value)} className="w-full rounded-lg border border-gray-200 px-3.5 py-3 text-sm outline-none focus:border-[#3B5998] focus:ring-2 focus:ring-blue-100" /></label><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">IFSC code</span><input required value={form.ifscCode} onChange={(event) => updateField('ifscCode', event.target.value.toUpperCase())} className="w-full rounded-lg border border-gray-200 px-3.5 py-3 text-sm uppercase outline-none focus:border-[#3B5998] focus:ring-2 focus:ring-blue-100" /></label><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">Account type</span><select value={form.accountType} onChange={(event) => updateField('accountType', event.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-[#3B5998] focus:ring-2 focus:ring-blue-100"><option>Savings</option><option>Current</option><option>Other</option></select></label><label><span className="mb-1.5 block text-sm font-semibold text-gray-700">UPI ID</span><input value={form.upiId} onChange={(event) => updateField('upiId', event.target.value.trim())} placeholder="yourname@upi" className="w-full rounded-lg border border-gray-200 px-3.5 py-3 text-sm outline-none focus:border-[#3B5998] focus:ring-2 focus:ring-blue-100" /></label><div className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold text-gray-700">UPI QR / scanner image</span><div className="flex flex-wrap items-start gap-4 rounded-xl border border-dashed border-gray-300 p-4"><div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-lg bg-gray-50">{form.upiQrImageBase64 ? <img src={form.upiQrImageBase64} alt="UPI QR code preview" className="h-full w-full object-contain" /> : <QrCode className="text-gray-300" size={48} />}</div><div className="space-y-2"><label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[#3B5998] px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700"><QrCode size={16} /> Choose QR image<input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => handleQrImage(event.target.files?.[0])} /></label>{form.upiQrImageBase64 && <button type="button" onClick={() => updateField('upiQrImageBase64', null)} className="block text-sm font-semibold text-red-600 hover:text-red-700">Remove QR image</button>}<p className="text-xs text-gray-500">JPG, PNG, or WEBP up to 5MB</p></div></div></div></div></section>
-                        </form> : <>
-                            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><div className="mb-5 flex items-center gap-3"><div className="rounded-lg bg-blue-50 p-2 text-[#3B5998]"><UserRound size={19} /></div><div><h3 className="font-bold text-gray-900">Owner details</h3><p className="text-sm text-gray-500">Your registered contact information</p></div></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><Field label="Full name" value={profile.fullName} icon={UserRound} /><Field label="Phone number" value={profile.phone} icon={Phone} /><Field label="Username" value={profile.username} icon={LockKeyhole} /><Field label="Sponsor" value={[profile.sponsorName, profile.sponsorId].filter(Boolean).join(" · ")} icon={BadgeCheck} /></div></section>
-                            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><div className="mb-5 flex items-center gap-3"><div className="rounded-lg bg-blue-50 p-2 text-[#3B5998]"><Building2 size={19} /></div><div><h3 className="font-bold text-gray-900">Center details</h3><p className="text-sm text-gray-500">The location customers will see</p></div></div><div className="grid gap-3 sm:grid-cols-2"><Field label="Center name" value={profile.centerName} icon={Building2} /><Field label="Location" value={`${profile.city}, ${profile.state}`} icon={MapPin} /><Field label="Address" value={profile.centerAddress} icon={MapPin} /></div></section>
-                            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><div className="mb-5 flex items-center gap-3"><div className="rounded-lg bg-blue-50 p-2 text-[#3B5998]"><ShieldCheck size={19} /></div><div><h3 className="font-bold text-gray-900">Verification and payment details</h3><p className="text-sm text-gray-500">Protected information linked to your center</p></div></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Field label="Aadhaar" value={mask(profile.aadharNumber)} icon={FileCheck2} /><Field label="PAN" value={mask(profile.panNumber)} icon={FileCheck2} /><Field label="Account number" value={mask(profile.accountNumber)} icon={Landmark} /><Field label="Bank" value={profile.bankName} icon={Landmark} /><Field label="Account holder" value={profile.accountHolderName} icon={UserRound} /><Field label="Account type" value={profile.accountType} icon={Landmark} /><Field label="IFSC code" value={profile.ifscCode} icon={Landmark} /><Field label="UPI ID" value={profile.upiId} icon={QrCode} /></div>{profile.upiQrImageBase64 && <div className="mt-5 flex items-center gap-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4"><img src={profile.upiQrImageBase64} alt="UPI QR code" className="h-28 w-28 rounded-lg bg-white object-contain p-2" /><div><p className="font-semibold text-gray-900">UPI scanner image</p><p className="mt-1 text-sm text-gray-500">Customers can scan this code to pay.</p></div></div>}<div className="mt-4 flex items-center gap-2 text-xs text-gray-500"><LockKeyhole size={14} /> Identity documents are kept read-only for your security.</div></section>
-                        </>}
-                    </>}
+                                        {/* Desktop actions */}
+                                        <div className="hidden lg:block">
+                                            {!editing ? (
+                                                <button onClick={() => { setNotice(null); setEditing(true); }} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#3B5998] shadow-sm hover:bg-blue-50"><Edit3 size={16} /> Edit details</button>
+                                            ) : (
+                                                <div className="flex gap-2">
+                                                    <button type="button" onClick={cancelEdit} className="inline-flex items-center gap-2 rounded-xl border border-white/30 px-4 py-2.5 text-sm font-semibold hover:bg-white/10"><X size={16} /> Cancel</button>
+                                                    <button form="profile-form" disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#3B5998] disabled:opacity-60"><Save size={16} /> {saving ? "Saving..." : "Save changes"}</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Stats strip */}
+                                    <div className="mt-5 grid grid-cols-3 divide-x divide-white/15 rounded-2xl bg-white/10 py-3 text-center">
+                                        <div className="px-2">
+                                            <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-200">Center ID</p>
+                                            <p className="mt-1 truncate font-mono text-xs font-bold sm:text-sm">{profile.pucId}</p>
+                                        </div>
+                                        <div className="px-2">
+                                            <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-200">Status</p>
+                                            <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-bold sm:text-sm">
+                                                <span className={`h-2 w-2 rounded-full ${isActive ? "bg-emerald-400" : "bg-amber-400"}`} />
+                                                {profile.status}
+                                            </p>
+                                        </div>
+                                        <div className="px-2">
+                                            <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-200">Member since</p>
+                                            <p className="mt-1 truncate text-xs font-bold sm:text-sm">{memberSince}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Mobile edit button */}
+                                    {!editing && (
+                                        <button onClick={() => { setNotice(null); setEditing(true); }} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-bold text-[#3B5998] shadow-sm active:bg-blue-50 lg:hidden">
+                                            <Edit3 size={16} /> Edit details
+                                        </button>
+                                    )}
+                                </div>
+                            </section>
+
+                            {editing ? (
+                                /* ---------- Edit form ---------- */
+                                <form id="profile-form" onSubmit={saveProfile} className="space-y-4 lg:space-y-6">
+                                    <Section icon={Building2} title="Contact & center" subtitle="Shown to customers who visit you">
+                                        <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-6">
+                                            {([["fullName", "Owner full name"], ["phone", "Phone number"], ["centerName", "Center name"], ["state", "State"], ["city", "City"], ["centerAddress", "Full center address"]] as [keyof EditableProfile, string][]).map(([field, label]) => (
+                                                <Input key={field} label={label} className={field === "centerAddress" ? "sm:col-span-2" : ""}>
+                                                    <input
+                                                        required
+                                                        type={field === "phone" ? "tel" : "text"}
+                                                        inputMode={field === "phone" ? "tel" : undefined}
+                                                        value={form[field] || ""}
+                                                        onChange={(event) => updateField(field, event.target.value)}
+                                                        className={inputCls}
+                                                    />
+                                                </Input>
+                                            ))}
+                                        </div>
+                                    </Section>
+
+                                    <Section icon={Landmark} title="Bank & UPI" subtitle="Payment details for your center">
+                                        <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-6">
+                                            <Input label="Account holder name"><input value={form.accountHolderName} onChange={(e) => updateField("accountHolderName", e.target.value)} className={inputCls} /></Input>
+                                            <Input label="Bank name"><input value={form.bankName} onChange={(e) => updateField("bankName", e.target.value)} className={inputCls} /></Input>
+                                            <Input label="Account number"><input required inputMode="numeric" value={form.accountNumber} onChange={(e) => updateField("accountNumber", e.target.value)} className={inputCls} /></Input>
+                                            <Input label="IFSC code"><input required value={form.ifscCode} onChange={(e) => updateField("ifscCode", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></Input>
+                                            <Input label="Account type">
+                                                <select value={form.accountType} onChange={(e) => updateField("accountType", e.target.value)} className={inputCls}>
+                                                    <option>Savings</option>
+                                                    <option>Current</option>
+                                                    <option>Other</option>
+                                                </select>
+                                            </Input>
+                                            <Input label="UPI ID"><input value={form.upiId} onChange={(e) => updateField("upiId", e.target.value.trim())} placeholder="yourname@upi" className={inputCls} /></Input>
+
+                                            <div className="sm:col-span-2">
+                                                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">UPI QR / scanner image</span>
+                                                <div className="flex items-center gap-4 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 p-4">
+                                                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-gray-200">
+                                                        {form.upiQrImageBase64 ? (
+                                                            // eslint-disable-next-line @next/next/no-img-element
+                                                            <img src={form.upiQrImageBase64} alt="UPI QR code preview" className="h-full w-full object-contain" />
+                                                        ) : (
+                                                            <QrCode className="text-gray-300" size={40} />
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0 space-y-2">
+                                                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#3B5998] px-4 py-2.5 text-sm font-bold text-white active:bg-[#2d4373]">
+                                                            <QrCode size={16} /> {form.upiQrImageBase64 ? "Change" : "Choose"} image
+                                                            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => handleQrImage(e.target.files?.[0])} />
+                                                        </label>
+                                                        {form.upiQrImageBase64 && (
+                                                            <button type="button" onClick={() => updateField("upiQrImageBase64", null)} className="block text-sm font-semibold text-red-600">Remove image</button>
+                                                        )}
+                                                        <p className="text-xs text-gray-500">JPG, PNG or WEBP, up to 5MB</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Section>
+                                </form>
+                            ) : (
+                                /* ---------- Read-only view ---------- */
+                                <>
+                                    <Section icon={UserRound} title="Owner details" subtitle="Your registered contact information">
+                                        <RowGroup cols={2}>
+                                            <Row label="Full name" value={profile.fullName} icon={UserRound} />
+                                            <Row label="Phone number" value={profile.phone} icon={Phone} href={profile.phone ? `tel:${profile.phone}` : undefined} />
+                                            <Row label="Username" value={profile.username} icon={LockKeyhole} />
+                                            <Row label="Sponsor" value={[profile.sponsorName, profile.sponsorId].filter(Boolean).join(" · ")} icon={BadgeCheck} />
+                                        </RowGroup>
+                                    </Section>
+
+                                    <Section icon={Building2} title="Center details" subtitle="The location customers will see">
+                                        <RowGroup cols={2}>
+                                            <Row label="Center name" value={profile.centerName} icon={Building2} />
+                                            <Row label="Location" value={[profile.city, profile.state].filter(Boolean).join(", ")} icon={MapPin} />
+                                            <Row label="Address" value={profile.centerAddress} icon={MapPin} />
+                                        </RowGroup>
+                                    </Section>
+
+                                    <Section icon={ShieldCheck} title="Verification" subtitle="Protected identity documents">
+                                        <RowGroup cols={2}>
+                                            <Row label="Aadhaar" value={mask(profile.aadharNumber)} icon={FileCheck2} mono />
+                                            <Row label="PAN" value={mask(profile.panNumber)} icon={FileCheck2} mono />
+                                        </RowGroup>
+                                        <div className="flex items-center gap-2 border-t border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500 sm:px-6">
+                                            <LockKeyhole size={13} /> Identity documents are read-only for your security.
+                                        </div>
+                                    </Section>
+
+                                    <Section icon={Landmark} title="Bank & UPI" subtitle="Where customers can pay you">
+                                        <RowGroup cols={2}>
+                                            <Row label="Bank" value={profile.bankName} icon={Landmark} />
+                                            <Row label="Account holder" value={profile.accountHolderName} icon={UserRound} />
+                                            <Row label="Account number" value={mask(profile.accountNumber)} icon={Landmark} mono />
+                                            <Row label="IFSC code" value={profile.ifscCode} icon={Landmark} mono />
+                                            <Row label="Account type" value={profile.accountType} icon={Landmark} />
+                                            <Row label="UPI ID" value={profile.upiId} icon={QrCode} />
+                                        </RowGroup>
+                                        {profile.upiQrImageBase64 && (
+                                            <div className="flex items-center gap-4 border-t border-gray-100 bg-blue-50/40 p-4 sm:px-6">
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img src={profile.upiQrImageBase64} alt="UPI QR code" className="h-28 w-28 shrink-0 rounded-xl bg-white object-contain p-2 ring-1 ring-blue-100" />
+                                                <div>
+                                                    <p className="text-sm font-bold text-gray-900">UPI scanner</p>
+                                                    <p className="mt-1 text-xs text-gray-500">Customers can scan this code to pay your center.</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </Section>
+
+                                    {/* Mobile-only logout */}
+                                    <button
+                                        onClick={() => setConfirmLogout(true)}
+                                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white py-3.5 text-sm font-bold text-red-600 shadow-sm active:bg-red-50 lg:hidden"
+                                    >
+                                        <LogOut size={17} /> Log out
+                                    </button>
+                                </>
+                            )}
+                        </>
+                    )}
                 </main>
             </div>
+
+            {/* Mobile sticky save bar (sits above bottom nav) */}
+            {editing && (
+                <div className="fixed inset-x-0 bottom-[68px] z-30 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur lg:hidden">
+                    <div className="flex gap-3">
+                        <button type="button" onClick={cancelEdit} className="flex-1 rounded-2xl border border-gray-300 py-3 text-sm font-semibold text-gray-700 active:bg-gray-50">Cancel</button>
+                        <button form="profile-form" disabled={saving} className="flex flex-[2] items-center justify-center gap-2 rounded-2xl bg-[#3B5998] py-3 text-sm font-bold text-white active:bg-[#2d4373] disabled:opacity-60">
+                            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                            {saving ? "Saving..." : "Save changes"}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Logout confirmation (mobile only) */}
+            {confirmLogout && (
+                <div className="fixed inset-0 z-[60] flex items-end bg-black/50 lg:hidden">
+                    <div className="w-full rounded-t-3xl bg-white p-6 shadow-2xl">
+                        <div className="mb-3 flex items-center gap-3">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600"><LogOut size={20} /></span>
+                            <h3 className="text-base font-bold text-gray-900">Log out?</h3>
+                        </div>
+                        <p className="mb-6 text-sm text-gray-600">You will need to sign in again to manage your pickup center.</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setConfirmLogout(false)} className="flex-1 rounded-2xl border border-gray-300 py-3 text-sm font-semibold text-gray-700 active:bg-gray-50">Cancel</button>
+                            <button onClick={handleLogout} className="flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white active:bg-red-700">Log out</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
