@@ -738,13 +738,6 @@ export default function SellPage() {
                           : false;
                         const lowStock =
                           !outOfStock && product.quantity <= 3;
-                        const discount =
-                          product.mrp > product.dp && product.mrp > 0
-                            ? Math.round(
-                                ((product.mrp - product.dp) / product.mrp) *
-                                  100
-                              )
-                            : 0;
 
                         return (
                           <div
@@ -762,11 +755,6 @@ export default function SellPage() {
                                   name={product.productName}
                                   className="h-20 w-20 rounded-xl text-2xl"
                                 />
-                                {discount > 0 && (
-                                  <span className="absolute -left-1 -top-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
-                                    {discount}% OFF
-                                  </span>
-                                )}
                               </div>
 
                               <div className="min-w-0 flex-1">
