@@ -473,7 +473,7 @@ export default function PlanPage() {
             </div>
           </div>
 
-          {/* ── BINARY PLAN ──────────────────────────────────────────────── */}
+          {/* Binary Plan hidden for now — to bring it back, delete this opening comment line and the closing one below.
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden relative transition-all duration-300">
             <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-br from-white via-white to-indigo-50/20">
               <div className="flex items-start justify-between gap-4">
@@ -616,6 +616,7 @@ export default function PlanPage() {
               </div>
             </div>
           </div>
+          Binary Plan hidden for now — end */}
 
         </main>
       </div>
