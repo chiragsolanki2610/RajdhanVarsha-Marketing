@@ -340,7 +340,7 @@ export default function OurPlanPage() {
               </div>
             </div>
 
-            {/* Plan 1 Card (Binary Plan) - MOVED TO SECOND POSITION */}
+            {/* Binary Plan hidden for now — to bring it back, delete this opening comment line and the closing one below.
             <div className="bg-white rounded-2xl shadow-md p-8 border border-gray-100 transition-all duration-300 hover:shadow-lg w-full">
               <h3 className="text-2xl font-bold text-gray-900">{currentText.plan1.title}</h3>
               <p className="text-gray-500 mt-2 text-sm max-w-3xl">{currentText.plan1.description}</p>
@@ -400,6 +400,7 @@ export default function OurPlanPage() {
                 </button>
               </div>
             </div>
+            Binary Plan hidden for now — end */}
 
           </div>
         </section>
