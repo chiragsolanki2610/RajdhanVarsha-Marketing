@@ -265,8 +265,9 @@ export default function PlanManagerPage() {
           <header className="mb-6">
             <p className="text-sm text-slate-500">
               Look up a member, confirm their sponsor, choose products, and activate their{" "}
-              <span className="font-medium" style={{ color: BRAND }}>Dream</span> or{" "}
-              <span className="font-medium" style={{ color: BRAND }}>Binary</span> Plan.
+              <span className="font-medium" style={{ color: BRAND }}>Dream</span> Plan.
+              {/* Binary Plan hidden for now — restore this text when you bring it back:
+              {" "}or <span className="font-medium" style={{ color: BRAND }}>Binary</span> Plan. */}
             </p>
           </header>
 
@@ -286,7 +287,10 @@ export default function PlanManagerPage() {
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Plan</label>
                   <div className="flex gap-2">
-                    {(["Dream Plan", "Binary Plan"] as PlanType[]).map((p) => (
+                    {([
+                      "Dream Plan",
+                      // "Binary Plan", // hidden for now — remove the // to bring it back
+                    ] as PlanType[]).map((p) => (
                       <button
                         key={p}
                         type="button"
